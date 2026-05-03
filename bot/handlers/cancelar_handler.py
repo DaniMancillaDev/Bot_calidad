@@ -44,6 +44,24 @@ def create_cancelar(conversation_repo, usuario_repo, contador_repo):
                 return
 
             conv = conversation_repo.obtener(user_id)
+            
+            # ── Cancelación de buffers temporales (Álbumes en progreso) ──
+            media_groups = context.user_data.get("media_groups", {})
+            for mg_id, grupo in list(media_groups.items()):
+                if grupo.get("timer_task"):
+                    grupo["timer_task"].cancel()
+                
+                # Borramos el mensaje de "Espera" si sigue ahí
+                wait_msg_id = grupo.get("wait_msg_id")
+                if wait_msg_id:
+                    try:
+                        await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=wait_msg_id)
+                    except Exception:
+                        pass
+            
+            # Vaciamos el buffer completamente
+            context.user_data["media_groups"] = {}
+            
             if not conv:
                 await update.message.reply_text("<b>No hay ningún registro en proceso.</b>", parse_mode="HTML")
                 return
@@ -65,11 +83,11 @@ def create_cancelar(conversation_repo, usuario_repo, contador_repo):
                                 fotos_eliminadas += 1
 
             # ── Rollback del contador ────────────────────────────────────
-            # Usa min(fotos)-1 para reutilizar exactamente los números
-            # de esta sesión sin afectar sesiones previas o de otros usuarios.
+            # Usa min(fotos) para que la próxima foto reciba exactamente
+            # el primer número que se usó en esta sesión cancelada.
             contador_revertido = None
             if fotos:
-                valor_anterior = max(1, min(fotos) - 1)
+                valor_anterior = max(1, min(fotos))
                 contador_repo.establecer(user_id, valor_anterior)
                 contador_revertido = valor_anterior
 
@@ -78,8 +96,7 @@ def create_cancelar(conversation_repo, usuario_repo, contador_repo):
             msg = "<b>Registro cancelado.</b>\n\n"
             msg += f"<b>Fotos eliminadas del intento:</b> {fotos_eliminadas}\n"
             if contador_revertido is not None:
-                msg += f"<b>Contador del grupo revertido a:</b> {contador_revertido:03d}\n"
-                msg += f"<b>La siguiente foto será:</b> {contador_revertido + 1:03d}"
+                msg += f"<b>La siguiente foto será:</b> {contador_revertido:03d}"
             await update.message.reply_text(msg, parse_mode="HTML")
 
         except Exception as e:

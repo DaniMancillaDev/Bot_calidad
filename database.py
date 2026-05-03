@@ -61,23 +61,9 @@ class DatabaseManager:
                 ''')
 
                 # ================================
-                # 👤 TABLA: Usuarios del bot
+                # 🗑️ ELIMINAR TABLA OBSOLETA (usuarios_bot)
                 # ================================
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS usuarios_bot (
-                        telegram_user_id INTEGER PRIMARY KEY,
-                        username TEXT,                  -- Nombre de usuario opcional
-                        turno TEXT NOT NULL,            -- Turno: A, B, C
-                        departamento TEXT NOT NULL,     -- Departamento: IQA, SQA, etc.
-                        fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                ''')
-
-                # 🔥 MIGRACIÓN SEGURA (no rompe si ya existe)
-                try:
-                    cursor.execute("ALTER TABLE usuarios_bot ADD COLUMN rol TEXT DEFAULT 'operador'")
-                except Exception:
-                    pass
+                cursor.execute('DROP TABLE IF EXISTS usuarios_bot')
 
                 # ================================
                 # 📊 TABLA: Contadores compartidos por Turno y Depto
@@ -104,11 +90,11 @@ class DatabaseManager:
                     cursor.execute(f'DROP TABLE IF EXISTS {tabla}')
 
                 conn.commit()
-                print("✅ Base de datos inicializada correctamente (multiusuario)")
-                print("✅ Tablas: registros_defectos, usuarios_bot, contadores_usuario")
+                print("OK: Base de datos inicializada correctamente (multiusuario)")
+                print("OK: Tablas: registros_defectos, contadores_usuario")
 
         except Exception as e:
-            print(f"❌ Error al inicializar la base de datos: {e}")
+            print(f"Error al inicializar la base de datos: {e}")
             raise
 
     # ================================
@@ -117,20 +103,16 @@ class DatabaseManager:
 
     def usuario_tiene_acceso(self, telegram_user_id: int) -> bool:
         """
-        Verifica si el ID de Telegram está registrado.
+        Verifica si el ID de Telegram está registrado en Django.
         """
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-                # Verificar en usuarios_bot primero
-                cursor.execute("SELECT telegram_user_id FROM usuarios_bot WHERE telegram_user_id = ?", (telegram_user_id,))
-                if cursor.fetchone():
-                    return True
-
-                # Verificar si la tabla de Django existe (fallback)
+                
+                # Verificar si la tabla de Django existe
                 cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='calidad_perfilusuario'")
                 if not cursor.fetchone():
-                    return True  # Si la web no está instalada, no bloqueamos
+                    return False
 
                 cursor.execute("SELECT id FROM calidad_perfilusuario WHERE telegram_user_id = ?", (telegram_user_id,))
                 return cursor.fetchone() is not None
@@ -172,72 +154,57 @@ class DatabaseManager:
 
     def crear_usuario(self, telegram_user_id: int, turno: str, departamento: str, username: str = None) -> bool:
         """
-        Registra un nuevo usuario del bot con su turno y departamento.
+        Ya no es utilizado. Los usuarios se crean desde Django.
         """
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute('''
-                    INSERT OR REPLACE INTO usuarios_bot
-                    (telegram_user_id, username, turno, departamento)
-                    VALUES (?, ?, ?, ?)
-                ''', (telegram_user_id, username, turno, departamento))
-                conn.commit()
-
-                # Inicializar contador del usuario
-                cursor.execute('''
-                    INSERT OR IGNORE INTO contadores_usuario (user_id, contador_actual, ultimo_numero_confirmado)
-                    VALUES (?, 1, 0)
-                ''', (telegram_user_id,))
-                conn.commit()
-
-                print(f"✅ Usuario {telegram_user_id} registrado: Turno {turno}, Depto {departamento}")
-                return True
-        except Exception as e:
-            print(f"❌ Error al crear usuario {telegram_user_id}: {e}")
-            return False
+        raise NotImplementedError("La creación de usuarios ahora se maneja exclusivamente desde Django.")
 
     def obtener_usuario(self, telegram_user_id: int) -> Optional[Dict]:
-        """Obtiene la información de un usuario."""
+        """Obtiene la información de un usuario desde las tablas nativas de Django."""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
-                cursor.execute('SELECT * FROM usuarios_bot WHERE telegram_user_id = ?', (telegram_user_id,))
+                
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='calidad_perfilusuario'")
+                if not cursor.fetchone():
+                    return None
+                    
+                query = """
+                    SELECT p.telegram_user_id, u.username, u.first_name, u.last_name, 
+                           p.turno, p.departamento, u.is_superuser
+                    FROM calidad_perfilusuario p
+                    JOIN auth_user u ON p.usuario_id = u.id
+                    WHERE p.telegram_user_id = ?
+                """
+                cursor.execute(query, (telegram_user_id,))
                 row = cursor.fetchone()
-                return dict(row) if row else None
+                
+                if row:
+                    t_id = row['telegram_user_id']
+                    username = row['username']
+                    first_name = row['first_name'] or ""
+                    last_name = row['last_name'] or ""
+                    
+                    nombre = f"{first_name} {last_name}".strip()
+                    if not nombre:
+                        nombre = username or str(t_id)
+
+                    return {
+                        'telegram_user_id': t_id,
+                        'username': username,
+                        'nombre': nombre,
+                        'turno': row['turno'],
+                        'departamento': row['departamento'],
+                        'rol': 'admin' if row['is_superuser'] else 'operador'
+                    }
+                return None
         except Exception as e:
             print(f"❌ Error al obtener usuario {telegram_user_id}: {e}")
             return None
 
     def actualizar_usuario(self, telegram_user_id: int, turno: str = None, departamento: str = None, username: str = None) -> bool:
-        """Actualiza la información de un usuario."""
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                updates = []
-                params = []
-
-                if turno is not None:
-                    updates.append('turno = ?')
-                    params.append(turno)
-                if departamento is not None:
-                    updates.append('departamento = ?')
-                    params.append(departamento)
-                if username is not None:
-                    updates.append('username = ?')
-                    params.append(username)
-
-                if not updates:
-                    return True
-
-                params.append(telegram_user_id)
-                cursor.execute(f'UPDATE usuarios_bot SET {", ".join(updates)} WHERE telegram_user_id = ?', params)
-                conn.commit()
-                return True
-        except Exception as e:
-            print(f"❌ Error al actualizar usuario {telegram_user_id}: {e}")
-            return False
+        """Ya no es utilizado. Actualizaciones desde Django."""
+        raise NotImplementedError("La actualización de usuarios se maneja exclusivamente desde Django.")
 
     def listar_usuarios(self) -> List[Dict]:
         """Lista todos los usuarios registrados."""
@@ -245,8 +212,28 @@ class DatabaseManager:
             with sqlite3.connect(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
-                cursor.execute('SELECT * FROM usuarios_bot ORDER BY telegram_user_id')
-                return [dict(row) for row in cursor.fetchall()]
+                query = """
+                    SELECT p.telegram_user_id, u.username, u.first_name, u.last_name, 
+                           p.turno, p.departamento, u.is_superuser
+                    FROM calidad_perfilusuario p
+                    JOIN auth_user u ON p.usuario_id = u.id
+                """
+                cursor.execute(query)
+                results = []
+                for row in cursor.fetchall():
+                    first_name = row['first_name'] or ""
+                    last_name = row['last_name'] or ""
+                    nombre = f"{first_name} {last_name}".strip() or row['username']
+                    
+                    results.append({
+                        'telegram_user_id': row['telegram_user_id'],
+                        'username': row['username'],
+                        'nombre': nombre,
+                        'turno': row['turno'],
+                        'departamento': row['departamento'],
+                        'rol': 'admin' if row['is_superuser'] else 'operador'
+                    })
+                return results
         except Exception as e:
             print(f"❌ Error al listar usuarios: {e}")
             return []

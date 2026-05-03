@@ -380,8 +380,11 @@
     <a href="{% url 'dashboard' %}" class="nav-link {% if seccion == 'dashboard' %}active{% endif %}">
       <span class="icon">📊</span> Dashboard
     </a>
+    <a href="{% url 'panel_operativo' %}" class="nav-link {% if seccion == 'operacion' %}active{% endif %}">
+      <span class="icon">⚡</span> Panel Operativo
+    </a>
     <a href="{% url 'reportes' %}" class="nav-link {% if seccion == 'reportes' %}active{% endif %}">
-      <span class="icon">📋</span> Reportes
+      <span class="icon">📋</span> Historial
     </a>
     <a href="{% url 'galeria_fotos' %}" class="nav-link {% if seccion == 'fotos' %}active{% endif %}">
       <span class="icon">🖼️</span> Galería de Fotos

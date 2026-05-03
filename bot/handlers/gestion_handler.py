@@ -38,7 +38,7 @@ def create_limpiar(conversation_repo, usuario_repo, registro_repo, contador_repo
             usuario = usuario_repo.obtener(user_id)
 
             if not usuario:
-                await update.message.reply_text("⚠️ <b>Usuario no registrado.</b>", parse_mode="HTML")
+                await update.message.reply_text("<b>Usuario no registrado.</b>", parse_mode="HTML")
                 return
 
             exito = registro_repo.limpiar_por_usuario(user_id)
@@ -48,7 +48,7 @@ def create_limpiar(conversation_repo, usuario_repo, registro_repo, contador_repo
                 conversation_repo.finalizar(user_id)
                 await update.message.reply_text(
                     "<b>Registros limpiados:</b>\n\n"
-                    f"• <b>Usuario:</b> <code>{user_id}</code>\n"
+                    f"• <b>Usuario:</b> {usuario.get('nombre', user_id)}\n"
                     f"• <b>Turno:</b> {usuario['turno']}\n"
                     f"• <b>Depto:</b> {usuario['departamento']}\n\n"
                     "<i>Solo se eliminaron TUS registros.</i>",
@@ -83,7 +83,7 @@ def create_limpiar_fotos(conversation_repo, usuario_repo, contador_repo):
             usuario = usuario_repo.obtener(user_id)
 
             if not usuario:
-                await update.message.reply_text("⚠️ <b>Usuario no registrado.</b>", parse_mode="HTML")
+                await update.message.reply_text("<b>Usuario no registrado.</b>", parse_mode="HTML")
                 return
 
             user_folder = os.path.join(FOTOS_PATH, str(user_id))
@@ -101,7 +101,7 @@ def create_limpiar_fotos(conversation_repo, usuario_repo, contador_repo):
 
             await update.message.reply_text(
                 "<b>Fotos eliminadas:</b>\n\n"
-                f"• <b>Usuario:</b> <code>{user_id}</code>\n"
+                f"• <b>Usuario:</b> {usuario.get('nombre', user_id)}\n"
                 f"• <b>Fotos eliminadas:</b> {fotos_eliminadas}\n"
                 "• <b>Contador reiniciado a:</b> 001\n\n"
                 "<i>Solo se eliminaron TUS fotos.</i>",

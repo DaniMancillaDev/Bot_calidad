@@ -39,7 +39,16 @@ async def crear_y_enviar_zip(
             with zipfile.ZipFile(tmpzip.name, "w", compression=zipfile.ZIP_DEFLATED) as zipf:
                 for archivo in archivos_imagenes:
                     ruta = os.path.join(user_folder, archivo)
-                    zipf.write(ruta, arcname=archivo)
+                    
+                    # Limpiar nombre para el ZIP (001_20231201_153022.jpg -> 001.jpg)
+                    partes = archivo.split('_', 1)
+                    if len(partes) > 1:
+                        ext = os.path.splitext(archivo)[1]
+                        nombre_limpio = f"{partes[0]}{ext}"
+                    else:
+                        nombre_limpio = archivo
+                        
+                    zipf.write(ruta, arcname=nombre_limpio)
             nombre_zip = tmpzip.name
 
         tamanio_mb = os.path.getsize(nombre_zip) / (1024 * 1024)
@@ -48,11 +57,11 @@ async def crear_y_enviar_zip(
             await update.message.reply_document(
                 document=fzip,
                 filename=f"fotos_defectos_{sufijo}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
-                caption=f"\U0001f4e6 ZIP con {len(archivos_imagenes)} im\u00e1genes ({tamanio_mb:.1f} MB)",
+                caption=f"ZIP con {len(archivos_imagenes)} imágenes ({tamanio_mb:.1f} MB)",
             )
 
     except Exception as e:
-        await update.message.reply_text(f"\u274c Error al enviar el archivo ZIP {sufijo}: {e}")
+        await update.message.reply_text(f"Error al enviar el archivo ZIP {sufijo}: {e}")
     finally:
         if nombre_zip:
             try:

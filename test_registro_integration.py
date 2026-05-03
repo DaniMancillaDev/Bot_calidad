@@ -38,18 +38,53 @@ def _ensure_schema(db_path: Path) -> None:
         if "numero_secuencia_fin" not in cols:
             cur.execute("ALTER TABLE registros_defectos ADD COLUMN numero_secuencia_fin INTEGER")
 
+        # Simular tablas de Django
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS auth_user (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                password TEXT NOT NULL,
+                last_login DATETIME,
+                is_superuser BOOLEAN NOT NULL,
+                username TEXT NOT NULL UNIQUE,
+                last_name TEXT NOT NULL,
+                email TEXT NOT NULL,
+                is_staff BOOLEAN NOT NULL,
+                is_active BOOLEAN NOT NULL,
+                date_joined DATETIME NOT NULL,
+                first_name TEXT NOT NULL
+            )
+        ''')
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS calidad_perfilusuario (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                turno TEXT NOT NULL,
+                departamento TEXT NOT NULL,
+                telegram_user_id INTEGER UNIQUE,
+                usuario_id INTEGER NOT NULL UNIQUE REFERENCES auth_user (id)
+            )
+        ''')
+
         conn.commit()
 
 
 def _insert_usuario(db_path: Path, *, telegram_user_id: int, turno: str = "A", departamento: str = "QA") -> None:
     with sqlite3.connect(db_path) as conn:
         cur = conn.cursor()
+        from datetime import datetime
         cur.execute(
             """
-            INSERT INTO usuarios_bot (telegram_user_id, username, turno, departamento)
+            INSERT INTO auth_user (password, is_superuser, username, last_name, email, is_staff, is_active, date_joined, first_name)
+            VALUES ('', 0, ?, '', '', 0, 1, ?, '')
+            """,
+            (f"user{telegram_user_id}", datetime.now()),
+        )
+        user_id_pk = cur.lastrowid
+        cur.execute(
+            """
+            INSERT INTO calidad_perfilusuario (turno, departamento, telegram_user_id, usuario_id)
             VALUES (?, ?, ?, ?)
             """,
-            (telegram_user_id, f"user{telegram_user_id}", turno, departamento),
+            (turno, departamento, telegram_user_id, user_id_pk),
         )
         conn.commit()
 

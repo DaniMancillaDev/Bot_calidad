@@ -11,6 +11,7 @@ OCP: agregar un nuevo comando = agregar import + add_handler.
      No se modifica nada existente.
 """
 from telegram import Update, BotCommand
+from telegram.request import HTTPXRequest
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -32,6 +33,7 @@ from bot.handlers.consulta_handler import (
     create_estado,
     create_info_fotos,
     create_descargar,
+    create_info,
 )
 
 
@@ -44,8 +46,8 @@ async def _post_init(application):
         BotCommand("info_fotos", "Ver estadísticas de tus fotos"),
         BotCommand("descargar", "Descargar fotos en ZIP"),
         BotCommand("limpiar", "Borrar tus registros de hoy"),
-        BotCommand("limpiar_fotos", "Borrar tus fotos de hoy"),
         BotCommand("cancelar", "Cancelar registro en curso"),
+        BotCommand("info", "Acerca del sistema"),
         BotCommand("mi_id", "Ver tu ID de Telegram"),
     ]
     await application.bot.set_my_commands(comandos)
@@ -56,8 +58,8 @@ async def _test_bot(update, context):
     if not update.message:
         return
     await update.message.reply_text(
-        "\U0001f9ea **BOT FUNCIONANDO CORRECTAMENTE**\n\n"
-        "\u2705 Arquitectura Clean Architecture + SOLID activa.\n"
+        "**BOT FUNCIONANDO CORRECTAMENTE**\n\n"
+        "Arquitectura Clean Architecture + SOLID activa.\n"
         "Usa /start para comenzar.",
         parse_mode="Markdown",
     )
@@ -74,7 +76,15 @@ def build_application(token: str, container: dict):
     Returns:
         Application lista para llamar .run_polling().
     """
-    app = ApplicationBuilder().token(token).concurrent_updates(True).post_init(_post_init).build()
+    # Configurar timeouts para evitar errores de conexión con fotos pesadas
+    request = HTTPXRequest(connect_timeout=30, read_timeout=30)
+    
+    app = ApplicationBuilder() \
+        .token(token) \
+        .request(request) \
+        .concurrent_updates(True) \
+        .post_init(_post_init) \
+        .build()
 
     # ── Middleware de seguridad (grupo -1 = se ejecuta ANTES que cualquier handler) ──
     app.add_handler(
@@ -104,6 +114,10 @@ def build_application(token: str, container: dict):
     app.add_handler(CommandHandler(
         "descargar",
         create_descargar(container["usuario_repo"]),
+    ))
+    app.add_handler(CommandHandler(
+        "info",
+        create_info(),
     ))
 
     # ── Gestión (operaciones destructivas) ────────────────────────────────────────

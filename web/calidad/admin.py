@@ -4,7 +4,7 @@ Admin personalizado — Panel de administración del sistema de calidad.
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
-from .models import RegistroDefecto, UsuarioBot, PerfilUsuario
+from .models import RegistroDefecto, PerfilUsuario
 
 
 # ============================================================
@@ -29,16 +29,7 @@ class RegistroDefectoAdmin(admin.ModelAdmin):
         return request.user.is_superuser  # Solo el admin puede borrar
 
 
-# ============================================================
-# ADMIN: Usuarios del Bot
-# ============================================================
 
-@admin.register(UsuarioBot)
-class UsuarioBotAdmin(admin.ModelAdmin):
-    list_display  = ['telegram_user_id', 'username', 'turno', 'departamento', 'fecha_registro']
-    list_filter   = ['turno', 'departamento']
-    search_fields = ['telegram_user_id', 'username']
-    ordering      = ['-fecha_registro']
 
 
 # ============================================================

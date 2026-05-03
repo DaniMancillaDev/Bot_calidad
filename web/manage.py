@@ -7,6 +7,13 @@ import sys
 def main():
     """Run administrative tasks."""
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+    
+    # Añadir la raíz del proyecto al path para encontrar 'shared'
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    root_dir = os.path.dirname(base_dir)
+    if root_dir not in sys.path:
+        sys.path.append(root_dir)
+        
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:

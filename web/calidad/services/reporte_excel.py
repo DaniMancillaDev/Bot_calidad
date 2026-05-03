@@ -33,9 +33,9 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 # ============================================================
 # CONFIGURACIÓN DE EXCEL
 # ============================================================
-SCALE_FACTOR   = 2     # 2x la resolución visual (buen zoom sin peso excesivo)
+SCALE_FACTOR   = 4     # 4x la resolución visual (nitidez extrema)
 GAP            = 5     # Separación horizontal entre fotos (px)
-MAX_DISPLAY_H  = 200   # Alto máximo visual de cada foto (px) — NO llena toda la fila
+MAX_DISPLAY_H  = 240   # Alto máximo visual de cada foto (px)
 CELL_COL       = 15    # Columna P (0-indexed)
 START_ROW      = 7     # Fila 8 en 0-indexed
 
@@ -45,7 +45,7 @@ PLANTILLA_PATH = _BASE_DIR / "plantilla_reporte.xlsx"
 
 # Calidad JPEG para las fotos insertadas (0-100)
 # 88 = excelente calidad visual con buen ratio de compresión
-JPEG_QUALITY = 88
+JPEG_QUALITY = 95
 
 
 def _get_row_height_px(ws, row_1based):
@@ -106,10 +106,20 @@ def _prepare_image_strip(img_path: Path, angle: int, target_h: int, tmp_dir: Pat
         img = Image.open(img_path)
         img = ImageOps.exif_transpose(img)
         if angle != 0:
-            # CSS rota en sentido horario (CW) con ángulos positivos.
-            # PIL rota en sentido anti-horario (CCW) con ángulos positivos.
-            # Invertimos el ángulo para que el Excel coincida exactamente con la vista web.
-            img = img.rotate(-angle, expand=True)
+            # Usar transpose en lugar de rotate para ángulos rectos (0 pérdida de calidad)
+            # 90 CW  -> ROTATE_270 en PIL (CCW)
+            # 180 CW -> ROTATE_180
+            # 270 CW -> ROTATE_90 en PIL (CCW)
+            mapping = {
+                90:  Image.ROTATE_270,
+                180: Image.ROTATE_180,
+                270: Image.ROTATE_90
+            }
+            if angle in mapping:
+                img = img.transpose(mapping[angle])
+            else:
+                # Caso genérico por si acaso (aunque usamos múltiplos de 90)
+                img = img.rotate(-angle, expand=True, resample=Image.BICUBIC)
 
         orig_w, orig_h = img.size
 

@@ -13,7 +13,7 @@ from django.db.models import Count, Sum, Q
 from django.conf import settings
 from django.http import Http404, HttpResponse, JsonResponse
 from django.views.decorators.http import require_POST
-from .models import RegistroDefecto, UsuarioBot, PerfilUsuario
+from .models import RegistroDefecto, PerfilUsuario
 
 
 # ============================================================
@@ -202,11 +202,11 @@ def ver_foto(request, numero):
         usuarios_permitidos = None  # Admin puede ver todos
     else:
         if hasattr(request.user, 'perfil'):
-            usuarios_bot = UsuarioBot.objects.filter(
+            usuarios_perfil = PerfilUsuario.objects.filter(
                 turno=request.user.perfil.turno,
                 departamento=request.user.perfil.departamento
             ).values_list('telegram_user_id', flat=True)
-            usuarios_permitidos = set(usuarios_bot)
+            usuarios_permitidos = set(usuarios_perfil)
         else:
             usuarios_permitidos = set()
 
@@ -249,6 +249,8 @@ def ver_foto(request, numero):
         'numero':     numero,
         'usuario':    user_id_encontrado,
         'registros':  registros_relacionados,
+        'prev':       numero - 1 if numero > 1 else None,
+        'next_num':   numero + 1,
         'seccion':    'fotos',
     }
     return render(request, 'calidad/ver_foto.html', context)
@@ -270,11 +272,11 @@ def galeria_fotos(request):
     else:
         if hasattr(request.user, 'perfil'):
             # Buscar usuarios del bot con mismo turno y departamento
-            usuarios_bot = UsuarioBot.objects.filter(
+            usuarios_perfil = PerfilUsuario.objects.filter(
                 turno=request.user.perfil.turno,
                 departamento=request.user.perfil.departamento
             ).values_list('telegram_user_id', flat=True)
-            usuarios_permitidos = set(usuarios_bot)
+            usuarios_permitidos = set(usuarios_perfil)
         else:
             usuarios_permitidos = set()
 
@@ -295,8 +297,8 @@ def galeria_fotos(request):
             if not request.user.is_superuser and user_id not in usuarios_permitidos:
                 continue
 
-            # Buscar fotos en la carpeta del usuario
-            for archivo in sorted(user_folder.glob('*.png')):
+            # Buscar fotos en la carpeta del usuario (.jpg son las actuales)
+            for archivo in sorted(user_folder.glob('*.jpg')):
                 # Extraer número de secuencia (formato: 001_timestamp.png)
                 try:
                     num = int(archivo.stem.split('_')[0])
@@ -365,20 +367,30 @@ def revisar_orientacion(request):
     """
     from .services.reporte_excel import detect_orientations_batch
 
-    registros_qs = get_registros_permitidos(request.user)
+    registros_data = []
+    
+    if request.method == 'POST' and request.POST.get('registros_data'):
+        # Recibir registros pre-procesados o agrupados desde el panel operativo
+        try:
+            registros_data = json.loads(request.POST.get('registros_data'))
+        except json.JSONDecodeError:
+            pass
+    else:
+        # Lógica original: cargar desde base de datos
+        registros_qs = get_registros_permitidos(request.user)
 
-    # Filtros opcionales heredados desde la página de reportes
-    fecha_desde = request.GET.get('fecha_desde', '')
-    fecha_hasta = request.GET.get('fecha_hasta', '')
-    if fecha_desde:
-        registros_qs = registros_qs.filter(fecha_registro__date__gte=fecha_desde)
-    if fecha_hasta:
-        registros_qs = registros_qs.filter(fecha_registro__date__lte=fecha_hasta)
+        # Filtros opcionales heredados desde la página de reportes
+        fecha_desde = request.GET.get('fecha_desde', '')
+        fecha_hasta = request.GET.get('fecha_hasta', '')
+        if fecha_desde:
+            registros_qs = registros_qs.filter(fecha_registro__date__gte=fecha_desde)
+        if fecha_hasta:
+            registros_qs = registros_qs.filter(fecha_registro__date__lte=fecha_hasta)
 
-    registros_data = _parse_fotos_nums(registros_qs)
+        registros_data = _parse_fotos_nums(registros_qs)
     
     # Ordenar registros por usuario y número de inicio para que la tabla sea coherente
-    registros_data.sort(key=lambda x: (x.get('user_id'), x['fotos_nums'][0] if x['fotos_nums'] else 0))
+    registros_data.sort(key=lambda x: (x.get('user_id'), x['fotos_nums'][0] if x.get('fotos_nums') else 0))
 
     fotos_dir = settings.MEDIA_ROOT / 'fotos'
 
@@ -659,3 +671,38 @@ def api_get_nuevos(request):
     registros_data = _parse_fotos_nums(nuevos_qs)
     
     return JsonResponse({'registros': registros_data})
+
+@require_POST
+@login_required
+def api_delete_registro(request, registro_id):
+    """Permite a un admin eliminar un registro."""
+    if not request.user.is_superuser:
+        return JsonResponse({'error': 'No autorizado'}, status=403)
+        
+    registro = get_object_or_404(RegistroDefecto, id=registro_id)
+    registro.delete()
+    return JsonResponse({'success': True})
+
+@require_POST
+@login_required
+def api_edit_registro(request, registro_id):
+    """Permite a un admin editar un registro."""
+    if not request.user.is_superuser:
+        return JsonResponse({'error': 'No autorizado'}, status=403)
+        
+    import json
+    try:
+        data = json.loads(request.body)
+        registro = get_object_or_404(RegistroDefecto, id=registro_id)
+        
+        # Solo permitir editar campos seguros
+        if 'modelo' in data: registro.modelo = data['modelo']
+        if 'linea' in data: registro.linea = data['linea']
+        if 'descripcion' in data: registro.descripcion = data['descripcion']
+        if 'responsable' in data: registro.responsable = data['responsable']
+        if 'cantidad' in data: registro.cantidad = int(data['cantidad'])
+        
+        registro.save()
+        return JsonResponse({'success': True})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)

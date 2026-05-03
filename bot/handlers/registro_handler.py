@@ -39,10 +39,14 @@ def create_start(conversation_repo):
         conversation_repo.iniciar(user_id)
 
         await update.message.reply_text(
-            "<b>¡Hola! Listo para registrar defectos.</b>\n\n"
-            "<b>Paso 1: Envía las fotos del defecto</b>\n"
-            "Puedes enviar una o varias. Cuando termines, simplemente toca el botón <b>TERMINAR</b>.\n\n"
-            "<i>Tip: Para ver otras opciones, usa el menú o escribe /</i>",
+            "<b>Agente IQA</b>\n\n"
+            "Bienvenido al asistente de captura de defectos. Este bot está diseñado "
+            "para agilizar el reporte de incidencias en línea de producción.\n\n"
+            "<b>Flujo de Trabajo:</b>\n"
+            "1. <b>Envía las fotos</b> del defecto detectado (una o varias).\n"
+            "2. Presiona el botón <b>TERMINAR</b> para cerrar el álbum.\n"
+            "3. <b>Responde a las preguntas</b> (Modelo, Línea, Responsable, etc.).\n\n"
+            "<i>Usa el botón de <b>MENÚ</b> (abajo a la izquierda) para ver comandos útiles o escribe /info.</i>",
             parse_mode="HTML",
         )
 
@@ -82,66 +86,128 @@ def create_guardar_foto(usuario_repo, contador_repo, conversation_repo, foto_sto
             conversation_repo.iniciar(user_id)
             context.user_data["status_message_id"] = None
 
-        photo = update.message.photo[-1]
-        file = await photo.get_file()
+        # ===== FUNCIÓN INTERNA DE PROCESAMIENTO ATÓMICO =====
+        async def _procesar_foto_ordenada(msg):
+            try:
+                photo = msg.photo[-1]
+                file = await photo.get_file(read_timeout=30)
 
-        contador = contador_repo.obtener_y_avanzar(user_id)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        nombre_archivo = f"{contador:03d}_{timestamp}.jpg"
+                contador = contador_repo.obtener_y_avanzar(user_id)
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                nombre_archivo = f"{contador:03d}_{timestamp}.jpg"
 
-        user_folder = os.path.join(FOTOS_PATH, str(user_id))
-        os.makedirs(user_folder, exist_ok=True)
-        ruta = os.path.join(user_folder, nombre_archivo)
+                user_folder = os.path.join(FOTOS_PATH, str(user_id))
+                os.makedirs(user_folder, exist_ok=True)
+                ruta = os.path.join(user_folder, nombre_archivo)
 
-        try:
-            await file.download_to_drive(ruta)
-        except Exception as e:
-            print(f"Error descargando foto: {e}")
-            await update.message.reply_text("<b>Error interno al guardar la foto en el servidor.</b>", parse_mode="HTML")
-            return
+                await file.download_to_drive(ruta)
 
-        conv = conversation_repo.obtener(user_id)
-        if conv is not None:
-            conv["fotos"].append(contador)
-            conversation_repo.persistir()
+                conv = conversation_repo.obtener(user_id)
+                if conv is not None:
+                    conv["fotos"].append(contador)
+                    conversation_repo.persistir()
+                return True
+            except Exception as e:
+                print(f"Error descargando foto {msg.message_id}: {e}")
+                return False
 
-        # Debouncing: Esperar a que lleguen todas las fotos de la ráfaga (álbum) antes de enviar el feedback
+        # ===== SISTEMA DE BUFFERING Y DEBOUNCING =====
         import asyncio
 
-        # Si ya había una tarea de feedback esperando, la cancelamos
-        tarea_anterior = context.user_data.get("feedback_task")
-        if tarea_anterior:
-            tarea_anterior.cancel()
+        if "media_groups" not in context.user_data:
+            context.user_data["media_groups"] = {}
+        if "processing_lock" not in context.user_data:
+            context.user_data["processing_lock"] = asyncio.Lock()
 
-        async def send_feedback():
+        # Identificar el grupo (álbum). Si es foto suelta, creamos un ID falso único.
+        mg_id = update.message.media_group_id
+        if not mg_id:
+            mg_id = f"single_{update.message.message_id}"
+
+        # Inicializar el grupo si no existe (DE FORMA SÍNCRONA para evitar race conditions)
+        is_first = False
+        if mg_id not in context.user_data["media_groups"]:
+            is_first = True
+            context.user_data["media_groups"][mg_id] = {
+                "messages": [],
+                "timer_task": None,
+                "wait_msg_id": None
+            }
+
+        grupo = context.user_data["media_groups"][mg_id]
+        grupo["messages"].append(update.message)
+
+        # Si es la primera foto, mandamos el mensaje de espera
+        if is_first:
+            wait_msg = await update.message.reply_text("<i>Recibiendo y ordenando fotos, por favor espera...</i>", parse_mode="HTML")
+            # Actualizamos el ID para poder borrarlo después
+            if mg_id in context.user_data["media_groups"]:
+                context.user_data["media_groups"][mg_id]["wait_msg_id"] = wait_msg.message_id
+
+        # Cancelar timer anterior de ESTE grupo si existe
+        if grupo["timer_task"]:
+            grupo["timer_task"].cancel()
+
+        # Función que se ejecutará tras 3.5s de inactividad en este grupo
+        async def process_group(current_mg_id, chat_id):
             try:
-                # Esperamos 1.5 segundos para agrupar fotos enviadas en álbum o en ráfaga
-                await asyncio.sleep(1.5)
+                await asyncio.sleep(3.5)
                 
-                conv_actual = conversation_repo.obtener(user_id)
-                total = len(conv_actual["fotos"]) if conv_actual else 1
+                # Extraer y limpiar el grupo
+                grp = context.user_data["media_groups"].pop(current_mg_id, None)
+                if not grp:
+                    return
                 
-                texto_estado = (
-                    f"<b>Se han recibido {total} fotos correctamente.</b>\n\n"
-                    "<i>Sigue enviando o presiona el botón <b>TERMINAR</b>.</i>"
-                )
+                mensajes = grp["messages"]
                 
-                reply_markup = ReplyKeyboardMarkup([["TERMINAR"]], resize_keyboard=True)
-                await context.bot.send_message(
-                    chat_id=update.effective_chat.id,
-                    text=texto_estado,
-                    parse_mode="HTML",
-                    reply_markup=reply_markup
-                )
+                # ¡LA CLAVE!: Ordenar por message_id para asegurar el orden de selección
+                mensajes.sort(key=lambda m: m.message_id)
+
+                lock = context.user_data["processing_lock"]
+                
+                # Bloquear para que no se mezclen fotos de distintos grupos del mismo usuario
+                async with lock:
+                    exitos = 0
+                    for msg in mensajes:
+                        if await _procesar_foto_ordenada(msg):
+                            exitos += 1
+                    
+                    if exitos == 0:
+                        await context.bot.send_message(chat_id, "<b>Error interno al guardar las fotos.</b>", parse_mode="HTML")
+                        return
+
+                    # Feedback al usuario
+                    conv_actual = conversation_repo.obtener(user_id)
+                    total = len(conv_actual["fotos"]) if conv_actual else exitos
+                    
+                    texto_estado = (
+                        f"<b>Se han recibido {total} fotos correctamente.</b>\n\n"
+                        "<i>Sigue enviando o presiona el botón <b>TERMINAR</b>.</i>"
+                    )
+                    reply_markup = ReplyKeyboardMarkup([["TERMINAR"]], resize_keyboard=True)
+                    
+                    # Borramos el mensaje temporal de "Recibiendo..."
+                    wait_msg_id = grp.get("wait_msg_id")
+                    if wait_msg_id:
+                        try:
+                            await context.bot.delete_message(chat_id=chat_id, message_id=wait_msg_id)
+                        except Exception:
+                            pass
+                    
+                    await context.bot.send_message(
+                        chat_id=chat_id,
+                        text=texto_estado,
+                        parse_mode="HTML",
+                        reply_markup=reply_markup
+                    )
             except asyncio.CancelledError:
-                # La tarea fue cancelada porque llegó otra foto muy rápido. Comportamiento esperado.
+                # Comportamiento esperado: llegó otra foto antes de 1.5s
                 pass
             except Exception as e:
-                print(f"Error enviando feedback: {e}")
+                print(f"Error procesando grupo {current_mg_id}: {e}")
 
-        # Creamos la nueva tarea en background
-        nueva_tarea = asyncio.create_task(send_feedback())
-        context.user_data["feedback_task"] = nueva_tarea
+        # Iniciar el nuevo timer
+        grupo["timer_task"] = asyncio.create_task(process_group(mg_id, update.effective_chat.id))
 
     return guardar_foto
 

@@ -47,30 +47,22 @@ def create_reporte(usuario_repo, registro_repo):
             user_id = update.effective_user.id if update.effective_user else None
             usuario = usuario_repo.obtener(user_id)
             if not usuario:
-                await update.message.reply_text("\u26a0\ufe0f Usuario no registrado.")
+                await update.message.reply_text("Usuario no registrado.")
                 return
 
-            partes = (update.message.text or "").strip().lower().split()
-            modo = partes[1] if len(partes) > 1 else "usuario"
-
-            if modo == "grupo":
-                if usuario.get("rol") not in ("admin", "supervisor"):
-                    await update.message.reply_text("<b>No tienes permiso para ver el grupo.</b>", parse_mode="HTML")
-                    return
+            if usuario.get("rol") == "admin":
+                # Admin ve todos los registros de su turno/departamento
                 registros = registro_repo.obtener_por_turno_depto(
                     turno=usuario["turno"],
                     departamento=usuario["departamento"],
                     user_id=user_id,
                 )
             else:
+                # Operador ve solo sus propios registros
                 registros = registro_repo.obtener_todos(user_id=user_id)
 
             if not registros:
-                msg = (
-                    "<b>No hay registros para tu turno/departamento.</b>"
-                    if modo == "grupo"
-                    else "<b>No tienes registros aún.</b>"
-                )
+                msg = "<b>No hay registros disponibles.</b>"
                 await update.message.reply_text(msg, parse_mode="HTML")
                 return
 
@@ -81,7 +73,7 @@ def create_reporte(usuario_repo, registro_repo):
                     f"REPORTE DE DEFECTOS - TURNO {usuario['turno']} - {usuario['departamento']}\n"
                 )
                 tmp.write(
-                    f"Usuario: {user_id} | Generado: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                    f"Usuario: {usuario.get('nombre', user_id)} | Generado: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
                 )
                 tmp.write("=" * 60 + "\n\n")
                 for reg in registros:
@@ -97,7 +89,7 @@ def create_reporte(usuario_repo, registro_repo):
                         f"_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
                     ),
                     caption=(
-                        f"\U0001f4ca Reporte {usuario['turno']}/{usuario['departamento']}"
+                        f"Reporte {usuario['turno']}/{usuario['departamento']}"
                         f" - {len(registros)} registros"
                     ),
                 )
@@ -133,15 +125,23 @@ def create_estado(usuario_repo, contador_repo, registro_repo):
                 return
 
             contador = contador_repo.obtener_actual(user_id)
-            stats = registro_repo.obtener_estadisticas(
-                turno=usuario["turno"],
-                departamento=usuario["departamento"],
-            )
+            
+            if usuario.get("rol") == "admin":
+                stats = registro_repo.obtener_estadisticas(
+                    turno=usuario["turno"],
+                    departamento=usuario["departamento"],
+                )
+                msg = f"<b>ESTADO DEL GRUPO (Admin)</b>\n<i>(Turno {usuario['turno']} - {usuario['departamento']})</i>\n\n"
+            else:
+                stats = registro_repo.obtener_estadisticas(user_id=user_id)
+                msg = f"<b>ESTADO PERSONAL</b>\n<i>(Turno {usuario['turno']} - {usuario['departamento']})</i>\n\n"
 
-            msg = f"<b>ESTADO DEL GRUPO</b>\n<i>(Turno {usuario['turno']} - {usuario['departamento']})</i>\n\n"
-            msg += f"<b>Usuario:</b> <code>{user_id}</code>\n"
+            msg += f"<b>Usuario:</b> {usuario.get('nombre', user_id)}\n"
+            msg += f"<b>Rol:</b> {usuario.get('rol', 'operador').capitalize()}\n"
             msg += f"<b>Siguiente foto:</b> {contador:03d}\n"
-            msg += f"<b>Registros del grupo:</b> {stats.get('total_registros', 0)}\n"
+            
+            lbl_registros = "Registros del grupo" if usuario.get("rol") == "admin" else "Tus registros"
+            msg += f"<b>{lbl_registros}:</b> {stats.get('total_registros', 0)}\n"
             if stats.get("ultimo_registro"):
                 msg += f"<b>Último registro:</b> {stats['ultimo_registro']}"
 
@@ -304,3 +304,26 @@ def create_descargar(usuario_repo):
             await crear_y_enviar_zip(update, imgs, "completo", user_id)
 
     return descargar
+
+
+# ─────────────────────────────────────────
+# /info
+# ─────────────────────────────────────────
+def create_info():
+    """
+    Factory para el comando /info (sin dependencias externas).
+    Muestra la información del sistema y créditos del desarrollador.
+    """
+    async def info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        if not update.message:
+            return
+            
+        texto = (
+            "<b>Agente IQA</b>\n"
+            "<i>Versión 3.1</i>\n\n"
+            "<b>Desarrollado por:</b> Daniel Hernandez\n\n"
+            "Bot especializado en el registro y gestión de reportes de calidad en línea de producción."
+        )
+        await update.message.reply_text(texto, parse_mode="HTML")
+        
+    return info
