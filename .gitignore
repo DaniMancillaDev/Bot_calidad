@@ -9,6 +9,28 @@ wheels/
 # Virtual environments
 .venv
 .env
+
 # Logs generados en runtime
 bot.log
 *.log
+
+# Database and state
+*.db
+*.db-journal
+*.sqlite3
+
+# Project specific
+scratch/
+fotos/
+move_photos*.bat
+rename_photos.bat
+revert_photos.bat
+
+# IDEs
+.vscode/
+.idea/
+
+# AI Agents
+.agents/
+skills/
+skills-lock.json
