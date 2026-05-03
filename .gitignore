@@ -22,6 +22,7 @@ bot.log
 # Project specific
 scratch/
 fotos/
+media/
 move_photos*.bat
 rename_photos.bat
 revert_photos.bat
