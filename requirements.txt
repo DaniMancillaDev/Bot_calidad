@@ -1,0 +1,23 @@
+anyio==4.9.0
+certifi==2025.4.26
+h11==0.16.0
+httpcore==1.0.9
+httpx==0.28.1
+hupper==1.12.1
+idna==3.10
+python-dotenv==1.1.0
+python-telegram-bot==22.1
+sniffio==1.3.1
+asyncio-mqtt==0.16.1
+aiofiles==23.2.1
+Pillow==10.4.0
+# Panel web Django
+django==6.0.4
+# Reporte Excel + detección de orientación
+openpyxl==3.1.5
+onnxruntime==1.25.1
+numpy==2.4.4
+huggingface_hub==0.31.4
+pytesseract==0.3.13
+# SQLite viene incluido con Python
+django==6.0.4

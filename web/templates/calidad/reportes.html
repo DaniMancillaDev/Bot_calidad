@@ -1,0 +1,128 @@
+{% extends "calidad/base.html" %}
+
+{% block title %}Reportes — Panel de Calidad{% endblock %}
+{% block page_title %}Reportes de Defectos{% endblock %}
+
+{% block topbar_actions %}
+<a href="{% url 'revisar_orientacion' %}{% if filtros.fecha_desde %}?fecha_desde={{ filtros.fecha_desde }}{% if filtros.fecha_hasta %}&fecha_hasta={{ filtros.fecha_hasta }}{% endif %}{% endif %}"
+  class="btn btn-primary">
+  📊 Preparar Excel con fotos
+</a>
+{% endblock %}
+
+{% block content %}
+
+<!-- FILTROS -->
+<div class="card" style="margin-bottom:24px;">
+  <form method="get" class="grid grid-4" style="align-items:end;">
+
+    <div class="form-group">
+      <label>Línea</label>
+      <select name="linea">
+        <option value="">Todas las líneas</option>
+        {% for l in lineas %}
+        <option value="{{ l }}" {% if filtros.linea == l %}selected{% endif %}>{{ l }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Responsable</label>
+      <select name="responsable">
+        <option value="">Todos</option>
+        {% for r in responsables %}
+        <option value="{{ r }}" {% if filtros.responsable == r %}selected{% endif %}>{{ r }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Modo</label>
+      <select name="modo">
+        <option value="">Ambos</option>
+        <option value="normal" {% if filtros.modo == 'normal' %}selected{% endif %}>Normal</option>
+        <option value="epidemico" {% if filtros.modo == 'epidemico' %}selected{% endif %}>Epidémico</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Desde Fecha</label>
+      <input type="date" name="fecha_desde" value="{{ filtros.fecha_desde }}">
+    </div>
+
+    <div class="form-group"
+      style="grid-column: span 3; display:flex; gap:12px; flex-direction:row; align-items:flex-end;">
+      <div style="flex:1;">
+        <label>Buscar Modelo</label>
+        <input type="text" name="modelo" value="{{ filtros.modelo }}" placeholder="Ej. NS-50F501...">
+      </div>
+      <div style="flex:1;">
+        <label>Hasta Fecha</label>
+        <input type="date" name="fecha_hasta" value="{{ filtros.fecha_hasta }}">
+      </div>
+    </div>
+
+    <div class="form-group" style="display:flex; gap:8px; flex-direction:row;">
+      <button type="submit" class="btn btn-primary" style="flex:1; justify-content:center;">Filtrar</button>
+      <a href="{% url 'reportes' %}" class="btn btn-ghost" style="flex:1; justify-content:center;">Limpiar</a>
+    </div>
+  </form>
+</div>
+
+<!-- TABLA DE RESULTADOS -->
+<div class="card">
+  <div style="margin-bottom:16px; font-size:.85rem; color:var(--text-muted);">
+    Mostrando <strong>{{ registros.count }}</strong> registros
+  </div>
+
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Fotos</th>
+          <th>Modelo</th>
+          <th>Línea</th>
+          <th>Descripción</th>
+          <th>Responsable</th>
+          <th>Cant.</th>
+          <th>Modo</th>
+          <th>Fecha</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in registros %}
+        <tr>
+          <td>
+            <a href="{% url 'galeria_fotos' %}?q={{ r.fotos }}"
+              style="color:var(--accent); text-decoration:none; font-family:monospace; font-size:.85rem;">
+              {{ r.fotos }}
+            </a>
+          </td>
+          <td title="{{ r.modelo }}">{{ r.modelo|truncatechars:25 }}</td>
+          <td><span class="badge badge-purple">{{ r.linea }}</span></td>
+          <td title="{{ r.descripcion }}">{{ r.descripcion|truncatechars:35 }}</td>
+          <td>{{ r.responsable }}</td>
+          <td>{{ r.cantidad|default:"—" }}</td>
+          <td>
+            {% if r.modo_epidemico %}
+            <span class="badge badge-red">Epidémico</span>
+            {% else %}
+            <span class="badge badge-green">Normal</span>
+            {% endif %}
+          </td>
+          <td style="color:var(--text-muted); font-size:.82rem; white-space:nowrap;">
+            {{ r.fecha_registro|date:"d/m/y H:i"|default:"—" }}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="8" style="text-align:center; color:var(--text-muted); padding:32px;">No se encontraron registros
+            con esos filtros.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

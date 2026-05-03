@@ -1,0 +1,399 @@
+{% extends "calidad/base.html" %}
+{% block title %}Revisar Orientación — Panel de Calidad{% endblock %}
+{% block page_title %}Revisión de Fotos para Excel{% endblock %}
+
+{% block topbar_actions %}
+  <div style="display:flex; gap:10px; align-items:center;">
+    <span id="status-msg" style="font-size:.85rem; color:var(--text-muted);"></span>
+    <button id="btn-generar" class="btn btn-primary" onclick="generarExcel()" disabled>
+      ⏳ Analizando...
+    </button>
+  </div>
+{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<style>
+  .instruccion {
+    background: rgba(99,102,241,.1); border: 1px solid rgba(99,102,241,.3);
+    border-radius: 10px; padding: 14px 20px; margin-bottom: 24px;
+    font-size: .88rem; color: var(--text-muted); line-height: 1.6;
+  }
+  .instruccion strong { color: var(--text); }
+
+  .foto-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+  .foto-card {
+    background: var(--surface); border: 2px solid var(--border);
+    border-radius: 12px; overflow: hidden;
+    transition: border-color .2s;
+  }
+  .foto-card.corregida { border-color: var(--accent); }
+  .foto-card.ok        { border-color: var(--success); }
+
+  .foto-img-wrapper {
+    display: flex; justify-content: center; align-items: center;
+    background: #000; height: 200px; overflow: hidden;
+  }
+  .foto-img-wrapper img {
+    max-width: 100%; max-height: 200px; object-fit: contain;
+    transition: transform .3s ease;
+  }
+
+  .foto-controls {
+    padding: 10px 12px; display: flex; justify-content: space-between; align-items: center;
+    border-top: 1px solid var(--border);
+  }
+  .foto-num { font-weight: 600; font-size: .9rem; }
+  .angulo-badge {
+    font-size: .75rem; padding: 2px 8px; border-radius: 99px;
+    background: var(--surface2); color: var(--text-muted);
+  }
+  .rot-btns { display: flex; gap: 4px; }
+  .rot-btn {
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); border-radius: 6px; padding: 4px 8px;
+    cursor: pointer; font-size: .9rem; transition: all .15s;
+  }
+  .rot-btn:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  /* Drag & Drop */
+  .drag-handle {
+    position: absolute; top: 6px; left: 6px;
+    background: rgba(0,0,0,.45); color: #fff;
+    border-radius: 5px; padding: 2px 5px;
+    font-size: .75rem; cursor: grab; user-select: none;
+    opacity: 0; transition: opacity .15s;
+    z-index: 10; /* Asegura que la imagen no lo tape */
+  }
+  .foto-img-wrapper { position: relative; }
+  .foto-card:hover .drag-handle { opacity: 1; }
+  .sortable-ghost {
+    opacity: .35;
+    border: 2px dashed var(--accent) !important;
+    background: rgba(99,102,241,.08) !important;
+  }
+  .sortable-drag { cursor: grabbing !important; box-shadow: 0 8px 32px rgba(0,0,0,.35); }
+
+  .section-header {
+    font-size: .8rem; font-weight: 600; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: .07em;
+    margin: 20px 0 12px; display: flex; align-items: center; gap: 8px;
+  }
+  .section-header::after {
+    content: ''; flex: 1; height: 1px; background: var(--border);
+  }
+
+  #loading-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(15,17,23,.85); z-index: 1000;
+    justify-content: center; align-items: center; flex-direction: column; gap: 16px;
+  }
+  .spinner {
+    width: 48px; height: 48px; border: 4px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .scan-pulse {
+    animation: pulse 1.5s infinite;
+  }
+  @keyframes pulse {
+    0% { opacity: 0.5; }
+    50% { opacity: 1; }
+    100% { opacity: 0.5; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- OVERLAY DE CARGA -->
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <p style="color: var(--text-muted); font-size:.9rem;">Generando Excel con las fotos...</p>
+</div>
+
+<!-- INSTRUCCIÓN -->
+<div class="instruccion">
+  <strong>¿Cómo funciona?</strong><br>
+  1. El sistema detectó automáticamente la orientación de cada foto usando inteligencia artificial.<br>
+  2. <strong>Revisa cada foto</strong>: si la ves girada, usa los botones 🔄 para corregirla. Las fotos corregidas se marcan en <strong style="color:var(--accent)">morado</strong>.<br>
+  3. Cuando todo se vea bien, haz clic en <strong>"Generar y Descargar Excel"</strong> arriba a la derecha.
+</div>
+
+<!-- RESUMEN DE REGISTROS -->
+<div class="section-header">📋 Registros incluidos ({{ registros|length }})</div>
+<div class="card" style="margin-bottom:24px; padding:0; overflow:hidden;">
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Fotos</th><th>Modelo</th><th>Línea</th><th>Descripción</th><th>Responsable</th><th>Cant.</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in registros %}
+        <tr>
+          <td><code style="font-size:.8rem; color:var(--accent);">{{ r.fotos_str }}</code></td>
+          <td>{{ r.modelo|truncatechars:22 }}</td>
+          <td><span class="badge badge-purple">{{ r.linea }}</span></td>
+          <td>{{ r.descripcion|truncatechars:35 }}</td>
+          <td>{{ r.responsable }}</td>
+          <td>{{ r.cantidad }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:24px;">Sin registros en este período.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- GALERÍA DE REVISIÓN -->
+<div class="section-header">🖼️ Fotos a incluir ({{ fotos_preview|length }})</div>
+
+{% if fotos_preview %}
+<div style="font-size:.8rem; color:var(--text-muted); margin-bottom:10px;">
+  💡 <strong>Arrastra</strong> las fotos para cambiar el orden en que aparecerán en el Excel.
+</div>
+<div class="foto-grid" id="foto-grid">
+  {% for foto in fotos_preview %}
+  <div class="foto-card {% if foto.angulo != 0 %}corregida{% else %}ok{% endif %}"
+       id="card-{{ foto.clave }}"
+       data-clave="{{ foto.clave }}"
+       data-num="{{ foto.numero }}"
+       data-angulo="{{ foto.angulo }}">
+    <div class="foto-img-wrapper">
+      <!-- Handle de arrastre -->
+      <div class="drag-handle" title="Arrastra para reordenar">⠿ mover</div>
+      <img id="img-{{ foto.clave }}"
+           src="{{ foto.url }}"
+           alt="Foto {{ foto.numero }}"
+           style="transform: rotate({{ foto.angulo }}deg);"
+           loading="lazy">
+    </div>
+    <div class="foto-controls">
+      <div>
+        <div class="foto-num">#{{ foto.numero|stringformat:"03d" }}</div>
+        <div class="angulo-badge scan-pulse" id="badge-{{ foto.clave }}">escaneando...</div>
+      </div>
+      <div class="rot-btns">
+        <button class="rot-btn" title="Rotar -90°" onclick="rotar('{{ foto.clave }}', -90)">↺</button>
+        <button class="rot-btn" title="Rotar +90°" onclick="rotar('{{ foto.clave }}', 90)">↻</button>
+        <button class="rot-btn" title="Resetear" onclick="resetear('{{ foto.clave }}')">⊙</button>
+        <button class="rot-btn" id="btn-excluir-{{ foto.clave }}" title="Excluir/Incluir foto" onclick="toggleExcluir('{{ foto.clave }}')" style="color:var(--danger); border-color:var(--danger);">❌</button>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card" style="padding:40px; text-align:center; color:var(--text-muted);">
+  <span style="font-size:2.5rem; display:block; margin-bottom:12px;">📭</span>
+  No hay fotos disponibles para este período. Verifica los filtros de fecha o que el bot haya guardado imágenes.
+</div>
+{% endif %}
+
+<script>
+  // Registros (para enviarlos al generar el Excel)
+  const registros = JSON.parse('{{ registros_json|escapejs }}');
+  const fotosClaves = {{ fotos_preview|length }} > 0 ? {{ fotos_preview|safe }}.map(f => f.clave) : [];
+  
+  // Estado mutable: identificador compuesto (str) -> { angulo: int, excluida: bool, numero: int }
+  const state = {};
+  {% if fotos_preview %}
+  const fotosData = {{ fotos_preview|safe }};
+  fotosData.forEach(f => { state[f.clave] = { angulo: 0, excluida: false, numero: f.numero }; });
+  {% endif %}
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    if (fotosClaves.length === 0) return;
+
+    // Inicializar Drag & Drop
+    const grid = document.getElementById('foto-grid');
+    if (grid) {
+      new Sortable(grid, {
+        animation: 150,
+        handle: '.drag-handle', // Solo se arrastra desde la etiqueta
+        ghostClass: 'sortable-ghost',
+        dragClass: 'sortable-drag',
+      });
+    }
+    
+    try {
+      const res = await fetch("{% url 'api_detectar_orientacion' %}", {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCookie('csrftoken'),
+        },
+        body: JSON.stringify({ fotos: fotosClaves }),
+      });
+      
+      if (res.ok) {
+        const angulos = await res.json();
+        Object.keys(angulos).forEach(k => {
+          const ang = parseInt(angulos[k]);
+          if (state[k]) state[k].angulo = ang;
+          actualizarCard(k);
+        });
+      }
+    } catch(e) {
+      console.error("Error analizando fotos", e);
+      // En caso de error, dejamos todo en 0 y quitamos pulse
+      fotosClaves.forEach(clave => actualizarCard(clave));
+    } finally {
+      const btn = document.getElementById('btn-generar');
+      btn.innerHTML = "⬇️ Generar y Descargar Excel";
+      btn.disabled = false;
+    }
+  });
+
+  function rotar(num, delta) {
+    if (state[num].excluida) return;
+    const actual = state[num].angulo || 0;
+    state[num].angulo = ((actual + delta) % 360 + 360) % 360;
+    actualizarCard(num);
+  }
+
+  function resetear(num) {
+    if (state[num].excluida) return;
+    state[num].angulo = 0;
+    actualizarCard(num);
+  }
+
+  function toggleExcluir(num) {
+    state[num].excluida = !state[num].excluida;
+    actualizarCard(num);
+  }
+
+  function actualizarCard(num) {
+    const s = state[num];
+    const img   = document.getElementById(`img-${num}`);
+    const badge = document.getElementById(`badge-${num}`);
+    const card  = document.getElementById(`card-${num}`);
+    const btnEx = document.getElementById(`btn-excluir-${num}`);
+
+    img.style.transform = `rotate(${s.angulo}deg)`;
+    badge.classList.remove('scan-pulse');
+    
+    if (s.excluida) {
+        badge.textContent = 'excluida';
+        card.style.opacity = '0.5';
+        card.classList.remove('ok', 'corregida');
+        card.style.borderColor = 'var(--danger)';
+        btnEx.textContent = '✅';
+        btnEx.title = 'Incluir foto';
+    } else {
+        badge.textContent = s.angulo !== 0 ? `auto: ${s.angulo}°` : 'sin rotación';
+        card.style.opacity = '1';
+        card.classList.remove('ok', 'corregida');
+        card.classList.add(s.angulo !== 0 ? 'corregida' : 'ok');
+        card.style.borderColor = ''; // usa css default
+        btnEx.textContent = '❌';
+        btnEx.title = 'Excluir foto';
+    }
+  }
+
+  async function generarExcel() {
+    const btn = document.getElementById('btn-generar');
+    const overlay = document.getElementById('loading-overlay');
+    const msg = document.getElementById('status-msg');
+
+    btn.disabled = true;
+    overlay.style.display = 'flex';
+    msg.textContent = 'Generando...';
+
+    // Convertir state a dict serializable y filtrar registros
+    const rotaciones = {};
+    const fotosAExcluir = new Set();
+    
+    Object.keys(state).forEach(k => {
+      if (state[k].excluida) {
+          fotosAExcluir.add(k);
+      } else if (state[k].angulo !== 0) {
+          rotaciones[k] = state[k].angulo;
+      }
+    });
+
+    // Capturar el orden visual actual del DOM tras arrastrar usando clave
+    const domOrder = [...document.querySelectorAll('.foto-card')].map(el => el.dataset.clave);
+    // Crear un mapa de orden para ordenar rápido (clave -> index)
+    const orderMap = {};
+    domOrder.forEach((clave, idx) => { orderMap[clave] = idx; });
+
+    // Clonamos los registros para no mutar el original en caso de error
+    const registrosFiltrados = JSON.parse(JSON.stringify(registros)).map(reg => {
+        // Filtrar las excluidas
+        reg.fotos_nums = reg.fotos_nums.filter(num => !fotosAExcluir.has(reg.user_id + "_" + num));
+        // Ordenar según la disposición visual del usuario
+        reg.fotos_nums.sort((a, b) => (orderMap[reg.user_id + "_" + a] ?? 9999) - (orderMap[reg.user_id + "_" + b] ?? 9999));
+        return reg;
+    }).filter(reg => reg.fotos_nums.length > 0); // Omitir registros que se quedaron sin fotos
+
+    try {
+      const res = await fetch("{% url 'generar_excel' %}", {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCookie('csrftoken'),
+        },
+        body: JSON.stringify({ rotaciones, registros: registrosFiltrados }),
+      });
+
+      if (!res.ok) {
+        const err = await res.text();
+        msg.textContent = `Error: ${err}`;
+        msg.style.color = 'var(--danger)';
+        return;
+      }
+
+      // Disparar la descarga del archivo
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+
+      // Detectar si es ZIP (varios proveedores) o XLSX (uno solo)
+      const contentDisp = res.headers.get('Content-Disposition') || '';
+      const filenameMatch = contentDisp.match(/filename="(.+?)"/);
+      if (filenameMatch) {
+        a.download = filenameMatch[1];
+      } else {
+        const isZip = res.headers.get('Content-Type')?.includes('zip');
+        const fecha = new Date().toISOString().slice(0,10);
+        a.download = isZip ? `reportes_${fecha}.zip` : `reporte_${fecha}.xlsx`;
+      }
+      
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      const isMultiple = a.download.endsWith('.zip');
+      msg.textContent = isMultiple ? '✅ ZIP con reportes por proveedor descargado' : '✅ Excel descargado';
+      msg.style.color = 'var(--success)';
+
+    } catch(e) {
+      msg.textContent = `Error de red: ${e}`;
+      msg.style.color = 'var(--danger)';
+    } finally {
+      overlay.style.display = 'none';
+      btn.disabled = false;
+    }
+  }
+
+  function getCookie(name) {
+    let val = null;
+    document.cookie.split(';').forEach(c => {
+      const [k, v] = c.trim().split('=');
+      if (k === name) val = decodeURIComponent(v);
+    });
+    return val;
+  }
+</script>
+
+{% endblock %}

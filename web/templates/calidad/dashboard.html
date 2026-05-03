@@ -1,0 +1,135 @@
+{% extends "calidad/base.html" %}
+
+{% block title %}Dashboard — Panel de Calidad{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block topbar_actions %}
+<a href="{% url 'reportes' %}" class="btn btn-ghost">Ver todos los reportes →</a>
+{% endblock %}
+
+{% block content %}
+
+<!-- FILTRO DE DÍAS -->
+<div style="display:flex; gap:8px; margin-bottom:20px; align-items:center;">
+  <span style="color:var(--text-muted); font-size:.85rem;">Período:</span>
+  <a href="?dias=7" class="btn {% if dias == 7 %}btn-primary{% else %}btn-ghost{% endif %}">7 días</a>
+  <a href="?dias=14" class="btn {% if dias == 14 %}btn-primary{% else %}btn-ghost{% endif %}">14 días</a>
+  <a href="?dias=30" class="btn {% if dias == 30 %}btn-primary{% else %}btn-ghost{% endif %}">30 días</a>
+</div>
+
+<!-- INFO DE USUARIO Y ESTADÍSTICAS -->
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+  {% if perfil %}
+  <div style="font-size:.9rem; color:var(--text-muted);">
+    👤 <strong>Turno {{ perfil.turno }}</strong> | {{ perfil.departamento }}
+    {% if request.user.is_superuser %}<span class="badge badge-purple">Admin</span>{% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<!-- TARJETAS DE ESTADÍSTICAS -->
+<div class="grid grid-3" style="margin-bottom:24px;">
+  <div class="card">
+    <div class="card-title">Total Registros</div>
+    <div class="card-value">{{ total_registros }}</div>
+    <div style="color:var(--text-muted); font-size:.8rem; margin-top:4px;">en tu turno/depto</div>
+  </div>
+  <div class="card">
+    <div class="card-title">Últimos {{ dias }} días</div>
+    <div class="card-value" style="color:var(--accent);">{{ registros_recientes }}</div>
+    <div style="color:var(--text-muted); font-size:.8rem; margin-top:4px;">registros recientes</div>
+  </div>
+  <div class="card">
+    <div class="card-title">Fotos Disponibles</div>
+    <div class="card-value" style="color:var(--success);"><a href="{% url 'galeria_fotos' %}"
+        style="color:inherit; text-decoration:none;">Ver →</a></div>
+    <div style="color:var(--text-muted); font-size:.8rem; margin-top:4px;">en galería</div>
+  </div>
+</div>
+
+<!-- DEFECTOS POR LÍNEA Y TOP DEFECTOS -->
+<div class="grid grid-2" style="margin-bottom:24px;">
+
+  <!-- Por línea -->
+  <div class="card">
+    <div class="card-title" style="margin-bottom:16px;">Defectos por Línea</div>
+    {% if por_linea %}
+    {% for item in por_linea %}
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
+      <span style="width:48px; font-weight:600; font-size:.9rem;">{{ item.linea }}</span>
+      <div style="flex:1; background:var(--surface2); border-radius:99px; height:8px; overflow:hidden;">
+        <div
+          style="height:100%; background:var(--accent); border-radius:99px; width:{{ item.total|floatformat:0 }}px; max-width:100%;">
+        </div>
+      </div>
+      <span style="color:var(--text-muted); font-size:.85rem;">{{ item.total }}</span>
+    </div>
+    {% endfor %}
+    {% else %}
+    <p style="color:var(--text-muted); font-size:.88rem;">Sin datos todavía.</p>
+    {% endif %}
+  </div>
+
+  <!-- Top defectos -->
+  <div class="card">
+    <div class="card-title" style="margin-bottom:16px;">Top Tipos de Defecto</div>
+    {% if top_defectos %}
+    {% for item in top_defectos %}
+    <div
+      style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border);">
+      <span style="font-size:.88rem; color:var(--text);">{{ item.descripcion|truncatechars:40 }}</span>
+      <span class="badge badge-purple">{{ item.total }}</span>
+    </div>
+    {% endfor %}
+    {% else %}
+    <p style="color:var(--text-muted); font-size:.88rem;">Sin datos todavía.</p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ÚLTIMOS REGISTROS -->
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+    <div class="card-title" style="margin:0;">Últimos Registros</div>
+    <a href="{% url 'reportes' %}" class="btn btn-ghost" style="font-size:.8rem; padding:6px 12px;">Ver todos</a>
+  </div>
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Fotos</th>
+          <th>Modelo</th>
+          <th>Línea</th>
+          <th>Responsable</th>
+          <th>Cant.</th>
+          <th>Turno/Depto</th>
+          <th>Fecha</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in ultimos_registros %}
+        <tr>
+          <td><code style="font-size:.8rem; color:var(--accent);">{{ r.fotos }}</code></td>
+          <td>{{ r.modelo|truncatechars:25 }}</td>
+          <td><span class="badge badge-purple">{{ r.linea }}</span></td>
+          <td>{{ r.responsable }}</td>
+          <td>{{ r.cantidad|default:"—" }}</td>
+          <td>
+            <span class="badge badge-green">{{ r.turno|default:"—" }}/{{ r.departamento|default:"—" }}</span>
+          </td>
+          <td style="color:var(--text-muted); font-size:.82rem;">
+            {{ r.fecha_registro|date:"d/m H:i"|default:"—" }}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="7" style="text-align:center; color:var(--text-muted); padding:32px;">No hay registros todavía.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

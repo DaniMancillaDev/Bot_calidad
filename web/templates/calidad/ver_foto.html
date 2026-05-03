@@ -1,0 +1,73 @@
+{% extends "calidad/base.html" %}
+
+{% block title %}Foto {{ numero|stringformat:"03d" }} — Panel de Calidad{% endblock %}
+{% block page_title %}Detalle de Foto #{{ numero|stringformat:"03d" }}{% endblock %}
+
+{% block topbar_actions %}
+<div style="display:flex; gap:8px;">
+  {% if prev %}
+  <a href="{% url 'ver_foto' prev %}" class="btn btn-ghost">← Anterior</a>
+  {% else %}
+  <button class="btn btn-ghost" disabled style="opacity:0.5; cursor:not-allowed;">← Anterior</button>
+  {% endif %}
+
+  <a href="{% url 'galeria_fotos' %}" class="btn btn-ghost">Volver a Galería</a>
+
+  <a href="{% url 'ver_foto' next_num %}" class="btn btn-ghost">Siguiente →</a>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<div class="grid grid-2" style="grid-template-columns: 2fr 1fr; align-items:start;">
+
+  <!-- VISOR DE IMAGEN -->
+  <div class="card" style="padding:0; overflow:hidden;">
+    <div
+      style="background:#000; display:flex; justify-content:center; align-items:center; min-height:400px; padding:20px;">
+      <img src="{{ url_foto }}" alt="Foto {{ numero }}" style="max-width:100%; max-height:70vh; object-fit:contain;">
+    </div>
+    <div
+      style="padding:16px 20px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        <span style="color:var(--text-muted); font-size:0.85rem;">Archivo:</span>
+        <strong style="margin-left:6px;">{{ nombre }}</strong>
+      </div>
+      <a href="{{ url_foto }}" target="_blank" class="btn btn-ghost" style="padding:4px 10px; font-size:0.8rem;">Abrir
+        original ↗</a>
+    </div>
+  </div>
+
+  <!-- REGISTROS ASOCIADOS -->
+  <div class="card">
+    <div class="card-title" style="margin-bottom:16px;">Registros que usan esta foto</div>
+
+    {% if registros %}
+    <div style="display:flex; flex-direction:column; gap:12px;">
+      {% for r in registros %}
+      <div style="background:var(--surface2); padding:16px; border-radius:8px; border:1px solid var(--border);">
+        <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+          <span class="badge badge-purple">{{ r.linea }}</span>
+          <span style="color:var(--text-muted); font-size:0.8rem;">{{ r.fecha_registro|date:"d/m H:i" }}</span>
+        </div>
+        <div style="font-weight:500; font-size:0.9rem; margin-bottom:4px;">{{ r.modelo }}</div>
+        <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:12px;">{{ r.descripcion }}</div>
+        <div style="display:flex; justify-content:space-between; font-size:0.85rem;">
+          <span>Resp: <strong>{{ r.responsable }}</strong></span>
+          <span>Cant: <strong>{{ r.cantidad }}</strong></span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div
+      style="padding:32px; text-align:center; color:var(--text-muted); background:var(--surface2); border-radius:8px;">
+      <span style="font-size:2rem; display:block; margin-bottom:12px;">👻</span>
+      Esta foto no está vinculada a ningún registro de defecto todavía.
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+{% endblock %}

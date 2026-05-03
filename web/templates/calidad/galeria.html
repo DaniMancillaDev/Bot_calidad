@@ -1,0 +1,114 @@
+{% extends "calidad/base.html" %}
+
+{% block title %}Galería de Fotos — Panel de Calidad{% endblock %}
+{% block page_title %}Galería de Fotos{% endblock %}
+
+{% block extra_head %}
+<style>
+  .gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+  }
+  .photo-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    transition: transform 0.2s, border-color 0.2s;
+    text-decoration: none;
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+  }
+  .photo-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--accent);
+  }
+  .photo-img {
+    width: 100%;
+    aspect-ratio: 4/3;
+    object-fit: cover;
+    background: #111;
+  }
+  .photo-info {
+    padding: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .photo-num {
+    font-weight: 600;
+    font-size: 1.1rem;
+  }
+  .photo-ext {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    background: var(--surface2);
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="card" style="margin-bottom:24px; display:flex; justify-content:space-between; align-items:center;">
+  <div>
+    <span style="font-size:1.2rem; font-weight:600;">{{ total }}</span>
+    <span style="color:var(--text-muted); font-size:0.9rem;">fotos almacenadas</span>
+  </div>
+  <div style="display:flex; gap:12px;">
+    <!-- Simple client side filter could be added here if needed -->
+    <input type="text" id="filterInput" placeholder="Buscar foto (ej. 005)..." style="width:200px;">
+  </div>
+</div>
+
+<div class="gallery-grid" id="galleryGrid">
+  {% for f in fotos %}
+  <a href="{% url 'ver_foto' f.numero %}" class="photo-card" data-num="{{ f.numero|stringformat:'03d' }}">
+    <img src="{{ f.url }}" alt="Foto {{ f.numero }}" class="photo-img" loading="lazy">
+    <div class="photo-info">
+      <span class="photo-num">#{{ f.numero|stringformat:"03d" }}</span>
+      <span class="photo-ext">{{ f.nombre|slice:"-3:"|upper }}</span>
+    </div>
+  </a>
+  {% empty %}
+  <div style="grid-column: 1 / -1; padding: 40px; text-align: center; color: var(--text-muted);">
+    No se encontraron fotos en el directorio.
+  </div>
+  {% endfor %}
+</div>
+
+<script>
+  // Filtrado simple en el frontend
+  document.getElementById('filterInput').addEventListener('input', function(e) {
+    const q = e.target.value.trim().toLowerCase();
+    const cards = document.querySelectorAll('.photo-card');
+    
+    cards.forEach(card => {
+      if (q === '') {
+        card.style.display = 'flex';
+      } else {
+        const num = card.getAttribute('data-num');
+        if (num.includes(q)) {
+          card.style.display = 'flex';
+        } else {
+          card.style.display = 'none';
+        }
+      }
+    });
+  });
+
+  // Si viene con '?q=' en la URL, aplicarlo
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.has('q')) {
+    const q = urlParams.get('q');
+    const input = document.getElementById('filterInput');
+    input.value = q;
+    // Dispatch event to trigger filter
+    input.dispatchEvent(new Event('input'));
+  }
+</script>
+
+{% endblock %}

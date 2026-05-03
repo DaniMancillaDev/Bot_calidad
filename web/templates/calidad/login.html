@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Iniciar Sesión — Panel de Calidad</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root { --accent: #6366f1; --accent2: #8b5cf6; --bg: #0f1117; --surface: #1a1d2e; --border: #2e3250; --text: #e2e8f0; --text-muted: #94a3b8; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+    .login-box { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 40px; width: 100%; max-width: 400px; }
+    .login-logo { text-align: center; margin-bottom: 28px; }
+    .login-logo .emoji { font-size: 3rem; display: block; margin-bottom: 8px; }
+    .login-logo h1 { font-size: 1.4rem; font-weight: 700; }
+    .login-logo p  { color: var(--text-muted); font-size: 0.88rem; margin-top: 4px; }
+    .form-group { margin-bottom: 18px; }
+    label { display: block; font-size: 0.82rem; font-weight: 500; color: var(--text-muted); margin-bottom: 6px; }
+    input { width: 100%; background: #242842; border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 10px 14px; font-size: 0.9rem; font-family: 'Inter', sans-serif; }
+    input:focus { outline: none; border-color: var(--accent); }
+    .btn-login { width: 100%; padding: 11px; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-size: 0.95rem; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; transition: background .2s; margin-top: 8px; }
+    .btn-login:hover { background: var(--accent2); }
+    .error-msg { background: rgba(239,68,68,.15); color: #f87171; border: 1px solid rgba(239,68,68,.3); border-radius: 8px; padding: 10px 14px; font-size: 0.85rem; margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+  <div class="login-box">
+    <div class="login-logo">
+      <span class="emoji">🏭</span>
+      <h1>Panel de Calidad</h1>
+      <p>Ingresa con tu usuario y contraseña</p>
+    </div>
+
+    {% if form.errors %}
+      <div class="error-msg">❌ Usuario o contraseña incorrectos. Intenta de nuevo.</div>
+    {% endif %}
+
+    <form method="post">
+      {% csrf_token %}
+      <div class="form-group">
+        <label for="id_username">Usuario</label>
+        <input type="text" name="username" id="id_username" autofocus autocomplete="username" placeholder="tu_usuario">
+      </div>
+      <div class="form-group">
+        <label for="id_password">Contraseña</label>
+        <input type="password" name="password" id="id_password" autocomplete="current-password" placeholder="••••••••">
+      </div>
+      <button type="submit" class="btn-login">Entrar →</button>
+    </form>
+  </div>
+</body>
+</html>
