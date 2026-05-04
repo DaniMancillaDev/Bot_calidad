@@ -183,12 +183,12 @@ def compress_file(filepath: Path) -> bool:
     backup_path = filepath.with_name(filepath.stem + ".original.md")
 
     if not original_text.strip():
-        print(" Refusing to compress: file is empty or whitespace-only.")
+        print("❌ Refusing to compress: file is empty or whitespace-only.")
         return False
 
     # Check if backup already exists to prevent accidental overwriting
     if backup_path.exists():
-        print(f" Backup file already exists: {backup_path}")
+        print(f"⚠️ Backup file already exists: {backup_path}")
         print("The original backup may contain important content.")
         print("Aborting to prevent data loss. Please remove or rename the backup file if you want to proceed.")
         return False
@@ -198,12 +198,12 @@ def compress_file(filepath: Path) -> bool:
     compressed = call_claude(build_compress_prompt(original_text))
 
     if compressed is None or not compressed.strip():
-        print(" Compression aborted: Claude returned an empty response.")
+        print("❌ Compression aborted: Claude returned an empty response.")
         print("   Original file is untouched (no backup created).")
         return False
 
     if compressed.strip() == original_text.strip():
-        print(" Compression aborted: output is identical to input.")
+        print("❌ Compression aborted: output is identical to input.")
         print("   Likely causes: Claude refused, returned the prompt verbatim, or the file is")
         print("   already in caveman form. Original file is untouched (no backup created).")
         return False
@@ -215,7 +215,7 @@ def compress_file(filepath: Path) -> bool:
     backup_path.write_text(original_text)
     backup_readback = backup_path.read_text(errors="ignore")
     if backup_readback != original_text:
-        print(f" Backup write verification failed: {backup_path}")
+        print(f"❌ Backup write verification failed: {backup_path}")
         print("   In-memory original differs from on-disk backup. Aborting before touching the input file.")
         try:
             backup_path.unlink()
@@ -234,7 +234,7 @@ def compress_file(filepath: Path) -> bool:
             print("Validation passed")
             break
 
-        print(" Validation failed:")
+        print("❌ Validation failed:")
         for err in result.errors:
             print(f"   - {err}")
 
@@ -242,7 +242,7 @@ def compress_file(filepath: Path) -> bool:
             # Restore original on failure
             filepath.write_text(original_text)
             backup_path.unlink(missing_ok=True)
-            print(" Failed after retries — original restored")
+            print("❌ Failed after retries — original restored")
             return False
 
         print("Fixing with Claude...")
