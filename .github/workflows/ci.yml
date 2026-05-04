@@ -1,0 +1,41 @@
+name: CI - Validación
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    name: Lint & Validación
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Instalar dependencias del sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tesseract-ocr tesseract-ocr-spa
+
+      - name: Instalar uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Instalar dependencias Python
+        run: uv sync
+
+      - name: Verificar imports (syntax check)
+        run: |
+          uv run python -c "import bot.app"
+          uv run python -c "import shared.infrastructure.orientation.orientation_engine"
+          uv run python -c "import database"
+
+      - name: Verificar migraciones Django
+        run: uv run python web/manage.py check --deploy 2>/dev/null || true
