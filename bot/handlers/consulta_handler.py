@@ -323,7 +323,6 @@ def create_info():
             
         texto = (
             "<b>Agente IQA</b>\n"
-            "<i>Versión 3.1</i>\n\n"
             "<b>Desarrollado por:</b> Daniel Hernandez\n\n"
             "Bot especializado en el registro y gestión de reportes de calidad en línea de producción."
         )

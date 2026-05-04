@@ -49,6 +49,25 @@ def create_cancelar(conversation_repo, usuario_repo, contador_repo):
             conv = conversation_repo.obtener(user_id)
             
             # ── Cancelación de buffers temporales (Álbumes en progreso) ──
+            # Borrar mensaje de estado si existe
+            if "photo_batch" in context.user_data:
+                wait_msg_id = context.user_data["photo_batch"].get("wait_msg_id")
+                if wait_msg_id:
+                    try:
+                        await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=wait_msg_id)
+                    except Exception:
+                        pass
+                
+                if context.user_data["photo_batch"].get("timer_task"):
+                    context.user_data["photo_batch"]["timer_task"].cancel()
+                
+                context.user_data["photo_batch"] = {
+                    "messages": [],
+                    "timer_task": None,
+                    "wait_msg_id": None,
+                    "sending_wait_msg": False
+                }
+            
             media_groups = context.user_data.get("media_groups", {})
             for mg_id, grupo in list(media_groups.items()):
                 if grupo.get("timer_task"):
