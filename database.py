@@ -1,5 +1,5 @@
 # ================================
-# 🗄️ BASE DE DATOS SQLITE - BOT DE CALIDAD (MULTIUSUARIO)
+#  BASE DE DATOS SQLITE - BOT DE CALIDAD (MULTIUSUARIO)
 # ================================
 # Versión multiusuario con aislamiento por turno y departamento.
 # Sistema de lotes y modo epidémico eliminados.
@@ -44,7 +44,7 @@ class DatabaseManager:
                 cursor = conn.cursor()
 
                 # ================================
-                # 📋 TABLA: Registros de defectos (MULTIUSUARIO)
+                #  TABLA: Registros de defectos (MULTIUSUARIO)
                 # ================================
                 cursor.execute('''
                     CREATE TABLE IF NOT EXISTS registros_defectos (
@@ -64,12 +64,12 @@ class DatabaseManager:
                 ''')
 
                 # ================================
-                # 🗑️ ELIMINAR TABLA OBSOLETA (usuarios_bot)
+                #  ELIMINAR TABLA OBSOLETA (usuarios_bot)
                 # ================================
                 cursor.execute('DROP TABLE IF EXISTS usuarios_bot')
 
                 # ================================
-                # 📊 TABLA: Contadores compartidos por Turno y Depto
+                #  TABLA: Contadores compartidos por Turno y Depto
                 # ================================
                 cursor.execute('''
                     CREATE TABLE IF NOT EXISTS contadores_grupo (
@@ -81,7 +81,7 @@ class DatabaseManager:
                 ''')
 
                 # ================================
-                # 🗑️ ELIMINAR TABLAS OBSOLETAS (si existen)
+                #  ELIMINAR TABLAS OBSOLETAS (si existen)
                 # ================================
                 tablas_obsoletas = [
                     'lotes_epidemico',
@@ -96,7 +96,7 @@ class DatabaseManager:
                     cursor.execute(f'DROP TABLE IF EXISTS {tabla}')
 
                 # ================================
-                # 🚀 ÍNDICES DE RENDIMIENTO
+                #  ÍNDICES DE RENDIMIENTO
                 # ================================
                 cursor.execute('CREATE INDEX IF NOT EXISTS idx_registros_turno_depto ON registros_defectos (turno, departamento)')
                 cursor.execute('CREATE INDEX IF NOT EXISTS idx_calidad_perfil_telegram ON calidad_perfilusuario (telegram_user_id)')
@@ -109,7 +109,7 @@ class DatabaseManager:
             raise
 
     # ================================
-    # 🔒 AUTENTICACIÓN Y USUARIOS
+    #  AUTENTICACIÓN Y USUARIOS
     # ================================
 
     def usuario_tiene_acceso(self, telegram_user_id: int) -> bool:
@@ -250,7 +250,7 @@ class DatabaseManager:
             return []
 
     # ================================
-    # 📝 REGISTROS DE DEFECTOS
+    #  REGISTROS DE DEFECTOS
     # ================================
 
     def guardar_registro(self, fotos: List[int], modelo: str, linea: str,
@@ -368,7 +368,7 @@ class DatabaseManager:
             return False
 
     # ================================
-    # 📊 ESTADÍSTICAS
+    #  ESTADÍSTICAS
     # ================================
 
     def obtener_estadisticas(self, user_id: int = None, turno: str = None, departamento: str = None) -> Dict:
@@ -411,7 +411,7 @@ class DatabaseManager:
             return {}
 
     # ================================
-    # 🔢 CONTADORES UNIFICADOS (Por Turno y Depto)
+    #  CONTADORES UNIFICADOS (Por Turno y Depto)
     # ================================
 
     def _obtener_turno_depto(self, user_id: int) -> Tuple[str, str]:
@@ -501,7 +501,7 @@ class DatabaseManager:
 
 
     # ================================
-    # 🔧 UTILIDADES
+    #  UTILIDADES
     # ================================
 
     def _formatear_rango_fotos(self, fotos: List[int]) -> str:
@@ -531,6 +531,6 @@ class DatabaseManager:
         return "".join([f"({rango})" for rango in rangos])
 
 # ================================
-# 🌐 INSTANCIA GLOBAL
+#  INSTANCIA GLOBAL
 # ================================
 db = DatabaseManager()

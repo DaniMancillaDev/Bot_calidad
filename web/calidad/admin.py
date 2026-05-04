@@ -63,6 +63,6 @@ admin.site.register(User, UserAdmin)
 # ============================================================
 # Personalización del Admin
 # ============================================================
-admin.site.site_header = '🏭 Panel de Calidad'
+admin.site.site_header = ' Panel de Calidad'
 admin.site.site_title  = 'Calidad Admin'
 admin.site.index_title = 'Gestión del Sistema de Calidad'

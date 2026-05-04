@@ -152,7 +152,7 @@ def build_application(token: str, container: dict):
 
     # ── Mensajes (fotos y texto libre) ────────────────────────────────────────────
     app.add_handler(MessageHandler(
-        filters.PHOTO,
+        filters.PHOTO | filters.VIDEO | filters.Document.ALL | filters.ANIMATION | filters.AUDIO | filters.VOICE,
         create_guardar_foto(
             container["usuario_repo"],
             container["contador_repo"],

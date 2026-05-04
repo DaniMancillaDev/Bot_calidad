@@ -91,6 +91,8 @@ def create_guardar_foto(usuario_repo, contador_repo, conversation_repo, foto_sto
 
         # ===== FUNCIÓN INTERNA DE PROCESAMIENTO ATÓMICO =====
         async def _procesar_foto_ordenada(msg):
+            if not msg.photo:
+                return "INVALID"
             try:
                 photo = msg.photo[-1]
                 file = await photo.get_file(read_timeout=30)
@@ -109,10 +111,10 @@ def create_guardar_foto(usuario_repo, contador_repo, conversation_repo, foto_sto
                 if conv is not None:
                     conv["fotos"].append(contador)
                     conversation_repo.persistir()
-                return True
+                return "OK"
             except Exception as e:
                 logger.error("Error descargando foto %s: %s", msg.message_id, e)
-                return False
+                return "ERROR"
 
         # ===== SISTEMA DE BUFFERING Y DEBOUNCING =====
         import asyncio
@@ -171,10 +173,38 @@ def create_guardar_foto(usuario_repo, contador_repo, conversation_repo, foto_sto
                 # Bloquear para que no se mezclen fotos de distintos grupos del mismo usuario
                 async with lock:
                     exitos = 0
+                    invalidos = 0
                     for msg in mensajes:
-                        if await _procesar_foto_ordenada(msg):
+                        res = await _procesar_foto_ordenada(msg)
+                        if res == "OK":
                             exitos += 1
+                        elif res == "INVALID":
+                            invalidos += 1
                     
+                    if exitos == 0 and invalidos > 0:
+                        mensaje_invalido = (
+                            " <b>Archivo no válido.</b>\n"
+                            "El sistema solo acepta <b>fotos comprimidas</b>.\n"
+                            "Los videos o documentos son ignorados."
+                        )
+                        # Si hay un registro en curso, dar opciones
+                        if conversation_repo.tiene_conversacion(user_id):
+                            conv_act = conversation_repo.obtener(user_id)
+                            fotos_c = len(conv_act.get("fotos", []))
+                            mensaje_invalido += f"\n\nTienes <b>{fotos_c} fotos</b> en el registro actual.\n¿Qué deseas hacer?"
+                            await context.bot.send_message(chat_id, mensaje_invalido, parse_mode="HTML", reply_markup=ReplyKeyboardMarkup([["TERMINAR"]], resize_keyboard=True))
+                        else:
+                            await context.bot.send_message(chat_id, mensaje_invalido, parse_mode="HTML")
+                        
+                        # Borramos el mensaje temporal si lo hay
+                        wait_msg_id = grp.get("wait_msg_id")
+                        if wait_msg_id:
+                            try:
+                                await context.bot.delete_message(chat_id=chat_id, message_id=wait_msg_id)
+                            except Exception:
+                                pass
+                        return
+
                     if exitos == 0:
                         await context.bot.send_message(chat_id, "<b>Error interno al guardar las fotos.</b>", parse_mode="HTML")
                         return
@@ -183,10 +213,11 @@ def create_guardar_foto(usuario_repo, contador_repo, conversation_repo, foto_sto
                     conv_actual = conversation_repo.obtener(user_id)
                     total = len(conv_actual["fotos"]) if conv_actual else exitos
                     
-                    texto_estado = (
-                        f"<b>Se han recibido {total} fotos correctamente.</b>\n\n"
-                        "<i>Sigue enviando o presiona el botón <b>TERMINAR</b>.</i>"
-                    )
+                    texto_estado = f"<b>Se han recibido {total} fotos correctamente.</b>\n"
+                    if invalidos > 0:
+                        texto_estado += f" <i>{invalidos} archivo(s) ignorados (no eran fotos).</i>\n"
+                    texto_estado += "\n<i>Sigue enviando o presiona el botón <b>TERMINAR</b>.</i>"
+                    
                     reply_markup = ReplyKeyboardMarkup([["TERMINAR"]], resize_keyboard=True)
                     
                     # Borramos el mensaje temporal de "Recibiendo..."
