@@ -1,3 +1,10 @@
+## [1.2.1](https://github.com/DaniMancillaDev/Bot_calidad/compare/v1.2.0...v1.2.1) (2026-05-04)
+
+
+### Performance Improvements
+
+* **db:** agregar indices y borrar tablas muertas ([2670568](https://github.com/DaniMancillaDev/Bot_calidad/commit/2670568cabe3e320d2202bacf0d7cf305cccc4e9))
+
 # [1.2.0](https://github.com/DaniMancillaDev/Bot_calidad/compare/v1.1.0...v1.2.0) (2026-05-04)
 
 

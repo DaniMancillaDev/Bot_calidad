@@ -1,6 +1,6 @@
 [project]
 name = "botcalidad"
-version = "1.2.0"
+version = "1.2.1"
 description = "Bot de Telegram y panel Django para gestion de reportes de calidad con IA"
 readme = "README.md"
 requires-python = ">=3.13"
