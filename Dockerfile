@@ -28,8 +28,15 @@ COPY plantilla_reporte.xlsx ./
 # Crear directorios para datos en runtime
 RUN mkdir -p fotos media
 
+# Instalar gunicorn para produccion
+RUN uv pip install gunicorn
+
 # Exponer puerto de Django
 EXPOSE 8000
+
+# Healthcheck: verificar que Django responde
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/login/')" || exit 1
 
 # Arrancar bot + web
 CMD ["sh", "-c", "uv run python web/manage.py migrate --run-syncdb && uv run python main.py"]

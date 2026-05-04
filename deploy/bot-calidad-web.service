@@ -1,0 +1,20 @@
+[Unit]
+Description=Bot de Calidad - Panel Web Django
+After=network.target
+
+[Service]
+Type=simple
+User=deploy
+WorkingDirectory=/opt/bot-calidad/web
+EnvironmentFile=/opt/bot-calidad/.env
+ExecStart=/opt/bot-calidad/.venv/bin/python -m gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 2
+Restart=always
+RestartSec=5
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=bot-calidad-web
+
+[Install]
+WantedBy=multi-user.target

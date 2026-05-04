@@ -1,0 +1,20 @@
+[Unit]
+Description=Bot de Calidad - Telegram
+After=network.target
+
+[Service]
+Type=simple
+User=deploy
+WorkingDirectory=/opt/bot-calidad
+EnvironmentFile=/opt/bot-calidad/.env
+ExecStart=/opt/bot-calidad/.venv/bin/python main.py
+Restart=always
+RestartSec=5
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=bot-calidad
+
+[Install]
+WantedBy=multi-user.target

@@ -1,6 +1,7 @@
 """
 Configuración de Django - Panel de Calidad
 """
+import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -8,11 +9,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # La base de datos del bot está un nivel arriba
 BOT_DIR = BASE_DIR.parent
 
-SECRET_KEY = 'django-insecure-calidad-bot-cambiar-en-produccion-abc123xyz789'
+SECRET_KEY = os.getenv(
+    'DJANGO_SECRET_KEY',
+    'django-insecure-calidad-bot-SOLO-PARA-DESARROLLO-LOCAL'
+)
 
-DEBUG = True
+DEBUG = os.getenv('DJANGO_DEBUG', 'True').lower() in ('true', '1', 'yes')
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0']
+ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,0.0.0.0').split(',')
 
 INSTALLED_APPS = [
     'django.contrib.admin',

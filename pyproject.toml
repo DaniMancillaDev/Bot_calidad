@@ -1,7 +1,7 @@
 [project]
 name = "botcalidad"
 version = "1.1.0"
-description = "Add your description here"
+description = "Bot de Telegram y panel Django para gestion de reportes de calidad con IA"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
@@ -14,7 +14,9 @@ dependencies = [
     "httpx>=0.28.1",
     "hupper>=1.12.1",
     "huggingface-hub>=0.31.4",
-    "aiofiles>=23.2.1"
+    "aiofiles>=23.2.1",
+    "gunicorn>=23.0.0",
+    "python-dotenv>=1.1.0"
 ]
 
 [dependency-groups]
