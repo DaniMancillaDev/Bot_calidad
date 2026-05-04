@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/DaniMancillaDev/Bot_calidad/compare/v1.0.0...v1.1.0) (2026-05-04)
+
+
+### Features
+
+* reemplazar print() por logging centralizado ([7ebcfea](https://github.com/DaniMancillaDev/Bot_calidad/commit/7ebcfea6ca404e69b3910b65bcf87475d6b9f4cf))
+
 # 1.0.0 (2026-05-04)
 
 
