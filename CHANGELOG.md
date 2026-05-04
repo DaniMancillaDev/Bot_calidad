@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/DaniMancillaDev/Bot_calidad/compare/v1.1.0...v1.2.0) (2026-05-04)
+
+
+### Features
+
+* **deploy:** preparar infraestructura para produccion VPS ([bbb5328](https://github.com/DaniMancillaDev/Bot_calidad/commit/bbb53287bfaa026795b8021b61455c1a41a2740c))
+
 # [1.1.0](https://github.com/DaniMancillaDev/Bot_calidad/compare/v1.0.0...v1.1.0) (2026-05-04)
 
 
