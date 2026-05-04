@@ -9,10 +9,13 @@ SRP : solo cambia si cambia la política de limpieza.
 DIP : recibe repos, no DatabaseManager ni acceso directo al filesystem.
 ISP : cada factory recibe SOLO las dependencias que necesita.
 """
+import logging
 import os
 
 from telegram import Update
 from telegram.ext import ContextTypes
+
+logger = logging.getLogger(__name__)
 
 FOTOS_PATH = "fotos"
 
@@ -58,7 +61,7 @@ def create_limpiar(conversation_repo, usuario_repo, registro_repo, contador_repo
                 await update.message.reply_text("<b>Error al limpiar registros.</b>", parse_mode="HTML")
 
         except Exception as e:
-            print(f"Error en /limpiar: {e}")
+            logger.error("Error en /limpiar: %s", e)
             await update.message.reply_text("<b>Error interno al limpiar registros.</b>", parse_mode="HTML")
 
     return limpiar
@@ -109,7 +112,7 @@ def create_limpiar_fotos(conversation_repo, usuario_repo, contador_repo):
             )
 
         except Exception as e:
-            print(f"Error en /limpiar_fotos: {e}")
+            logger.error("Error en /limpiar_fotos: %s", e)
             await update.message.reply_text("<b>Error interno al eliminar fotos.</b>", parse_mode="HTML")
 
     return limpiar_fotos

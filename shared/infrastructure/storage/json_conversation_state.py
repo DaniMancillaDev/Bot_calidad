@@ -1,6 +1,9 @@
+import logging
 import os
 import json
 from typing import Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 from shared.domain.estado_conversacion import EstadoConversacion, parse_estado_conversacion
 
@@ -38,7 +41,7 @@ class JsonConversationStateRepository:
                         if estado is not None:
                             conv['estado'] = estado.value
             except Exception as e:
-                print(f"Error al cargar estado: {e}")
+                logger.error("Error al cargar estado: %s", e)
                 self._conversaciones = {}
 
     def _guardar(self):
@@ -47,7 +50,7 @@ class JsonConversationStateRepository:
             with open(self._estado_file, 'w', encoding='utf-8') as f:
                 json.dump(self._conversaciones, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            print(f"Error al guardar estado: {e}")
+            logger.error("Error al guardar estado: %s", e)
 
     def tiene_conversacion(self, user_id: int) -> bool:
         return user_id in self._conversaciones

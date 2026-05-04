@@ -5,11 +5,14 @@
 # Sistema de lotes y modo epidémico eliminados.
 # ================================
 
+import logging
 import sqlite3
 import os
 import json
 from datetime import datetime
 from typing import List, Dict, Optional, Union, Tuple
+
+logger = logging.getLogger(__name__)
 
 class DatabaseManager:
     """
@@ -90,11 +93,10 @@ class DatabaseManager:
                     cursor.execute(f'DROP TABLE IF EXISTS {tabla}')
 
                 conn.commit()
-                print("OK: Base de datos inicializada correctamente (multiusuario)")
-                print("OK: Tablas: registros_defectos, contadores_usuario")
+                logger.info("Base de datos inicializada correctamente (multiusuario)")
 
         except Exception as e:
-            print(f"Error al inicializar la base de datos: {e}")
+            logger.error("Error al inicializar la base de datos: %s", e)
             raise
 
     # ================================
@@ -117,7 +119,7 @@ class DatabaseManager:
                 cursor.execute("SELECT id FROM calidad_perfilusuario WHERE telegram_user_id = ?", (telegram_user_id,))
                 return cursor.fetchone() is not None
         except Exception as e:
-            print(f"Error verificando acceso: {e}")
+            logger.error("Error verificando acceso: %s", e)
             return False
 
     def usuario_es_staff(self, telegram_user_id: int) -> bool:
@@ -149,7 +151,7 @@ class DatabaseManager:
                 row = cursor.fetchone()
                 return bool(row[0]) if row else False
         except Exception as e:
-            print(f"Error verificando is_staff para {telegram_user_id}: {e}")
+            logger.error("Error verificando is_staff para %s: %s", telegram_user_id, e)
             return False
 
     def crear_usuario(self, telegram_user_id: int, turno: str, departamento: str, username: str = None) -> bool:
@@ -199,7 +201,7 @@ class DatabaseManager:
                     }
                 return None
         except Exception as e:
-            print(f"❌ Error al obtener usuario {telegram_user_id}: {e}")
+            logger.error("Error al obtener usuario %s: %s", telegram_user_id, e)
             return None
 
     def actualizar_usuario(self, telegram_user_id: int, turno: str = None, departamento: str = None, username: str = None) -> bool:
@@ -235,7 +237,7 @@ class DatabaseManager:
                     })
                 return results
         except Exception as e:
-            print(f"❌ Error al listar usuarios: {e}")
+            logger.error("Error al listar usuarios: %s", e)
             return []
 
     # ================================
@@ -264,18 +266,11 @@ class DatabaseManager:
                 conn.commit()
                 return True
         except Exception as e:
-            print(f"❌ Error al guardar registro: {e}")
+            logger.error("Error al guardar registro: %s", e)
             return False
 
-    # Método legacy para compatibilidad temporal
-    def guardar_registro_normal(self, fotos: List[int], modelo: str, linea: str,
-                               cantidad: int, responsable: str, descripcion: str,
-                               usuario_id: int) -> bool:
-        """Compatibilidad temporal - delega a guardar_registro()."""
-        usuario = self.obtener_usuario(usuario_id)
-        turno = usuario.get('turno') if usuario else None
-        departamento = usuario.get('departamento') if usuario else None
-        return self.guardar_registro(fotos, modelo, linea, cantidad, responsable, descripcion, usuario_id, turno, departamento)
+
+
 
     def obtener_todos_registros(self, user_id: Optional[int] = None, turno: str = None, departamento: str = None) -> List[Dict]:
         """Obtiene registros filtrados por usuario, turno y departamento."""
@@ -309,7 +304,7 @@ class DatabaseManager:
 
                 return registros
         except Exception as e:
-            print(f"❌ Error al obtener registros: {e}")
+            logger.error("Error al obtener registros: %s", e)
             return []
 
     def obtener_registros_por_turno_depto(self, turno: str, departamento: str, user_id: int = None) -> List[Dict]:
@@ -334,7 +329,7 @@ class DatabaseManager:
 
                 return registros
         except Exception as e:
-            print(f"❌ Error al obtener registros por turno/depto: {e}")
+            logger.error("Error al obtener registros por turno/depto: %s", e)
             return []
 
     def limpiar_registros(self) -> bool:
@@ -347,7 +342,7 @@ class DatabaseManager:
                 conn.commit()
                 return True
         except Exception as e:
-            print(f"❌ Error al limpiar registros: {e}")
+            logger.error("Error al limpiar registros: %s", e)
             return False
 
     def limpiar_registros_usuario(self, user_id: int) -> bool:
@@ -357,10 +352,10 @@ class DatabaseManager:
                 cursor = conn.cursor()
                 cursor.execute('DELETE FROM registros_defectos WHERE user_id = ?', (user_id,))
                 conn.commit()
-                print(f"🗑️ Registros del usuario {user_id} eliminados")
+                logger.info("Registros del usuario %s eliminados", user_id)
                 return True
         except Exception as e:
-            print(f"❌ Error al limpiar registros del usuario {user_id}: {e}")
+            logger.error("Error al limpiar registros del usuario %s: %s", user_id, e)
             return False
 
     # ================================
@@ -403,7 +398,7 @@ class DatabaseManager:
                     'ultimo_registro': f"{ultimo_registro[0]} - {ultimo_registro[1]} - {ultimo_registro[2]}" if ultimo_registro else None
                 }
         except Exception as e:
-            print(f"❌ Error al obtener estadísticas: {e}")
+            logger.error("Error al obtener estadísticas: %s", e)
             return {}
 
     # ================================
@@ -442,7 +437,7 @@ class DatabaseManager:
                 conn.commit()
                 return contador
         except Exception as e:
-            print(f"❌ Error al obtener contador de grupo: {e}")
+            logger.error("Error al obtener contador de grupo: %s", e)
             return 1
 
     def obtener_contador_usuario(self, user_id: int) -> int:
@@ -457,9 +452,7 @@ class DatabaseManager:
         except:
             return 1
 
-    def actualizar_contador_usuario(self, user_id: int, nuevo_contador: int):
-        """LEGACY: Ya no se debe usar para incrementar manualmente porque causa Race Conditions."""
-        pass
+
 
     def reiniciar_contador_usuario(self, user_id: int):
         """
@@ -492,38 +485,11 @@ class DatabaseManager:
                 )
                 conn.commit()
         except Exception as e:
-            print(f"[ERROR establecer_contador_usuario] {e}")
+            logger.error("Error en establecer_contador_usuario: %s", e)
 
-    def obtener_ultimo_numero_confirmado(self, user_id: int = None) -> int:
-        """LEGACY: Ya no se usa. Retorna 0."""
-        return 0
 
-    def actualizar_ultimo_numero_confirmado(self, numero: int, user_id: int = None):
-        """LEGACY: Ya no se usa. No hace nada."""
-        pass
 
-    # ================================
-    # 🗑️ MÉTODOS LEGACY OBSOLETOS
-    # ================================
-    # Estos métodos se mantienen temporalmente para compatibilidad
-    # pero serán eliminados en futuras versiones.
 
-    def obtener_contador_actual(self) -> int:
-        """⚠️ LEGACY: Usar obtener_contador_usuario(user_id) en su lugar."""
-        print("⚠️ AVISO: obtener_contador_actual() está obsoleto. Use obtener_contador_usuario(user_id).")
-        return 1
-
-    def actualizar_contador(self, nuevo_contador: int):
-        """⚠️ LEGACY: Usar actualizar_contador_usuario(user_id, contador) en su lugar."""
-        print("⚠️ AVISO: actualizar_contador() está obsoleto. Use actualizar_contador_usuario(user_id, contador).")
-
-    def obtener_numeros_ocupados(self) -> set:
-        """⚠️ LEGACY: Retorna conjunto vacío. Ya no se usa en versión multiusuario."""
-        return set()
-
-    def actualizar_numeros_ocupados(self, numeros: set):
-        """⚠️ LEGACY: No hace nada. Ya no se usa en versión multiusuario."""
-        pass
 
     # ================================
     # 🔧 UTILIDADES

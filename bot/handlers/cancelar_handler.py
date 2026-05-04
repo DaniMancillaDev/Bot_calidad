@@ -8,10 +8,13 @@ SRP : solo cambia si cambia la política de cancelación.
 DIP : recibe repos, no DatabaseManager ni estado global.
 ISP : recibe SOLO los tres repos que necesita.
 """
+import logging
 import os
 
 from telegram import Update
 from telegram.ext import ContextTypes
+
+logger = logging.getLogger(__name__)
 
 FOTOS_PATH = "fotos"
 
@@ -100,7 +103,7 @@ def create_cancelar(conversation_repo, usuario_repo, contador_repo):
             await update.message.reply_text(msg, parse_mode="HTML")
 
         except Exception as e:
-            print(f"Error en /cancelar: {e}")
+            logger.error("Error en /cancelar: %s", e)
             await update.message.reply_text("<b>Error interno al cancelar la operación.</b>", parse_mode="HTML")
 
     return cancelar

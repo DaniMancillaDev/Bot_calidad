@@ -10,12 +10,15 @@ SRP : solo cambia si cambia el flujo de captura de defectos.
 DIP : recibe repos e interfaces, no concretos ni `db`.
 ISP : cada factory recibe SOLO las dependencias que necesita.
 """
+import logging
 import os
 from datetime import datetime
 
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import ContextTypes
 from telegram.constants import ReactionEmoji
+
+logger = logging.getLogger(__name__)
 
 FOTOS_PATH = "fotos"
 
@@ -108,7 +111,7 @@ def create_guardar_foto(usuario_repo, contador_repo, conversation_repo, foto_sto
                     conversation_repo.persistir()
                 return True
             except Exception as e:
-                print(f"Error descargando foto {msg.message_id}: {e}")
+                logger.error("Error descargando foto %s: %s", msg.message_id, e)
                 return False
 
         # ===== SISTEMA DE BUFFERING Y DEBOUNCING =====
@@ -204,7 +207,7 @@ def create_guardar_foto(usuario_repo, contador_repo, conversation_repo, foto_sto
                 # Comportamiento esperado: llegó otra foto antes de 1.5s
                 pass
             except Exception as e:
-                print(f"Error procesando grupo {current_mg_id}: {e}")
+                logger.error("Error procesando grupo %s: %s", current_mg_id, e)
 
         # Iniciar el nuevo timer
         grupo["timer_task"] = asyncio.create_task(process_group(mg_id, update.effective_chat.id))

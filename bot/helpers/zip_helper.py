@@ -6,12 +6,15 @@ Sin lógica de negocio, sin dependencias de repositorios.
 
 SRP: única razón de cambio = cambiar cómo se empaquetan/envían los ZIPs.
 """
+import logging
 import os
 import tempfile
 import zipfile
 from datetime import datetime
 
 from telegram import Update
+
+logger = logging.getLogger(__name__)
 
 # Directorio base de fotos (constante de configuración)
 FOTOS_PATH = "fotos"
@@ -67,4 +70,4 @@ async def crear_y_enviar_zip(
             try:
                 os.remove(nombre_zip)
             except OSError as e:
-                print(f"[WARN] No se pudo borrar ZIP temporal: {e}")
+                logger.warning("No se pudo borrar ZIP temporal: %s", e)

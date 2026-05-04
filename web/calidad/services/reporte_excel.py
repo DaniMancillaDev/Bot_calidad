@@ -10,6 +10,7 @@ Flujo:
 NOTA: Las funciones de detección ONNX viven en shared/infrastructure/orientation/
       y se re-exportan aquí para compatibilidad con el código existente.
 """
+import logging
 import os
 import warnings
 from pathlib import Path
@@ -29,6 +30,8 @@ from shared.infrastructure.orientation.orientation_engine import (
 os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
 warnings.filterwarnings("ignore")
 ImageFile.LOAD_TRUNCATED_IMAGES = True
+
+logger = logging.getLogger(__name__)
 
 # ============================================================
 # CONFIGURACIÓN DE EXCEL
@@ -139,7 +142,7 @@ def _prepare_image_strip(img_path: Path, angle: int, target_h: int, tmp_dir: Pat
         img_hi.save(tmp_path, format="JPEG", quality=JPEG_QUALITY, optimize=True)
         return tmp_path, disp_w, disp_h
     except Exception as e:
-        print(f"[ERROR] No se pudo procesar {img_path.name}: {e}")
+        logger.error("No se pudo procesar %s: %s", img_path.name, e)
         return None, 0, 0
 
 
@@ -247,7 +250,7 @@ def generate_excel(
                 try:
                     xl_img = OpenpyxlImage(str(tmp_path))
                 except Exception as e:
-                    print(f"[ERROR] openpyxl: {e}")
+                    logger.error("Error openpyxl: %s", e)
                     continue
 
                 # Resolver en qué columna real cae esta imagen

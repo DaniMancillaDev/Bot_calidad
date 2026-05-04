@@ -1,7 +1,10 @@
+import logging
 import os
 import re
 from pathlib import Path
 from typing import List, Optional
+
+logger = logging.getLogger(__name__)
 
 
 class LocalFotoStorage:
@@ -86,7 +89,7 @@ class LocalFotoStorage:
                         os.remove(os.path.join(user_folder, archivo))
                         eliminadas += 1
                     except Exception as e:
-                        print(f"Error al eliminar foto {archivo}: {e}")
+                        logger.error("Error al eliminar foto %s: %s", archivo, e)
         return eliminadas
 
     def eliminar_todas(self, user_id: int) -> int:
@@ -106,5 +109,5 @@ class LocalFotoStorage:
                     os.remove(os.path.join(user_folder, archivo))
                     eliminadas += 1
                 except Exception as e:
-                    print(f"Error al eliminar foto {archivo}: {e}")
+                    logger.error("Error al eliminar foto %s: %s", archivo, e)
         return eliminadas

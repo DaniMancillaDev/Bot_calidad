@@ -8,6 +8,7 @@ Funciones públicas:
     detect_orientation(img_path) → int  (0 / 90 / 180 / 270)
     detect_orientations_batch(foto_paths) → dict[int, int]
 """
+import logging
 import warnings
 import numpy as np
 import onnxruntime as ort
@@ -16,6 +17,8 @@ from PIL import Image, ImageFile, ImageOps
 
 warnings.filterwarnings("ignore")
 ImageFile.LOAD_TRUNCATED_IMAGES = True
+
+logger = logging.getLogger(__name__)
 
 
 # ============================================================
@@ -36,7 +39,7 @@ def _get_onnx_session():
             )
             _onnx_session = ort.InferenceSession(model_path)
         except Exception as e:
-            print(f"[WARN] No se pudo cargar modelo ONNX: {e}")
+            logger.warning("No se pudo cargar modelo ONNX: %s", e)
             _onnx_session = None
     return _onnx_session
 
@@ -73,7 +76,7 @@ def detect_orientation(img_path) -> int:
         elif 135 <= raw < 225:       return 180
         else:                        return 90
     except Exception as e:
-        print(f"[WARN] Orientación fallida en {img_path}: {e}")
+        logger.warning("Orientación fallida en %s: %s", img_path, e)
         return 0
 
 

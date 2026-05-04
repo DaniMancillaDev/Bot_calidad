@@ -11,6 +11,7 @@ SRP : solo cambia si cambia la forma de presentar información al usuario.
 DIP : recibe repos e interfaces, sin acceso a `db` ni filesystem directo.
 ISP : cada factory recibe SOLO las dependencias que necesita.
 """
+import logging
 import os
 import re
 import tempfile
@@ -20,6 +21,8 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from bot.helpers.zip_helper import crear_y_enviar_zip
+
+logger = logging.getLogger(__name__)
 
 FOTOS_PATH = "fotos"
 MAX_IMAGENES_POR_ZIP = 30
@@ -96,7 +99,7 @@ def create_reporte(usuario_repo, registro_repo):
             os.remove(nombre_archivo)
 
         except Exception as e:
-            print(f"Error en /reporte: {e}")
+            logger.error("Error en /reporte: %s", e)
             await update.message.reply_text("<b>Error interno al generar el reporte.</b>", parse_mode="HTML")
 
     return reporte
@@ -148,7 +151,7 @@ def create_estado(usuario_repo, contador_repo, registro_repo):
             await update.message.reply_text(msg, parse_mode="HTML")
 
         except Exception as e:
-            print(f"Error en /estado: {e}")
+            logger.error("Error en /estado: %s", e)
             await update.message.reply_text("<b>Error interno al obtener el estado.</b>", parse_mode="HTML")
 
     return estado
@@ -212,7 +215,7 @@ def create_info_fotos(usuario_repo):
             await update.message.reply_text(msg, parse_mode="HTML")
 
         except Exception as e:
-            print(f"Error en /info_fotos: {e}")
+            logger.error("Error en /info_fotos: %s", e)
             await update.message.reply_text("<b>Error interno al obtener información.</b>", parse_mode="HTML")
 
     return info_fotos
