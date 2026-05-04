@@ -87,10 +87,19 @@ class DatabaseManager:
                     'lotes_epidemico',
                     'lotes_activos',
                     'fotos_por_responsable',
-                    'control_contador'
+                    'control_contador',
+                    'contadores_globales',
+                    'contadores_usuario',
+                    'registro_numeracion'
                 ]
                 for tabla in tablas_obsoletas:
                     cursor.execute(f'DROP TABLE IF EXISTS {tabla}')
+
+                # ================================
+                # 🚀 ÍNDICES DE RENDIMIENTO
+                # ================================
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_registros_turno_depto ON registros_defectos (turno, departamento)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_calidad_perfil_telegram ON calidad_perfilusuario (telegram_user_id)')
 
                 conn.commit()
                 logger.info("Base de datos inicializada correctamente (multiusuario)")
