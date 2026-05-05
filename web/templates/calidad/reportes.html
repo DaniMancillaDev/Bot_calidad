@@ -72,57 +72,88 @@
 <!-- TABLA DE RESULTADOS -->
 <div class="card">
   <div style="margin-bottom:16px; font-size:.85rem; color:var(--text-muted);">
-    Mostrando <strong>{{ registros.count }}</strong> registros
+    Mostrando <strong>{{ total_registros }}</strong> registros
   </div>
 
-  <div class="table-wrapper">
-    <table>
-      <thead>
-        <tr>
-          <th>Fotos</th>
-          <th>Modelo</th>
-          <th>Línea</th>
-          <th>Descripción</th>
-          <th>Responsable</th>
-          <th>Cant.</th>
-          <th>Modo</th>
-          <th>Fecha</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for r in registros %}
-        <tr>
-          <td>
-            <a href="{% url 'galeria_fotos' %}?q={{ r.fotos }}"
-              style="color:var(--accent); text-decoration:none; font-family:monospace; font-size:.85rem;">
-              {{ r.fotos }}
-            </a>
-          </td>
-          <td title="{{ r.modelo }}">{{ r.modelo|truncatechars:25 }}</td>
-          <td><span class="badge badge-purple">{{ r.linea }}</span></td>
-          <td title="{{ r.descripcion }}">{{ r.descripcion|truncatechars:35 }}</td>
-          <td>{{ r.responsable }}</td>
-          <td>{{ r.cantidad|default:"—" }}</td>
-          <td>
-            {% if r.modo_epidemico %}
-            <span class="badge badge-red">Epidémico</span>
-            {% else %}
-            <span class="badge badge-green">Normal</span>
-            {% endif %}
-          </td>
-          <td style="color:var(--text-muted); font-size:.82rem; white-space:nowrap;">
-            {{ r.fecha_registro|date:"d/m/y H:i"|default:"—" }}
-          </td>
-        </tr>
-        {% empty %}
-        <tr>
-          <td colspan="8" style="text-align:center; color:var(--text-muted); padding:32px;">No se encontraron registros
-            con esos filtros.</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <div class="report-container">
+    {% regroup registros by user_id as grupos %}
+    {% for grupo in grupos %}
+    <div class="user-group" style="margin-bottom: 24px;">
+      <!-- Encabezado del grupo -->
+      <div class="user-group-header" onclick="toggleGroup('{{ grupo.grouper|default:'none' }}')" style="cursor:pointer; background: var(--surface); padding: 12px 16px; border: 1px solid var(--border); border-radius: var(--radius); display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; transition: background 0.2s;">
+        <div>
+          <span id="icon-{{ grupo.grouper|default:'none' }}" style="display:inline-block; width:20px;">▶</span>
+          <strong style="margin-left: 8px; font-size:1.1rem;">Usuario: {{ grupo.list.0.nombre_usuario }} <span style="color:var(--text-muted); font-size:0.9rem;">(ID: {{ grupo.grouper|default:'Ninguno' }})</span></strong>
+        </div>
+        <span class="badge" style="background: var(--surface2); padding: 4px 10px; border-radius: 12px; font-size: 0.85rem; font-weight: 600;">{{ grupo.list|length }} registros</span>
+      </div>
+
+      <!-- Contenedor colapsable -->
+      <div class="table-wrapper" id="table-{{ grupo.grouper|default:'none' }}" style="display: none;">
+        <table>
+          <thead>
+            <tr>
+              <th>Fotos</th>
+              <th>Modelo</th>
+              <th>Línea</th>
+              <th>Descripción</th>
+              <th>Responsable</th>
+              <th>Cant.</th>
+              <th>Modo</th>
+              <th>Fecha</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in grupo.list %}
+            <tr>
+              <td>
+                <a href="{% url 'galeria_fotos' %}?q={{ r.fotos }}"
+                  style="color:var(--accent); text-decoration:none; font-family:monospace; font-size:.85rem;">
+                  {{ r.fotos }}
+                </a>
+              </td>
+              <td title="{{ r.modelo }}">{{ r.modelo|truncatechars:25 }}</td>
+              <td><span class="badge badge-purple">{{ r.linea }}</span></td>
+              <td title="{{ r.descripcion }}">{{ r.descripcion|truncatechars:35 }}</td>
+              <td>{{ r.responsable }}</td>
+              <td>{{ r.cantidad|default:"—" }}</td>
+              <td>
+                {% if r.modo_epidemico %}
+                <span class="badge badge-red">Epidémico</span>
+                {% else %}
+                <span class="badge badge-green">Normal</span>
+                {% endif %}
+              </td>
+              <td style="color:var(--text-muted); font-size:.82rem; white-space:nowrap;">
+                {{ r.fecha_registro|date:"d/m/y H:i"|default:"—" }}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% empty %}
+    <div style="padding: 40px; text-align: center; color: var(--text-muted); background: var(--surface); border-radius: var(--radius);">
+      No se encontraron registros con esos filtros.
+    </div>
+    {% endfor %}
   </div>
 </div>
+
+<script>
+  function toggleGroup(userId) {
+    const tableDiv = document.getElementById(`table-${userId}`);
+    const icon = document.getElementById(`icon-${userId}`);
+    
+    if (tableDiv.style.display === 'none') {
+      tableDiv.style.display = 'block';
+      icon.textContent = '▼';
+    } else {
+      tableDiv.style.display = 'none';
+      icon.textContent = '▶';
+    }
+  }
+</script>
 
 {% endblock %}

@@ -113,279 +113,159 @@
   
   // Render de la tabla
   function renderTabla() {
-    const tbody = document.getElementById('registros-body');
-    tbody.innerHTML = '';
+    const table = document.querySelector('.table-wrapper table');
+    // Eliminar tbodys anteriores
+    table.querySelectorAll('tbody').forEach(tb => tb.remove());
     
     if (registros.length === 0) {
+      const tbody = document.createElement('tbody');
       tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:30px;">No hay registros para mostrar.</td></tr>';
+      table.appendChild(tbody);
       return;
     }
 
+    // Agrupar registros por user_id
+    const grupos = {};
+    let hasVisibleRows = false;
+
     registros.forEach((r, index) => {
-      // Si está oculta por búsqueda
+      r._originalIndex = index; // Para recuperar rápido en handlers
       if (r._hidden) return;
+      hasVisibleRows = true;
+      if (!grupos[r.user_id]) grupos[r.user_id] = [];
+      grupos[r.user_id].push(r);
+    });
+
+    if (!hasVisibleRows) {
+      const tbody = document.createElement('tbody');
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:30px;">Ningún registro coincide con la búsqueda.</td></tr>';
+      table.appendChild(tbody);
+      return;
+    }
+
+    Object.keys(grupos).forEach(userId => {
+      const g = grupos[userId];
+      const colspan = isSuperUser ? 10 : 9;
       
-      const tr = document.createElement('tr');
-      tr.id = `row-${r.id}`;
-      tr.dataset.index = index;
-      if (r._agrupado) tr.classList.add('agrupada');
-      if (r._selected) tr.classList.add('selected');
-      
-      const dateStr = r.fecha_registro ? new Date(r.fecha_registro).toLocaleString() : 'Reciente';
-      const fotosStr = r.fotos_nums && r.fotos_nums.length > 0 
-        ? `[${r.fotos_nums.join(', ')}]` 
-        : (r.fotos_str || '-');
-        
-      tr.innerHTML = `
-        <td>
-          <span class="drag-handle">⠿</span>
-          <input type="checkbox" class="row-check" ${r._selected ? 'checked' : ''} onchange="toggleSelect(${index})">
-        </td>
-        <td style="font-size:0.8rem; color:var(--text-muted);">${dateStr}</td>
-        <td style="font-weight:500;">${r.modelo}</td>
-        <td><span class="badge badge-purple">${r.linea}</span></td>
-        <td style="font-size:0.9rem;">${r.descripcion}</td>
-        <td>${r.responsable}</td>
-        <td><code style="color:var(--accent); font-size:0.8rem;">${fotosStr}</code></td>
-        <td style="font-weight:bold;" id="td-cant-${r.id}">${r.cantidad || 1}</td>
-        <td><span class="badge-user">${r.user_id}</span></td>
-        ${isSuperUser ? `
-        <td style="text-align:center;">
-          <button class="btn btn-ghost" style="padding:4px 8px; font-size:0.8rem;" onclick="editarRegistro(${r.id})" title="Editar">✏️</button>
-          <button class="btn btn-ghost" style="padding:4px 8px; font-size:0.8rem; color:var(--danger);" onclick="eliminarRegistro(${r.id})" title="Eliminar">🗑️</button>
-        </td>` : ''}
+      // Header tbody (colapsable trigger)
+      const headerTbody = document.createElement('tbody');
+      headerTbody.innerHTML = `
+        <tr style="background: var(--surface2); cursor: pointer; transition: background 0.2s;" onclick="toggleGrupo('group-${userId}')" onmouseover="this.style.background='var(--border)'" onmouseout="this.style.background='var(--surface2)'">
+          <td colspan="${colspan}">
+            <span id="icon-group-${userId}" style="display:inline-block; width:20px;">▶</span>
+            <strong style="margin-left: 8px;">Usuario ID: ${userId}</strong>
+            <span class="badge" style="margin-left:12px; background: var(--surface); border: 1px solid var(--border);">${g.length} registros</span>
+          </td>
+        </tr>
       `;
-      tbody.appendChild(tr);
+      table.appendChild(headerTbody);
+
+      // Rows tbody
+      const rowsTbody = document.createElement('tbody');
+      rowsTbody.id = `group-${userId}`;
+      rowsTbody.className = 'sortable-tbody';
+      rowsTbody.style.display = 'none';
+
+      g.forEach(r => {
+        const index = r._originalIndex;
+        const tr = document.createElement('tr');
+        tr.id = `row-${r.id}`;
+        tr.dataset.index = index;
+        if (r._agrupado) tr.classList.add('agrupada');
+        if (r._selected) tr.classList.add('selected');
+        
+        const dateStr = r.fecha_registro ? new Date(r.fecha_registro).toLocaleString() : 'Reciente';
+        const fotosStr = r.fotos_nums && r.fotos_nums.length > 0 
+          ? `[${r.fotos_nums.join(', ')}]` 
+          : (r.fotos_str || '-');
+          
+        tr.innerHTML = `
+          <td>
+            <span class="drag-handle">⠿</span>
+            <input type="checkbox" class="row-check" ${r._selected ? 'checked' : ''} onchange="toggleSelect(${index})">
+          </td>
+          <td style="font-size:0.8rem; color:var(--text-muted);">${dateStr}</td>
+          <td style="font-weight:500;">${r.modelo}</td>
+          <td><span class="badge badge-purple">${r.linea}</span></td>
+          <td style="font-size:0.9rem;">${r.descripcion}</td>
+          <td>${r.responsable}</td>
+          <td><code style="color:var(--accent); font-size:0.8rem;">${fotosStr}</code></td>
+          <td style="font-weight:bold;" id="td-cant-${r.id}">${r.cantidad || 1}</td>
+          <td><span class="badge-user">${r.user_id}</span></td>
+          ${isSuperUser ? `
+          <td style="text-align:center;">
+            <button class="btn btn-ghost" style="padding:4px 8px; font-size:0.8rem;" onclick="editarRegistro(${r.id})" title="Editar">✏️</button>
+            <button class="btn btn-ghost" style="padding:4px 8px; font-size:0.8rem; color:var(--danger);" onclick="eliminarRegistro(${r.id})" title="Eliminar">🗑️</button>
+          </td>` : ''}
+        `;
+        rowsTbody.appendChild(tr);
+      });
+      table.appendChild(rowsTbody);
+    });
+
+    // Re-bind SortableJS
+    initSortable();
+
+    // Auto expandir si hay búsqueda
+    const term = document.getElementById('search-input').value.trim();
+    if (term !== '') {
+        document.querySelectorAll('.sortable-tbody').forEach(tb => {
+            tb.style.display = '';
+            document.getElementById(`icon-${tb.id}`).textContent = '▼';
+        });
+    }
+  }
+
+  window.toggleGrupo = function(groupId) {
+    const tbody = document.getElementById(groupId);
+    const icon = document.getElementById(`icon-${groupId}`);
+    if (tbody.style.display === 'none') {
+        tbody.style.display = '';
+        icon.textContent = '▼';
+    } else {
+        tbody.style.display = 'none';
+        icon.textContent = '▶';
+    }
+  };
+
+  // Sortable Initialization
+  let sortableInstances = [];
+  function initSortable() {
+    sortableInstances.forEach(s => s.destroy());
+    sortableInstances = [];
+
+    document.querySelectorAll('.sortable-tbody').forEach(tbody => {
+      const s = new Sortable(tbody, {
+        handle: '.drag-handle',
+        animation: 150,
+        ghostClass: 'sortable-ghost',
+        onEnd: function (evt) {
+          const term = document.getElementById('search-input').value.trim();
+          if (term !== '') {
+              mostrarToast("No se puede reordenar mientras hay una búsqueda activa.");
+              renderTabla(); // revertir visualmente
+              return;
+          }
+
+          // Reconstruir el array global en base al DOM
+          const nuevoOrden = [];
+          document.querySelectorAll('.sortable-tbody tr').forEach((tr) => {
+            const rIndex = tr.dataset.index;
+            const reg = registros[rIndex];
+            nuevoOrden.push(reg);
+          });
+          
+          registros = nuevoOrden;
+          renderTabla();
+        }
+      });
+      sortableInstances.push(s);
     });
   }
 
   // Interacción UI
-  function toggleSelectAll() {
-    const checked = document.getElementById('selectAll').checked;
-    registros.forEach(r => { if (!r._hidden) r._selected = checked; });
-    renderTabla();
-  }
-
-  // Hacer funciones accesibles globalmente (porque los handlers onchange="toggleSelect" usan eval en el window object)
-  window.toggleSelectAll = toggleSelectAll;
-
-  window.toggleSelect = function(index) {
-    registros[index]._selected = !registros[index]._selected;
-    document.getElementById(`row-${registros[index].id}`).classList.toggle('selected');
-  };
-
-  window.filtrarTabla = function() {
-    const term = document.getElementById('search-input').value.toLowerCase();
-    registros.forEach(r => {
-      const match = `${r.modelo} ${r.linea} ${r.descripcion} ${r.responsable}`.toLowerCase().includes(term);
-      r._hidden = !match;
-    });
-    renderTabla();
-  };
-
-  // Ordenamiento básico
-  let orderAsc = true;
-  window.ordenar = function(campo) {
-    registros.sort((a, b) => {
-      let valA = a[campo] || '';
-      let valB = b[campo] || '';
-      if (campo === 'fecha') {
-          valA = a.fecha_registro ? new Date(a.fecha_registro).getTime() : 0;
-          valB = b.fecha_registro ? new Date(b.fecha_registro).getTime() : 0;
-      }
-      if (valA < valB) return orderAsc ? -1 : 1;
-      if (valA > valB) return orderAsc ? 1 : -1;
-      return 0;
-    });
-    orderAsc = !orderAsc;
-    renderTabla();
-  };
-
-  // Agrupación Segura
-  window.agruparSeleccionados = function() {
-    const seleccionados = registros.filter(r => r._selected && !r._hidden);
-    if (seleccionados.length < 2) {
-      mostrarToast("Selecciona al menos 2 registros para agrupar.");
-      return;
-    }
-
-    const ref = seleccionados[0];
-    
-    // Validar Reglas Estrictas
-    for (let i = 1; i < seleccionados.length; i++) {
-      const r = seleccionados[i];
-      if (r.user_id !== ref.user_id) {
-        mostrarToast("❌ Error: No se pueden agrupar fotos de distintos usuarios (riesgo de orfandad).");
-        return;
-      }
-      if (r.modelo !== ref.modelo || r.descripcion !== ref.descripcion || r.responsable !== ref.responsable) {
-        mostrarToast("❌ Error: Modelo, descripción o responsable no coinciden.");
-        return;
-      }
-      
-      // Coherencia temporal (max 2 horas de diferencia)
-      if (r.fecha_registro && ref.fecha_registro) {
-          const t1 = new Date(ref.fecha_registro).getTime();
-          const t2 = new Date(r.fecha_registro).getTime();
-          const diffHours = Math.abs(t1 - t2) / (1000 * 60 * 60);
-          if (diffHours > 2) {
-              mostrarToast("❌ Error: Los registros superan las 2 horas de diferencia. Agrúpalos lógicamente.");
-              return;
-          }
-      }
-    }
-
-    // Fusión
-    const fotosSet = new Set();
-    let totalCantidad = 0;
-    seleccionados.forEach(r => {
-      (r.fotos_nums || []).forEach(n => fotosSet.add(n));
-      totalCantidad += (r.cantidad || 1);
-    });
-
-    const superRegistro = { ...ref };
-    // Eliminación de duplicados (Set) y ordenamiento ascendente obligatorio
-    superRegistro.fotos_nums = Array.from(fotosSet).sort((a, b) => a - b);
-    superRegistro.cantidad = totalCantidad;
-    superRegistro.fotos_str = `(${superRegistro.fotos_nums[0]}-${superRegistro.fotos_nums[superRegistro.fotos_nums.length-1]})`;
-    superRegistro._agrupado = true;
-    superRegistro._selected = true;
-
-    // Eliminar los originales y poner el nuevo
-    registros = registros.filter(r => !seleccionados.includes(r));
-    registros.unshift(superRegistro); // Poner arriba
-    
-    document.getElementById('selectAll').checked = false;
-    renderTabla();
-    mostrarToast("✅ Registros agrupados y fotos reordenadas correctamente.", "var(--success)");
-  };
-
-  // Toast
-  function mostrarToast(msg, bg = "var(--danger)") {
-    const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.style.background = bg;
-    t.style.display = 'block';
-    setTimeout(() => { t.style.display = 'none'; }, 4000);
-  }
-
-  // Polling Inteligente de Peso Pluma
-  setInterval(async () => {
-    try {
-      const res = await fetch(`/api/check_updates/?last_id=${lastId}`);
-      if (res.status === 304) return; 
-      
-      const data = await res.json();
-      if (data.has_updates && data.nuevos_count > 0) {
-        document.getElementById('update-count').textContent = data.nuevos_count;
-        document.getElementById('update-notifier').style.display = 'block';
-      }
-    } catch(e) { console.warn("Error en polling:", e); }
-  }, 10000);
-
-  // Descargar nuevos registros
-  window.fetchNuevos = async function() {
-    try {
-      const res = await fetch(`/api/get_nuevos/?last_id=${lastId}`);
-      const data = await res.json();
-      if (data.registros && data.registros.length > 0) {
-        registros = [...data.registros, ...registros]; // Insertar arriba
-        lastId = Math.max(...data.registros.map(r => r.id));
-        renderTabla();
-      }
-      document.getElementById('update-notifier').style.display = 'none';
-    } catch(e) { console.error("Error trayendo nuevos:", e); }
-  };
-
-  // Eliminar y Editar
-  window.eliminarRegistro = async function(id) {
-    if (!confirm("¿Seguro que deseas eliminar este registro permanentemente?")) return;
-    try {
-      const res = await fetch(`/api/registro/${id}/delete/`, {
-        method: 'POST',
-        headers: {
-          'X-CSRFToken': '{{ csrf_token }}',
-        }
-      });
-      if (res.ok) {
-        registros = registros.filter(r => r.id !== id);
-        renderTabla();
-        mostrarToast("🗑️ Registro eliminado", "var(--success)");
-      } else {
-        mostrarToast("Error al eliminar registro");
-      }
-    } catch(e) { console.error(e); }
-  };
-
-  window.editarRegistro = async function(id) {
-    const reg = registros.find(r => r.id === id);
-    if (!reg) return;
-    
-    const nuevaCant = prompt("Nueva cantidad:", reg.cantidad || 1);
-    const nuevoResp = prompt("Nuevo responsable:", reg.responsable);
-    
-    if (nuevaCant === null || nuevoResp === null) return; // Canceló
-    
-    try {
-      const res = await fetch(`/api/registro/${id}/edit/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': '{{ csrf_token }}',
-        },
-        body: JSON.stringify({
-            cantidad: parseInt(nuevaCant),
-            responsable: nuevoResp
-        })
-      });
-      if (res.ok) {
-        reg.cantidad = parseInt(nuevaCant);
-        reg.responsable = nuevoResp;
-        renderTabla();
-        mostrarToast("✏️ Registro actualizado", "var(--success)");
-      } else {
-        mostrarToast("Error al editar registro");
-      }
-    } catch(e) { console.error(e); }
-  };
-
-  // Drag & Drop
   document.addEventListener('DOMContentLoaded', () => {
     renderTabla();
-    
-    const tbody = document.getElementById('registros-body');
-    new Sortable(tbody, {
-      handle: '.drag-handle',
-      animation: 150,
-      ghostClass: 'sortable-ghost',
-      onEnd: function (evt) {
-        // Actualizar el array 'registros' basándose en el nuevo DOM
-        const trs = Array.from(tbody.children);
-        const nuevoOrden = [];
-        let advertencia = false;
-        
-        trs.forEach((tr, index) => {
-          const rIndex = tr.dataset.index;
-          const reg = registros[rIndex];
-          nuevoOrden.push(reg);
-          
-          // Advertencia de lógica (si arrastró algo a una sección de otro responsable)
-          if (index > 0) {
-              const prev = nuevoOrden[index-1];
-              if (reg.responsable !== prev.responsable && evt.oldIndex !== evt.newIndex) {
-                  advertencia = true;
-              }
-          }
-        });
-        
-        registros = nuevoOrden;
-        renderTabla();
-        
-        if (advertencia) {
-            mostrarToast("⚠️ Advertencia: Has movido un registro fuera del bloque lógico de su responsable/línea.", "#f59e0b");
-        }
-      }
-    });
   });
 
   // Enviar a Excel / Revisión de Orientación

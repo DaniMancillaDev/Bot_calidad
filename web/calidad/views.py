@@ -164,8 +164,18 @@ def reportes(request):
     lineas = base_qs.values_list('linea', flat=True).distinct().order_by('linea')
     responsables = base_qs.values_list('responsable', flat=True).distinct().order_by('responsable')
 
+    # Pre-cargar nombres y evaluar registros para agrupar por usuario
+    nombres_dict = {}
+    for p in PerfilUsuario.objects.select_related('usuario').exclude(telegram_user_id__isnull=True):
+        nombres_dict[p.telegram_user_id] = p.usuario.get_full_name() or p.usuario.username
+
+    registros = list(registros.order_by('user_id', '-fecha_registro'))
+    for r in registros:
+        r.nombre_usuario = nombres_dict.get(r.user_id, "Desconocido")
+
     context = {
         'registros':    registros,
+        'total_registros': len(registros),
         'lineas':       lineas,
         'responsables': responsables,
         'filtros': {
@@ -262,8 +272,9 @@ def ver_foto(request, numero):
 
 @login_required
 def galeria_fotos(request):
-    """Muestra galería filtrada por turno/departamento."""
-    fotos = []
+    """Muestra galería filtrada por turno/departamento, agrupada por usuario."""
+    grupos_usuarios = {}
+    total_fotos = 0
 
     # Obtener user_ids permitidos (del mismo turno/depto)
     if request.user.is_superuser:
@@ -283,6 +294,11 @@ def galeria_fotos(request):
     fotos_base_dir = settings.MEDIA_ROOT / 'fotos'
 
     if fotos_base_dir.exists():
+        # Pre-cargar nombres de usuarios para evitar N+1 queries
+        nombres_dict = {}
+        for p in PerfilUsuario.objects.select_related('usuario').exclude(telegram_user_id__isnull=True):
+            nombres_dict[p.telegram_user_id] = p.usuario.get_full_name() or p.usuario.username
+
         # Iterar sobre carpetas de usuarios
         for user_folder in fotos_base_dir.iterdir():
             if not user_folder.is_dir():
@@ -297,6 +313,7 @@ def galeria_fotos(request):
             if not request.user.is_superuser and user_id not in usuarios_permitidos:
                 continue
 
+            fotos_del_usuario = []
             # Buscar fotos en la carpeta del usuario (.jpg son las actuales)
             for archivo in sorted(user_folder.glob('*.jpg')):
                 # Extraer número de secuencia (formato: 001_timestamp.png)
@@ -305,19 +322,30 @@ def galeria_fotos(request):
                 except (ValueError, IndexError):
                     num = 0
 
-                fotos.append({
+                fotos_del_usuario.append({
                     'numero': num,
                     'url': f"/media/fotos/{user_id}/{archivo.name}",
                     'nombre': archivo.name,
                     'usuario': user_id,
                 })
+                total_fotos += 1
 
-    # Ordenar por número
-    fotos.sort(key=lambda x: x['numero'])
+            if fotos_del_usuario:
+                fotos_del_usuario.sort(key=lambda x: x['numero'])
+                nombre_usuario = nombres_dict.get(user_id, "Desconocido")
+                grupos_usuarios[user_id] = {
+                    'user_id': user_id,
+                    'nombre_usuario': nombre_usuario,
+                    'fotos': fotos_del_usuario,
+                    'cantidad': len(fotos_del_usuario)
+                }
+
+    grupos_lista = list(grupos_usuarios.values())
+    grupos_lista.sort(key=lambda x: x['nombre_usuario'])
 
     context = {
-        'fotos':   fotos,
-        'total':   len(fotos),
+        'grupos_usuarios': grupos_lista,
+        'total': total_fotos,
         'seccion': 'fotos',
     }
     return render(request, 'calidad/galeria.html', context)

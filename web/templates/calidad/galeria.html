@@ -64,37 +64,86 @@
   </div>
 </div>
 
-<div class="gallery-grid" id="galleryGrid">
-  {% for f in fotos %}
-  <a href="{% url 'ver_foto' f.numero %}" class="photo-card" data-num="{{ f.numero|stringformat:'03d' }}">
-    <img src="{{ f.url }}" alt="Foto {{ f.numero }}" class="photo-img" loading="lazy">
-    <div class="photo-info">
-      <span class="photo-num">#{{ f.numero|stringformat:"03d" }}</span>
-      <span class="photo-ext">{{ f.nombre|slice:"-3:"|upper }}</span>
+<div class="gallery-container">
+  {% for grupo in grupos_usuarios %}
+  <div class="user-group" style="margin-bottom: 24px;">
+    <!-- Encabezado del grupo -->
+    <div class="user-group-header" onclick="toggleGroup('{{ grupo.user_id }}')" style="cursor:pointer; background: var(--surface); padding: 12px 16px; border: 1px solid var(--border); border-radius: var(--radius); display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; transition: background 0.2s;">
+      <div>
+        <span id="icon-{{ grupo.user_id }}" style="display:inline-block; width:20px;">▶</span>
+        <strong style="margin-left: 8px; font-size:1.1rem;">Usuario: {{ grupo.nombre_usuario }} <span style="color:var(--text-muted); font-size:0.9rem;">(ID: {{ grupo.user_id }})</span></strong>
+      </div>
+      <span class="badge" style="background: var(--surface2); padding: 4px 10px; border-radius: 12px; font-size: 0.85rem; font-weight: 600;">{{ grupo.cantidad }} fotos</span>
     </div>
-  </a>
+    
+    <!-- Contenedor colapsable de fotos -->
+    <div class="gallery-grid" id="grid-{{ grupo.user_id }}" style="display: none;">
+      {% for f in grupo.fotos %}
+      <a href="{% url 'ver_foto' f.numero %}" class="photo-card" data-num="{{ f.numero|stringformat:'03d' }}">
+        <img src="{{ f.url }}" alt="Foto {{ f.numero }}" class="photo-img" loading="lazy">
+        <div class="photo-info">
+          <span class="photo-num">#{{ f.numero|stringformat:"03d" }}</span>
+          <span class="photo-ext">{{ f.nombre|slice:"-3:"|upper }}</span>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
   {% empty %}
-  <div style="grid-column: 1 / -1; padding: 40px; text-align: center; color: var(--text-muted);">
+  <div style="padding: 40px; text-align: center; color: var(--text-muted); background: var(--surface); border-radius: var(--radius);">
     No se encontraron fotos en el directorio.
   </div>
   {% endfor %}
 </div>
 
 <script>
+  // Función para expandir/contraer grupos
+  function toggleGroup(userId, forceOpen = false) {
+    const grid = document.getElementById(`grid-${userId}`);
+    const icon = document.getElementById(`icon-${userId}`);
+    
+    if (grid.style.display === 'none' || forceOpen) {
+      grid.style.display = 'grid';
+      icon.textContent = '▼';
+    } else {
+      grid.style.display = 'none';
+      icon.textContent = '▶';
+    }
+  }
+
   // Filtrado simple en el frontend
   document.getElementById('filterInput').addEventListener('input', function(e) {
     const q = e.target.value.trim().toLowerCase();
-    const cards = document.querySelectorAll('.photo-card');
+    const groups = document.querySelectorAll('.user-group');
     
-    cards.forEach(card => {
-      if (q === '') {
-        card.style.display = 'flex';
-      } else {
-        const num = card.getAttribute('data-num');
-        if (num.includes(q)) {
+    groups.forEach(group => {
+      const cards = group.querySelectorAll('.photo-card');
+      let groupHasMatch = false;
+      const header = group.querySelector('.user-group-header');
+      const gridId = group.querySelector('.gallery-grid').id.replace('grid-', '');
+
+      cards.forEach(card => {
+        if (q === '') {
           card.style.display = 'flex';
         } else {
-          card.style.display = 'none';
+          const num = card.getAttribute('data-num');
+          if (num.includes(q)) {
+            card.style.display = 'flex';
+            groupHasMatch = true;
+          } else {
+            card.style.display = 'none';
+          }
+        }
+      });
+
+      // Si el grupo no tiene fotos coincidentes y hay búsqueda, ocultar todo el grupo
+      if (q !== '' && !groupHasMatch) {
+        group.style.display = 'none';
+      } else {
+        group.style.display = 'block';
+        // Auto expandir si hay coincidencias
+        if (q !== '') {
+          toggleGroup(gridId, true);
         }
       }
     });
