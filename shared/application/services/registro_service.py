@@ -176,11 +176,6 @@ class RegistroService:
         )
 
         if exito:
-            # Actualizar el último número confirmado del usuario (legacy)
-            if conv['fotos'] and self._db_legacy:
-                ultimo_numero = max(conv['fotos'])
-                self._db_legacy.actualizar_ultimo_numero_confirmado(ultimo_numero, user_id)
-
             fotos_str = self._registro_repo.formatear_rango_fotos(conv['fotos'])
             linea = (
                 f"{fotos_str} Modelo: {datos['modelo']}; "

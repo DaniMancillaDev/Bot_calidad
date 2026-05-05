@@ -14,6 +14,7 @@ from telegram import Update, BotCommand
 from telegram.request import HTTPXRequest
 from telegram.ext import (
     ApplicationBuilder,
+    CallbackQueryHandler,
     CommandHandler,
     MessageHandler,
     TypeHandler,
@@ -25,6 +26,7 @@ from bot.handlers.registro_handler import (
     create_start,
     create_guardar_foto,
     create_procesar_respuesta,
+    create_terminar_callback,
 )
 from bot.handlers.cancelar_handler import create_cancelar
 from bot.handlers.gestion_handler import create_limpiar, create_limpiar_fotos
@@ -159,6 +161,10 @@ def build_application(token: str, container: dict):
             container["conversation_repo"],
             container["foto_storage"],
         ),
+    ))
+    app.add_handler(CallbackQueryHandler(
+        create_terminar_callback(container["registro_service"]),
+        pattern="^terminar_fotos$",
     ))
     app.add_handler(MessageHandler(
         filters.TEXT & ~filters.COMMAND,
