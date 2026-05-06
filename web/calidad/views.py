@@ -15,6 +15,7 @@ from django.http import Http404, HttpResponse, JsonResponse
 from django.views.decorators.http import require_POST
 from .models import RegistroDefecto, PerfilUsuario
 
+EXCEL_TASKS = {}
 
 # ============================================================
 # FUNCIONES AUXILIARES DE SEGURIDAD Y PERMISOS
@@ -396,6 +397,8 @@ def revisar_orientacion(request):
     from .services.reporte_excel import detect_orientations_batch
 
     registros_data = []
+    fecha_desde = ''
+    fecha_hasta = ''
     
     if request.method == 'POST' and request.POST.get('registros_data'):
         # Recibir registros pre-procesados o agrupados desde el panel operativo
@@ -513,12 +516,12 @@ def api_detectar_orientacion(request):
 @login_required
 def generar_excel(request):
     """
-    Recibe JSON con las rotaciones corregidas por el usuario,
-    agrupa los registros por proveedor (responsable) y genera
-    un Excel por cada uno. Si hay varios proveedores, devuelve un ZIP.
+    Inicia la generación de Excel en background y devuelve un task_id.
     """
-    from .services.reporte_excel import generate_excel
     import zipfile
+    import threading
+    import uuid
+    from .services.reporte_excel import generate_excel
 
     if request.method != 'POST':
         return redirect('reportes')
@@ -576,68 +579,102 @@ def generar_excel(request):
                 agrupados[clave] = dict(reg)  # copia
         return list(agrupados.values())
 
-    # ── Generar un Excel por proveedor ─────────────────────────
-    archivos_generados = []  # [(nombre, path)]
-    tmp_paths = []
+    # ── Generar Task ID ──────────────────────────────────────────
+    task_id = str(uuid.uuid4())
+    EXCEL_TASKS[task_id] = {
+        'status': 'processing',
+        'progress': 'Iniciando...',
+        'file_path': None,
+        'filename': None,
+        'error': None
+    }
 
+    # ── Función Worker ─────────────────────────────────────────
+    def _worker(task_id, grupos, rotaciones, fotos_dir, fecha_str):
+        archivos_generados = []
+        try:
+            total_grupos = len(grupos)
+            for i, (proveedor, regs) in enumerate(grupos.items(), 1):
+                EXCEL_TASKS[task_id]['progress'] = f'Procesando {proveedor} ({i}/{total_grupos})'
+                
+                tmp = tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False)
+                tmp.close()
+                output_path = Path(tmp.name)
+
+                generate_excel(
+                    registros=regs,
+                    rotaciones=rotaciones,
+                    fotos_dir=fotos_dir,
+                    output_path=output_path,
+                )
+
+                nombre = f"reporte_{proveedor}_{fecha_str}.xlsx"
+                archivos_generados.append((nombre, output_path))
+
+            # Empaquetar
+            EXCEL_TASKS[task_id]['progress'] = 'Preparando archivo final...'
+            if len(archivos_generados) == 1:
+                nombre, path = archivos_generados[0]
+                EXCEL_TASKS[task_id]['file_path'] = str(path)
+                EXCEL_TASKS[task_id]['filename'] = nombre
+            else:
+                zip_tmp = tempfile.NamedTemporaryFile(suffix='.zip', delete=False)
+                zip_tmp.close()
+                zip_path = Path(zip_tmp.name)
+                with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+                    for nombre, path in archivos_generados:
+                        zf.write(path, nombre)
+                
+                # Cleanup xlsx tmp files
+                for _, p in archivos_generados:
+                    Path(p).unlink(missing_ok=True)
+                
+                EXCEL_TASKS[task_id]['file_path'] = str(zip_path)
+                EXCEL_TASKS[task_id]['filename'] = f"reportes_por_proveedor_{fecha_str}.zip"
+
+            EXCEL_TASKS[task_id]['status'] = 'done'
+
+        except Exception as e:
+            EXCEL_TASKS[task_id]['status'] = 'error'
+            EXCEL_TASKS[task_id]['error'] = str(e)
+
+    # Iniciar Thread
+    thread = threading.Thread(target=_worker, args=(task_id, grupos, rotaciones, fotos_dir, fecha_str))
+    thread.start()
+
+    return JsonResponse({'task_id': task_id})
+
+@login_required
+def api_excel_status(request, task_id):
+    if task_id not in EXCEL_TASKS:
+        return JsonResponse({'error': 'Task not found'}, status=404)
+    return JsonResponse(EXCEL_TASKS[task_id])
+
+@login_required
+def api_download_excel(request, task_id):
+    if task_id not in EXCEL_TASKS:
+        return HttpResponse('Task not found', status=404)
+    
+    task = EXCEL_TASKS[task_id]
+    if task['status'] != 'done' or not task['file_path']:
+        return HttpResponse('File not ready', status=400)
+    
+    path = task['file_path']
+    nombre = task['filename']
+    
+    with open(path, 'rb') as f:
+        contenido = f.read()
+    
+    # Intentar limpiar el archivo
     try:
-        for proveedor, regs in grupos.items():
-            # [EXPERIMENTAL] Consolidar: mismo modelo + mismo defecto → una sola fila
-            # Descomentar para activar:
-            # regs = _consolidar_registros(regs)
-
-            tmp = tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False)
-            tmp.close()
-            output_path = Path(tmp.name)
-            tmp_paths.append(output_path)
-
-            generate_excel(
-                registros=regs,
-                rotaciones=rotaciones,
-                fotos_dir=fotos_dir,
-                output_path=output_path,
-            )
-
-            nombre = f"reporte_{proveedor}_{fecha_str}.xlsx"
-            archivos_generados.append((nombre, output_path))
-
-        # ── Respuesta ──────────────────────────────────────────
-        if len(archivos_generados) == 1:
-            # Un solo proveedor → devolver .xlsx directo
-            nombre, path = archivos_generados[0]
-            with open(path, 'rb') as f:
-                contenido = f.read()
-            response = HttpResponse(
-                contenido,
-                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-            )
-            response['Content-Disposition'] = f'attachment; filename="{nombre}"'
-            return response
-        else:
-            # Varios proveedores → empaquetar en ZIP
-            zip_tmp = tempfile.NamedTemporaryFile(suffix='.zip', delete=False)
-            zip_tmp.close()
-            zip_path = Path(zip_tmp.name)
-            tmp_paths.append(zip_path)
-
-            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-                for nombre, path in archivos_generados:
-                    zf.write(path, nombre)
-
-            with open(zip_path, 'rb') as f:
-                contenido = f.read()
-
-            nombre_zip = f"reportes_por_proveedor_{fecha_str}.zip"
-            response = HttpResponse(contenido, content_type='application/zip')
-            response['Content-Disposition'] = f'attachment; filename="{nombre_zip}"'
-            return response
-
-    except Exception as e:
-        return HttpResponse(f'Error generando Excel: {e}', status=500)
-
-    finally:
-        for p in tmp_paths:
-            Path(p).unlink(missing_ok=True)
+        Path(path).unlink(missing_ok=True)
+    except Exception:
+        pass
+        
+    content_type = 'application/zip' if nombre.endswith('.zip') else 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    response = HttpResponse(contenido, content_type=content_type)
+    response['Content-Disposition'] = f'attachment; filename="{nombre}"'
+    return response
 
 # ============================================================
 # PANEL OPERATIVO Y POLLING LIGERO

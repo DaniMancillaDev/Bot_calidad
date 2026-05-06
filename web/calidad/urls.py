@@ -9,6 +9,8 @@ urlpatterns = [
     path('revisar/',            views.revisar_orientacion, name='revisar_orientacion'),
     path('api/detectar/',       views.api_detectar_orientacion, name='api_detectar_orientacion'),
     path('generar-excel/',      views.generar_excel,       name='generar_excel'),
+    path('api/excel_status/<str:task_id>/', views.api_excel_status, name='api_excel_status'),
+    path('api/download_excel/<str:task_id>/', views.api_download_excel, name='api_download_excel'),
     
     # Nuevas rutas operativas
     path('operacion/',          views.panel_operativo,     name='panel_operativo'),

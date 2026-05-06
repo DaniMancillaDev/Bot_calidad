@@ -61,9 +61,8 @@ def _get_row_height_px(ws, row_1based):
 
 def _get_container_width(ws):
     """Calcula el ancho combinado en píxeles de las columnas P y Q."""
-    p_w = ws.column_dimensions['P'].width or 8.43
-    q_w = ws.column_dimensions['Q'].width or 8.43
-    return _col_width_to_px(p_w) + _col_width_to_px(q_w)
+    # Usamos la nueva lógica más robusta introducida previamente
+    return _get_columns_width(ws, 'P', 'Q')
 
 
 def _col_width_to_px(w):
@@ -73,13 +72,14 @@ def _col_width_to_px(w):
     return int(((256 * w + int(128 / 7)) / 256) * 7)
 
 
-def _resolve_col_offset(ws, start_col, x_px):
+def _resolve_col_offset(ws, start_col, x_px, max_col=None):
     """
     Convierte un offset absoluto en píxeles (desde start_col)
     a la pareja (columna_real, offset_dentro_de_esa_columna).
 
-    Esto garantiza que colOff nunca exceda el ancho de una columna,
-    evitando solapamientos en la transición entre columnas P y Q.
+    Si max_col está definido, nunca devolverá una columna mayor a max_col
+    y clampea colOff al ancho de esa columna para que la imagen nunca
+    escape del bloque de columnas permitido.
     """
     remaining = x_px
     col = start_col
@@ -89,6 +89,10 @@ def _resolve_col_offset(ws, start_col, x_px):
         col_w = ws.column_dimensions[col_letter].width
         col_px = _col_width_to_px(col_w)
 
+        # Si llegamos a la columna tope, clampear offset al ancho de la columna
+        if max_col is not None and col >= max_col:
+            return col, min(remaining, max(col_px - 1, 0))
+
         if remaining < col_px:
             return col, remaining
 
@@ -97,22 +101,19 @@ def _resolve_col_offset(ws, start_col, x_px):
 
 
 
-def _prepare_image_strip(img_path: Path, angle: int, target_h: int, tmp_dir: Path):
+def _prepare_image_strip(img_path: Path, angle: int, target_h: int, tmp_dir: Path,
+                         max_width: int = None):
     """
-    Rota la imagen y la escala para que tenga EXACTAMENTE target_h de alto,
-    dejando que el ancho se ajuste proporcionalmente.
-
-    Guarda en alta resolución (×SCALE_FACTOR) para nitidez al hacer zoom.
+    Rota la imagen y la escala con lógica contain:
+    - Alto máximo = target_h
+    - Ancho máximo = max_width (si se pasa)
+    Nunca deforma. Guarda en alta resolución (×SCALE_FACTOR).
     Retorna (path_tmp, display_w, display_h) o (None, 0, 0).
     """
     try:
         img = Image.open(img_path)
         img = ImageOps.exif_transpose(img)
         if angle != 0:
-            # Usar transpose en lugar de rotate para ángulos rectos (0 pérdida de calidad)
-            # 90 CW  -> ROTATE_270 en PIL (CCW)
-            # 180 CW -> ROTATE_180
-            # 270 CW -> ROTATE_90 en PIL (CCW)
             mapping = {
                 90:  Image.ROTATE_270,
                 180: Image.ROTATE_180,
@@ -121,15 +122,17 @@ def _prepare_image_strip(img_path: Path, angle: int, target_h: int, tmp_dir: Pat
             if angle in mapping:
                 img = img.transpose(mapping[angle])
             else:
-                # Caso genérico por si acaso (aunque usamos múltiplos de 90)
                 img = img.rotate(-angle, expand=True, resample=Image.BICUBIC)
 
         orig_w, orig_h = img.size
 
-        # Escalar para que el ALTO sea exactamente target_h
-        ratio  = target_h / orig_h
+        # ── Contain scaling: respetar ambos límites ──
+        ratio_h = target_h / orig_h
+        ratio_w = (max_width / orig_w) if max_width else float('inf')
+        ratio = min(ratio_h, ratio_w)
+
         disp_w = int(orig_w * ratio)
-        disp_h = target_h  # exacto
+        disp_h = int(orig_h * ratio)
 
         # Imagen física en alta resolución
         phys_w = disp_w * SCALE_FACTOR
@@ -137,8 +140,52 @@ def _prepare_image_strip(img_path: Path, angle: int, target_h: int, tmp_dir: Pat
         img_hi = img.resize((phys_w, phys_h), Image.LANCZOS)
 
         # Guardar como JPEG (mucho más liviano que PNG)
-        img_hi = img_hi.convert('RGB')  # JPEG no soporta alpha
+        img_hi = img_hi.convert('RGB')
         tmp_path = tmp_dir / f"strip_{img_path.stem}_{angle}.jpg"
+        img_hi.save(tmp_path, format="JPEG", quality=JPEG_QUALITY, optimize=True)
+        return tmp_path, disp_w, disp_h
+    except Exception as e:
+        logger.error("No se pudo procesar %s: %s", img_path.name, e)
+        return None, 0, 0
+
+
+def _prepare_image_for_slot(img_path: Path, angle: int, slot_w: int, tmp_dir: Path):
+    """
+    Rota la imagen y la escala para llenar el ancho del slot.
+    Escala por ancho primero (ratio = slot_w / orig_w), sin límite de altura.
+    Nunca deforma. Guarda en alta resolución (×SCALE_FACTOR).
+    Retorna (path_tmp, display_w, display_h) o (None, 0, 0).
+    """
+    try:
+        img = Image.open(img_path)
+        img = ImageOps.exif_transpose(img)
+        if angle != 0:
+            mapping = {
+                90:  Image.ROTATE_270,
+                180: Image.ROTATE_180,
+                270: Image.ROTATE_90
+            }
+            if angle in mapping:
+                img = img.transpose(mapping[angle])
+            else:
+                img = img.rotate(-angle, expand=True, resample=Image.BICUBIC)
+
+        orig_w, orig_h = img.size
+
+        # ── Width-first scaling: llenar ancho del slot ──
+        ratio = slot_w / orig_w
+
+        disp_w = slot_w
+        disp_h = int(orig_h * ratio)
+
+        # Imagen física en alta resolución
+        phys_w = disp_w * SCALE_FACTOR
+        phys_h = disp_h * SCALE_FACTOR
+        img_hi = img.resize((phys_w, phys_h), Image.LANCZOS)
+
+        # Guardar como JPEG
+        img_hi = img_hi.convert('RGB')
+        tmp_path = tmp_dir / f"slot_{img_path.stem}_{angle}.jpg"
         img_hi.save(tmp_path, format="JPEG", quality=JPEG_QUALITY, optimize=True)
         return tmp_path, disp_w, disp_h
     except Exception as e:
@@ -148,6 +195,133 @@ def _prepare_image_strip(img_path: Path, angle: int, target_h: int, tmp_dir: Pat
 
 # ============================================================
 # GENERACIÓN DEL EXCEL
+def _get_columns_width(ws, col_start: str, col_end: str) -> int:
+    """Calcula el ancho combinado en píxeles de un rango de columnas."""
+    start_idx = openpyxl.utils.column_index_from_string(col_start)
+    end_idx = openpyxl.utils.column_index_from_string(col_end)
+    
+    total_px = 0
+    for col_idx in range(start_idx, end_idx + 1):
+        col_letter = openpyxl.utils.get_column_letter(col_idx)
+        w = ws.column_dimensions[col_letter].width
+        # Si w es None, se asume el ancho estándar de Excel
+        total_px += _col_width_to_px(w or 8.43)
+    return total_px
+
+
+def place_image_contain(
+    ws,
+    image_path: str | Path,
+    col_start: str = "P",
+    col_end: str = "Q",
+    row: int = 15,
+    max_height: int = None,
+    padding: int = 0,
+    align: str = "center",
+    auto_row_height: bool = False,
+    logger_obj=None
+) -> None:
+    """
+    Inserta una imagen en Excel simulando object-fit: contain.
+    Mantiene la proporción y alinea sin deformar.
+    
+    :param ws: Worksheet de openpyxl
+    :param image_path: ruta local a la imagen
+    :param col_start: letra de columna inicial (ej. "P")
+    :param col_end: letra de columna final (ej. "Q")
+    :param row: fila (1-indexed) donde colocar la imagen
+    :param max_height: px máximos permitidos en altura (None = usa alto de fila)
+    :param padding: px de margen interno
+    :param align: "center", "left", "right"
+    :param auto_row_height: ajusta la fila si la imagen la excede
+    :param logger_obj: opcional, para debugear
+    """
+    if logger_obj:
+        logger_obj.debug("Procesando imagen: %s en %s%s:%s%s", image_path, col_start, row, col_end, row)
+        
+    try:
+        img = Image.open(image_path)
+        img = ImageOps.exif_transpose(img)
+    except Exception as e:
+        if logger_obj:
+            logger_obj.error("Error al abrir imagen %s: %s", image_path, e)
+        return
+
+    orig_w, orig_h = img.size
+    
+    # 1. Cálculo de ancho del bloque
+    block_width_px = _get_columns_width(ws, col_start, col_end)
+    effective_width = max(1, block_width_px - (padding * 2))
+    
+    # Altura disponible
+    if max_height is None:
+        effective_height = _get_row_height_px(ws, row) - (padding * 2)
+    else:
+        effective_height = max_height - (padding * 2)
+        
+    if effective_height <= 0:
+        effective_height = 1
+
+    # 2. Escalado proporcional (contain)
+    ratio_w = effective_width / orig_w
+    ratio_h = effective_height / orig_h
+    ratio = min(ratio_w, ratio_h)
+    
+    disp_w = int(orig_w * ratio)
+    disp_h = int(orig_h * ratio)
+    
+    # Lazy resize en memoria (Bono: no genera archivos físicos temporales)
+    import io
+    img_byte_arr = io.BytesIO()
+    
+    # Escalar físicamente si la original es muy grande (manteniendo nitidez con SCALE_FACTOR)
+    phys_w, phys_h = disp_w * SCALE_FACTOR, disp_h * SCALE_FACTOR
+    if phys_w < orig_w and phys_h < orig_h:
+        img = img.resize((phys_w, phys_h), Image.LANCZOS)
+    
+    img = img.convert('RGB')
+    img.save(img_byte_arr, format="JPEG", quality=JPEG_QUALITY, optimize=True)
+    img_byte_arr.seek(0)
+    xl_img = OpenpyxlImage(img_byte_arr)
+
+    # 3. Alineación
+    if align == "center":
+        x_offset = padding + (effective_width - disp_w) // 2
+    elif align == "right":
+        x_offset = padding + effective_width - disp_w
+    else:  # left
+        x_offset = padding
+        
+    y_offset = padding
+
+    # 4. Anchor correcto — offset absoluto desde col_start
+    # Evita gap visual en fronteras de columna
+    start_col_idx = openpyxl.utils.column_index_from_string(col_start) - 1  # 0-indexed
+    row_idx = row - 1  # 0-indexed para openpyxl
+    
+    end_col_idx = openpyxl.utils.column_index_from_string(col_end) - 1  # 0-indexed
+    anchor_col, anchor_colOff = _resolve_col_offset(ws, start_col_idx, x_offset, max_col=end_col_idx)
+    xl_img.anchor = OneCellAnchor(
+        _from=AnchorMarker(
+            col=anchor_col,
+            colOff=pixels_to_EMU(anchor_colOff),
+            row=row_idx,
+            rowOff=pixels_to_EMU(y_offset),
+        ),
+        ext=XDRPositiveSize2D(
+            pixels_to_EMU(disp_w),
+            pixels_to_EMU(disp_h),
+        ),
+    )
+    ws.add_image(xl_img)
+    
+    # 5. Bono: auto altura de fila
+    if auto_row_height:
+        needed_pt = (disp_h + (padding * 2)) * 0.75  # 1px = 0.75pt
+        current_pt = ws.row_dimensions[row].height or 0
+        if needed_pt > current_pt:
+            ws.row_dimensions[row].height = needed_pt
+
 # ============================================================
 
 def generate_excel(
@@ -198,13 +372,11 @@ def generate_excel(
             if not nums_fotos:
                 continue
 
-            # Ancho máximo permitido (Columnas P+Q combinadas)
-            max_w_px = _get_container_width(ws)
-
-            # Altura de la fila en px (base)
-            row_h_px = _get_row_height_px(ws, row_1based)
+            # Ancho del bloque P+Q (sin combinar celdas, solo visual)
+            block_w_px = _get_container_width(ws)
 
             # Limitar la altura de cada foto
+            row_h_px = _get_row_height_px(ws, row_1based)
             target_h = min(row_h_px, MAX_DISPLAY_H)
 
             # ── TIRA HORIZONTAL CON WRAPPING ────────────────
@@ -223,7 +395,6 @@ def generate_excel(
 
                 img_path = None
                 for ext in ['png', 'jpg']:
-                    # Buscar formato exacto (001.png) o con timestamp (001_2023.png)
                     archivos = list(user_folder.glob(f"{num:03d}.{ext}")) + \
                                list(user_folder.glob(f"{num:03d}_*.{ext}"))
                     if archivos:
@@ -242,7 +413,7 @@ def generate_excel(
                     continue
 
                 # WRAP: Si esta foto se sale de P+Q, saltar a la siguiente línea
-                if x_offset + disp_w > max_w_px - 8:
+                if x_offset + disp_w > block_w_px - 8:
                     x_offset = 8
                     y_offset += target_h + GAP
                     max_y_reached = y_offset + target_h
@@ -254,7 +425,7 @@ def generate_excel(
                     continue
 
                 # Resolver en qué columna real cae esta imagen
-                real_col, real_col_off = _resolve_col_offset(ws, CELL_COL, x_offset)
+                real_col, real_col_off = _resolve_col_offset(ws, CELL_COL, x_offset, max_col=CELL_COL + 1)
 
                 xl_img.anchor = OneCellAnchor(
                     _from=AnchorMarker(
