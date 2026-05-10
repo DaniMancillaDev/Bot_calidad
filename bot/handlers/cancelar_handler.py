@@ -31,7 +31,7 @@ def create_cancelar(api_client):
             return
 
         try:
-            user_id = update.effective_user.id
+            user_id = update.effective_user.id if update.effective_user else None
 
             # Cancelar buffers temporales (fotos en debounce)
             batch = context.user_data.pop("photo_batch", None)
@@ -54,7 +54,10 @@ def create_cancelar(api_client):
                 fotos = resp.get("fotos", [])
             except Exception as e:
                 logger.error("Error llamando API cancelar_sesion: %s", e)
-                await update.message.reply_text("Error de red al cancelar sesión.")
+                await update.message.reply_text(
+                    "<b>Error de red.</b> No se pudo cancelar la sesion. Intenta de nuevo.",
+                    parse_mode="HTML"
+                )
                 return
 
             fotos_eliminadas = 0
@@ -73,9 +76,10 @@ def create_cancelar(api_client):
                                 fotos_eliminadas += 1
 
             msg = "<b>Registro cancelado.</b>\n\n"
-            msg += f"<b>Fotos eliminadas del intento:</b> {fotos_eliminadas}\n"
+            msg += f"<b>Fotos eliminadas:</b> {fotos_eliminadas}\n"
             if contador_revertido is not None:
-                msg += f"<b>La siguiente foto será:</b> {contador_revertido:03d}"
+                msg += f"<b>Siguiente foto:</b> {contador_revertido:03d}\n"
+            msg += "<i>Los datos del intento no fueron guardados.</i>"
             await update.message.reply_text(msg, parse_mode="HTML")
 
         except Exception as e:

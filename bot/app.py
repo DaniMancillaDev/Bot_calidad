@@ -35,6 +35,12 @@ from bot.handlers.consulta_handler import (
     create_estado,
     create_info_fotos,
     create_descargar,
+    create_descargar_turno,
+    create_turno_callback,
+    create_operador_callback,
+    create_reporte_turno,
+    create_rpt_turno_callback,
+    create_rpt_operador_callback,
     create_info,
 )
 
@@ -45,7 +51,8 @@ async def _post_init(application):
         BotCommand("start", "Iniciar o reiniciar sesión"),
         BotCommand("estado", "Ver estado actual"),
         BotCommand("reporte", "Descargar reporte en texto"),
-        BotCommand("info_fotos", "Ver estadísticas de tus fotos"),
+        BotCommand("reporte_turno", "Reporte de otro turno (Admin)"),
+        BotCommand("info_fotos", "Ver estadisticas de tus fotos"),
         BotCommand("descargar", "Descargar fotos en ZIP"),
         BotCommand("descargar_todo", "Descargar turno (Admin)"),
         BotCommand("limpiar", "Borrar tus registros de hoy"),
@@ -122,7 +129,12 @@ def build_application(token: str, container: dict):
     app.add_handler(CommandHandler("estado", create_estado(container["api_client"])))
     app.add_handler(CommandHandler("info_fotos", create_info_fotos(container["api_client"])))
     app.add_handler(CommandHandler("descargar", create_descargar(container["api_client"])))
-    app.add_handler(CommandHandler("descargar_todo", create_descargar(container["api_client"])))
+    app.add_handler(CommandHandler("descargar_todo", create_descargar_turno(container["api_client"])))
+    app.add_handler(CallbackQueryHandler(create_turno_callback(container["api_client"]), pattern="^turno:"))
+    app.add_handler(CallbackQueryHandler(create_operador_callback(container["api_client"]), pattern="^op:"))
+    app.add_handler(CommandHandler("reporte_turno", create_reporte_turno(container["api_client"])))
+    app.add_handler(CallbackQueryHandler(create_rpt_turno_callback(container["api_client"]), pattern="^rpt_turno:"))
+    app.add_handler(CallbackQueryHandler(create_rpt_operador_callback(container["api_client"]), pattern="^rpt_op:"))
     app.add_handler(CommandHandler("info", create_info()))
 
     # ── Gestión (operaciones destructivas) ────────────────────────────────────────

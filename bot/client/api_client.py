@@ -164,6 +164,23 @@ class BotApiClient:
             logger.error(f"Error obteniendo reporte para {telegram_id}: {str(e)}")
             raise ApiException("No se pudo obtener el reporte.")
 
+    async def obtener_reporte_turno(self, telegram_id: int, turno: str, operador_id: str = "todos") -> dict:
+        """Admin-only. Reporte de un turno completo o de un operador específico."""
+        try:
+            response = await self.client.get(
+                "/api/v1/workflows/usuario/reporte-turno/",
+                params={'telegram_id': telegram_id, 'turno': turno, 'operador_id': operador_id}
+            )
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Error HTTP {e.response.status_code} obteniendo reporte de turno: {e.response.text}")
+            raise ApiException(f"HTTP {e.response.status_code}")
+        except Exception as e:
+            logger.error(f"Error obteniendo reporte de turno {turno}: {str(e)}")
+            raise ApiException("No se pudo obtener el reporte del turno.")
+
+
     # ==========================
     # WORKFLOW: SESION
     # ==========================
@@ -187,3 +204,49 @@ class BotApiClient:
             "/api/v1/workflows/sesion/limpiar-fotos/",
             json={"telegram_id": telegram_id}
         )
+
+    # ==========================
+    # EXPORTACIONES (ZIP)
+    # ==========================
+    async def obtener_turnos(self, telegram_id: int) -> list:
+        return await self._get("/api/v1/export/turnos/", params={"telegram_id": telegram_id})
+
+    async def obtener_operadores(self, telegram_id: int, turno: str) -> list:
+        return await self._get("/api/v1/export/operadores/", params={"telegram_id": telegram_id, "turno": turno})
+
+    async def obtener_info_evidencia(self, telegram_id: int) -> dict:
+        return await self._get("/api/v1/export/evidencia/info/", params={"telegram_id": telegram_id})
+
+    async def descargar_evidencia(self, telegram_id: int, turno: str = None, operador: str = None, inicio: int = None, fin: int = None) -> tuple[str, int]:
+        """Descarga el ZIP generado y lo guarda en un temporal local. Retorna (ruta_temporal, cantidad_fotos)."""
+        import tempfile
+        import os
+        params = {"telegram_id": telegram_id}
+        if turno:
+            params["turno"] = turno
+        if operador:
+            params["operador"] = operador
+        if inicio is not None:
+            params["inicio"] = inicio
+        if fin is not None:
+            params["fin"] = fin
+
+        try:
+            # Aumentamos timeout por si el ZIP es grande o toma tiempo en generarse
+            async with self.client.stream("GET", "/api/v1/export/evidencia/", params=params, timeout=60.0) as response:
+                if response.status_code != 200:
+                    await response.aread()
+                    response.raise_for_status()
+
+                count = int(response.headers.get("X-Image-Count", "0"))
+                fd, temp_path = tempfile.mkstemp(suffix=".zip")
+                with os.fdopen(fd, 'wb') as f:
+                    async for chunk in response.aiter_bytes():
+                        f.write(chunk)
+                return temp_path, count
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Error HTTP {e.response.status_code} descargando evidencia: {e.response.text}")
+            raise ApiException(f"HTTP {e.response.status_code}")
+        except Exception as e:
+            logger.error(f"Error de red descargando evidencia: {str(e)}")
+            raise ApiException("Error descargando evidencia.")

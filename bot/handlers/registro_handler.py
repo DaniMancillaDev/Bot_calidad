@@ -46,7 +46,7 @@ def create_start(api_client):
         if not update.message or not update.effective_user:
             return
 
-        user_id = update.effective_user.id
+        user_id = update.effective_user.id if update.effective_user else None
         
         try:
             # Cancelamos / limpiamos la sesión anterior e iniciamos una nueva
@@ -54,20 +54,22 @@ def create_start(api_client):
             await api_client.iniciar_defecto(user_id)
 
             await update.message.reply_text(
-                "<b>Agente IQA</b>\n\n"
-                "Bienvenido al asistente de captura de defectos. Este bot está diseñado "
-                "para agilizar el reporte de incidencias en línea de producción.\n\n"
-                "<b>Flujo de Trabajo:</b>\n"
-                "1. <b>Envía las fotos</b> del defecto detectado (una o varias).\n"
-                "2. Presiona el botón <b>TERMINAR</b> para cerrar el álbum.\n"
-                "3. <b>Responde a las preguntas</b> (Modelo, Línea, Responsable, etc.)\n\n"
-                "<i>Usa el botón de <b>MENÚ</b> (abajo a la izquierda) para ver comandos útiles o escribe /info.</i>",
+                "<b>Agente IQA</b>\n"
+                "<i>Sistema de captura de defectos en linea de produccion.</i>\n\n"
+                "<b>Flujo de registro:</b>\n"
+                "1. <b>Envia las fotos</b> del defecto detectado (una o varias).\n"
+                "2. Presiona <b>TERMINAR</b> para cerrar el album.\n"
+                "3. <b>Responde el formulario:</b> Modelo, Linea, Responsable y descripcion.\n\n"
+                "<i>Usa el menu inferior para ver los comandos disponibles, o escribe /info.</i>",
                 parse_mode="HTML",
                 reply_markup=ReplyKeyboardRemove(),
             )
         except Exception as e:
             logger.error("Error iniciando /start: %s", e)
-            await update.message.reply_text("Error de red al conectar con el servidor.")
+            await update.message.reply_text(
+                "<b>Error de conexion.</b> No se pudo iniciar la sesion. Intenta de nuevo.",
+                parse_mode="HTML"
+            )
 
     return start
 
@@ -90,7 +92,7 @@ def create_guardar_foto(api_client):
         if not update.message or not update.effective_user:
             return
 
-        user_id = update.effective_user.id
+        user_id = update.effective_user.id if update.effective_user else None
         
         try:
             perfil = await api_client.obtener_perfil(user_id)
@@ -274,7 +276,7 @@ def create_terminar_callback(api_client):
 
         await query.answer()
 
-        user_id = update.effective_user.id
+        user_id = update.effective_user.id if update.effective_user else None
         
         try:
             result = await api_client.responder_defecto(user_id, "TERMINAR")
@@ -320,7 +322,7 @@ def create_procesar_respuesta(api_client):
         if not update.message or not update.effective_user or not update.message.text:
             return
 
-        user_id = update.effective_user.id
+        user_id = update.effective_user.id if update.effective_user else None
         
         try:
             result = await api_client.responder_defecto(user_id, update.message.text)

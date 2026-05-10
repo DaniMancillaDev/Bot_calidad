@@ -31,21 +31,21 @@ def create_limpiar(api_client):
         if not update.message:
             return
         try:
-            user_id = update.effective_user.id if update.effective_user else None
+            user_id = update.effective_user.id if update.effective_user else None if update.effective_user else None
 
             resp = await api_client.limpiar_sesion(user_id)
 
             if resp.get('status') == 'cleaned':
                 await update.message.reply_text(
-                    "<b>Registros limpiados:</b>\n\n"
-                    f"• <b>Usuario:</b> {resp.get('nombre', user_id)}\n"
-                    f"• <b>Turno:</b> {resp.get('turno', '-')}\n"
-                    f"• <b>Depto:</b> {resp.get('departamento', '-')}\n\n"
-                    "<i>Solo se eliminaron TUS registros.</i>",
+                    "<b>Registros eliminados.</b>\n\n"
+                    f"<b>Usuario:</b> {resp.get('nombre', user_id)}\n"
+                    f"<b>Turno:</b> {resp.get('turno', '-')}\n"
+                    f"<b>Departamento:</b> {resp.get('departamento', '-')}\n\n"
+                    "<i>Solo se eliminaron tus registros del turno actual.</i>",
                     parse_mode="HTML"
                 )
             else:
-                await update.message.reply_text("<b>Error al limpiar registros.</b>", parse_mode="HTML")
+                await update.message.reply_text("<b>Error al eliminar registros.</b>", parse_mode="HTML")
 
         except Exception as e:
             logger.error("Error en /limpiar: %s", e)
@@ -67,7 +67,7 @@ def create_limpiar_fotos(api_client):
         if not update.message:
             return
         try:
-            user_id = update.effective_user.id if update.effective_user else None
+            user_id = update.effective_user.id if update.effective_user else None if update.effective_user else None
 
             # Obtener perfil para mostrar nombre en respuesta
             perfil = await api_client.obtener_perfil(user_id)
@@ -87,11 +87,11 @@ def create_limpiar_fotos(api_client):
             await api_client.limpiar_fotos_sesion(user_id)
 
             await update.message.reply_text(
-                "<b>Fotos eliminadas:</b>\n\n"
-                f"• <b>Usuario:</b> {nombre}\n"
-                f"• <b>Fotos eliminadas:</b> {fotos_eliminadas}\n"
-                "• <b>Contador reiniciado a:</b> 001\n\n"
-                "<i>Solo se eliminaron TUS fotos.</i>",
+                "<b>Fotos eliminadas.</b>\n\n"
+                f"<b>Usuario:</b> {nombre}\n"
+                f"<b>Fotos eliminadas:</b> {fotos_eliminadas}\n"
+                "<b>Contador reiniciado a:</b> 001\n\n"
+                "<i>Solo se eliminaron tus fotos del turno actual.</i>",
                 parse_mode="HTML"
             )
 

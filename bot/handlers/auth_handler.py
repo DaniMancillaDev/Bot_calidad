@@ -16,7 +16,7 @@ async def comando_mi_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     """Envía el ID de Telegram al usuario para que pueda registrarse."""
     if not update.message:
         return
-    user_id = update.effective_user.id
+    user_id = update.effective_user.id if update.effective_user else None
     await update.message.reply_text(
         f"<b>Tu ID de Telegram es:</b> <code>{user_id}</code>\n\n"
         "<i>Copia y pásale este número al Administrador del sistema para que te dé de alta.</i>",
@@ -35,7 +35,7 @@ def create_verificar_acceso(api_client):
         if not update.effective_user:
             return
 
-        user_id = update.effective_user.id
+        user_id = update.effective_user.id if update.effective_user else None
 
         try:
             resp = await api_client.tiene_acceso(user_id)
@@ -44,7 +44,7 @@ def create_verificar_acceso(api_client):
             # En caso de error de red, asumimos sin acceso y mostramos mensaje amigable
             tiene_acceso = False
             if update.message and not update.message.text.startswith("/mi_id"):
-                await update.message.reply_text("⏳ Conectando con el servidor. Por favor intenta de nuevo.")
+                await update.message.reply_text("<b>Conectando con el servidor.</b> Por favor intenta de nuevo.", parse_mode="HTML")
                 raise ApplicationHandlerStop()
 
         if not tiene_acceso:
@@ -58,9 +58,9 @@ def create_verificar_acceso(api_client):
 
             if update.message:
                 await update.message.reply_text(
-                    "<b>ACCESO DENEGADO</b>\n\n"
-                    "No tienes permisos para usar este bot.\n"
-                    "Escribe /mi_id para obtener tu identificador y registrarte.",
+                    "<b>Acceso denegado.</b>\n\n"
+                    "No tienes permisos para usar este sistema.\n"
+                    "Escribe /mi_id para obtener tu ID y compartirlo con el administrador.",
                     parse_mode="HTML"
                 )
             raise ApplicationHandlerStop()
