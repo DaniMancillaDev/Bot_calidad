@@ -52,3 +52,4 @@ revert_photos.bat
 .agents/
 skills/
 skills-lock.json
+.env.local

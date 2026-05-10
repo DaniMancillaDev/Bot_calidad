@@ -22,10 +22,18 @@ class DjangoRegistroRepository:
                 user_id: int, turno: Optional[str] = None,
                 departamento: Optional[str] = None) -> bool:
         from calidad.models import RegistroDefecto
+        import time
         try:
-            fotos_str = ", ".join(str(f) for f in fotos) if isinstance(fotos, list) else str(fotos)
+            # Normalizar: asegurar lista de ints
+            fotos_list = list(fotos) if isinstance(fotos, list) else []
+
+            # Dual-write: legacy TextField + nuevo ArrayField
+            fotos_str = ", ".join(str(f) for f in fotos_list)
+
+            t0 = time.monotonic()
             RegistroDefecto.objects.create(
-                fotos=fotos_str,
+                fotos=fotos_str,             # legacy — mantener mientras se migra
+                fotos_nums=fotos_list,        # Fase 1 — nuevo campo normalizado
                 modelo=modelo.upper() if modelo else "",
                 linea=linea.upper() if linea else "",
                 cantidad=cantidad,
@@ -35,8 +43,16 @@ class DjangoRegistroRepository:
                 turno=turno,
                 departamento=departamento,
             )
+            elapsed = (time.monotonic() - t0) * 1000
+            import logging
+            logging.getLogger(__name__).info(
+                "RegistroDefecto guardado | user_id=%s fotos=%s elapsed=%.1fms",
+                user_id, fotos_list, elapsed
+            )
             return True
-        except Exception:
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error("Error guardando RegistroDefecto: %s", e)
             return False
 
     def obtener_todos(self, user_id: Optional[int] = None,

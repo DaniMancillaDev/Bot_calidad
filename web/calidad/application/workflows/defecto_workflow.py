@@ -1,5 +1,6 @@
 import logging
-from typing import Dict, Any, List
+import time
+from typing import Dict, Any, List, Optional
 
 from calidad.domain.defectos.entities import EstadoConversacion, FSMContext, FSMResult
 from calidad.domain.defectos.state_machine import RegistroFSM
@@ -7,6 +8,7 @@ from calidad.services.redis_conversation_state import RedisConversationState
 from shared.infrastructure.database.django_registro_repository import DjangoRegistroRepository
 from shared.infrastructure.database.django_usuario_repository import DjangoUsuarioRepository
 from shared.infrastructure.database.django_contador_repository import DjangoContadorRepository
+from shared.infrastructure.storage.foto_storage import LocalFotoStorage
 
 logger = logging.getLogger(__name__)
 
@@ -16,13 +18,15 @@ class DefectoWorkflow:
     Integra Redis, la FSM pura y la Base de Datos.
     """
     
-    def __init__(self):
+    def __init__(self, foto_storage=None):
         # En el entorno de Django, REDIS_URL o CELERY_BROKER_URL está configurado.
         self._state_repo = RedisConversationState()
         self._fsm = RegistroFSM()
         self._registro_repo = DjangoRegistroRepository()
         self._usuario_repo = DjangoUsuarioRepository()
         self._contador_repo = DjangoContadorRepository()
+        # Etapa 5: storage inyectado — default LocalFotoStorage para backward compat
+        self._storage = foto_storage or LocalFotoStorage()
 
     def iniciar(self, user_id: int) -> FSMResult:
         """Inicia una nueva sesión de reporte."""
@@ -37,69 +41,79 @@ class DefectoWorkflow:
         )
 
     def adjuntar_fotos(self, user_id: int, fotos_ids: List[int]) -> FSMResult:
-        """Añade un lote de fotos al estado actual. Las renombra desde tmp_{id} a {contador}. Avanza FSM si es primer lote."""
+        """Añade lote de fotos al estado actual. Renombra tmp_{id} → {contador}. Avanza FSM si primer lote."""
         import os
         from datetime import datetime
-        
+        t0 = time.monotonic()
+
         if not self._state_repo.tiene_conversacion(user_id):
             self._state_repo.iniciar(user_id)
-            
+
         estado_dict = self._state_repo.obtener(user_id)
-        
-        import os
-        FOTOS_PATH = os.getenv("FOTOS_PATH", "media_files/fotos")
-        user_folder = os.path.join(FOTOS_PATH, str(user_id))
-        
+        user_folder = self._storage.get_user_folder(user_id)  # Etapa 5: storage
+
         nuevos_contadores = []
         for msg_id in fotos_ids:
-            tmp_path = os.path.join(user_folder, f"tmp_{msg_id}.jpg")
-            if os.path.exists(tmp_path):
-                # Obtener siguiente contador
+            tmp_path = user_folder / f"tmp_{msg_id}.jpg"
+            if tmp_path.exists():
                 contador = self._contador_repo.obtener_y_avanzar(user_id)
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 nuevo_nombre = f"{contador:03d}_{timestamp}.jpg"
-                nueva_ruta = os.path.join(user_folder, nuevo_nombre)
-                
+                nueva_ruta = user_folder / nuevo_nombre
+
                 try:
                     os.rename(tmp_path, nueva_ruta)
                     nuevos_contadores.append(contador)
+                    # Etapa 3: thumbnail async
+                    try:
+                        from calidad.tasks import generar_thumbnail_task
+                        generar_thumbnail_task.delay(user_id, str(nueva_ruta))
+                    except Exception as thumb_exc:
+                        logger.warning("thumbnail dispatch failed: %s", thumb_exc)
                 except Exception as e:
-                    logger.error(f"Error renombrando {tmp_path}: {e}")
-        
+                    logger.error("rename failed %s → %s: %s", tmp_path, nueva_ruta, e)
+
         estado_dict['fotos'] = list(set(estado_dict.get('fotos', []) + nuevos_contadores))
         estado_dict['fotos_sin_asignar'] = list(set(estado_dict.get('fotos_sin_asignar', []) + nuevos_contadores))
-        
+
         estado_actual = EstadoConversacion.parse(estado_dict.get('estado'))
-        
+
         mensaje = f"<b>¡{len(nuevos_contadores)} foto(s) recibidas!</b>\n\n¿Deseas enviar más fotos o prefieres continuar con el registro?"
 
-            
         self._state_repo.guardar(user_id, estado_dict)
-        
+
+        # Etapa 6: structured log con timing
+        elapsed = (time.monotonic() - t0) * 1000
+        logger.info(
+            "adjuntar_fotos | user_id=%s lote=%d total_fotos=%d elapsed=%.1fms",
+            user_id, len(nuevos_contadores), len(estado_dict['fotos']), elapsed
+        )
+
         return FSMResult(
-            exito=True, 
-            mensaje=mensaje, 
+            exito=True,
+            mensaje=mensaje,
             nuevo_estado=EstadoConversacion.parse(estado_dict['estado']),
             finalizado=False
         )
 
     def responder(self, user_id: int, texto: str) -> FSMResult:
-        """Procesa una respuesta de texto según el estado de la FSM."""
+        """Procesa respuesta de texto según estado de la FSM."""
+        t0 = time.monotonic()
         if not self._state_repo.tiene_conversacion(user_id):
             return FSMResult(exito=False, mensaje="No tienes un reporte en curso. Envía una foto primero.")
-            
+
         estado_dict = self._state_repo.obtener(user_id)
         estado_actual = EstadoConversacion.parse(estado_dict.get('estado', 'ESPERANDO_FOTOS'))
-        
-        # Caso especial: El usuario presiona TERMINAR en el álbum de fotos
+
+        # Caso especial: TERMINAR en fase de fotos
         if estado_actual == EstadoConversacion.ESPERANDO_FOTOS:
             if texto.upper() == "TERMINAR":
                 if not estado_dict.get('fotos'):
                     return FSMResult(exito=False, mensaje="No has enviado fotos aún.")
-                
+
                 estado_dict['estado'] = EstadoConversacion.ESPERANDO_MODELO.value
                 self._state_repo.guardar(user_id, estado_dict)
-                
+
                 return FSMResult(
                     exito=True,
                     mensaje=(
@@ -112,8 +126,8 @@ class DefectoWorkflow:
                     nuevo_estado=EstadoConversacion.ESPERANDO_MODELO
                 )
             return FSMResult(exito=False, mensaje="Por favor envíame primero las <b>fotos</b> del defecto o presiona TERMINAR.")
-            
-        # Rechazar TERMINAR si ya no estamos en fase de fotos
+
+        # Rechazar TERMINAR si ya no estamos en fase fotos
         if texto.upper() == "TERMINAR":
             return FSMResult(exito=False, mensaje="El álbum ya fue cerrado. Responde la pregunta actual para continuar.")
 
@@ -122,15 +136,14 @@ class DefectoWorkflow:
             estado=estado_actual,
             datos=estado_dict.get('datos', {})
         )
-        
+
         result = self._fsm.procesar_evento(context, texto.upper())
-        
+
         if result.exito:
             estado_dict['datos'] = context.datos
             estado_dict['estado'] = context.estado.value if context.estado else None
-            
+
             if result.finalizado:
-                # Termina FSM, guardar en base de datos
                 guardado = self._guardar_registro(user_id, estado_dict)
                 if guardado:
                     resumen = self._generar_resumen(estado_dict)
@@ -141,15 +154,25 @@ class DefectoWorkflow:
                     result.mensaje = "Error al guardar en base de datos."
             else:
                 self._state_repo.guardar(user_id, estado_dict)
-                
+
+        # Etapa 6: structured timing log
+        elapsed = (time.monotonic() - t0) * 1000
+        logger.info(
+            "responder | user_id=%s estado=%s exito=%s finalizado=%s elapsed=%.1fms",
+            user_id, estado_actual.value if estado_actual else None,
+            result.exito, result.finalizado, elapsed
+        )
         return result
+
 
     def _guardar_registro(self, user_id: int, conv: Dict) -> bool:
         """Guarda físicamente en DjangoRegistroRepository."""
+        t0 = time.monotonic()
         usuario = self._usuario_repo.obtener(user_id)
         if not usuario:
+            logger.error("_guardar_registro: user_id=%s no encontrado en repositorio", user_id)
             return False
-            
+
         datos = conv.get('datos', {})
         exito = self._registro_repo.guardar(
             user_id=user_id,
@@ -161,6 +184,12 @@ class DefectoWorkflow:
             responsable=datos.get('responsable', ''),
             descripcion=datos.get('descripcion', ''),
             fotos=conv.get('fotos', [])
+        )
+        elapsed = (time.monotonic() - t0) * 1000
+        # Etapa 6: structured log con timing
+        logger.info(
+            "_guardar_registro | user_id=%s exito=%s fotos=%s elapsed=%.1fms",
+            user_id, exito, conv.get('fotos', []), elapsed
         )
         return exito
         

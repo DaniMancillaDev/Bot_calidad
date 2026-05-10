@@ -7,6 +7,7 @@ El bot consume el ORM en lugar de sqlite3 directo.
 import json
 from django.db import models
 from django.contrib.auth.models import User
+from django.contrib.postgres.fields import ArrayField
 
 
 # ============================================================
@@ -26,13 +27,23 @@ class Departamento(models.TextChoices):
     ENG  = 'ENG',  'Ingeniería'
 
 
+class EstadoRevision(models.TextChoices):
+    PENDIENTE  = 'pendiente',  'Pendiente'
+    REVISADO   = 'revisado',   'Revisado'
+    APROBADO   = 'aprobado',   'Aprobado'
+    RECHAZADO  = 'rechazado',  'Rechazado'
+    DUPLICADO  = 'duplicado',  'Duplicado'
+    BORROSO    = 'borroso',    'Borroso'
+
+
 # ============================================================
 # REGISTROS DE DEFECTOS
 # ============================================================
 
 class RegistroDefecto(models.Model):
     """Tabla principal del bot: cada defecto fotografiado."""
-    fotos          = models.TextField()
+    # ── Campos originales (NO modificar — backward compat) ─────────────────
+    fotos          = models.TextField()              # Legacy: "1, 2, 3"
     modelo         = models.TextField()
     linea          = models.TextField()
     cantidad       = models.IntegerField(null=True, blank=True)
@@ -42,6 +53,33 @@ class RegistroDefecto(models.Model):
     user_id        = models.BigIntegerField(db_index=True)
     turno          = models.CharField(max_length=1, null=True, blank=True)
     departamento   = models.CharField(max_length=10, null=True, blank=True)
+
+    # ── Fase 1: Normalización ──────────────────────────────────────────────
+    fotos_nums     = ArrayField(
+        models.IntegerField(),
+        default=list,
+        blank=True,
+        help_text='IDs de foto como enteros. Reemplaza fotos (TextField) gradualmente.'
+    )
+
+    # ── Fase 1: Estados Operativos ─────────────────────────────────────────
+    estado_revision = models.CharField(
+        max_length=20,
+        choices=EstadoRevision.choices,
+        default=EstadoRevision.PENDIENTE,
+        db_index=True,
+    )
+    supervisor      = models.ForeignKey(
+        'auth.User',
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='registros_revisados',
+        help_text='Supervisor que revisó el registro.'
+    )
+    comentarios_supervisor = models.TextField(blank=True, default='')
+    fecha_revision  = models.DateTimeField(null=True, blank=True)
+    is_duplicate    = models.BooleanField(default=False, db_index=True)
+    is_blurry       = models.BooleanField(default=False)
 
     class Meta:
         db_table            = 'registros_defectos'

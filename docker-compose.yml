@@ -97,6 +97,8 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"  # Expuesto al host para desarrollo local
     networks:
       - internal
     healthcheck:
@@ -114,7 +116,9 @@ services:
     restart: unless-stopped
     networks:
       - internal
-    # Sin puerto expuesto al exterior — solo accesible internamente
+    ports:
+      - "6379:6379"  # Expuesto al host para desarrollo local
+    # Sin autenticación — solo dev local. Prod: proteger con requirepass.
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes  # Persistencia AOF

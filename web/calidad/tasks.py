@@ -1,21 +1,92 @@
 """
 web/calidad/tasks.py
 
-Tareas Celery para generación de reportes Excel en background.
+Tareas Celery para generación de reportes Excel y thumbnails en background.
 
-Reemplaza el threading.Thread + EXCEL_TASKS dict en views.py.
-- Cada tarea tiene un task_id real de Celery (UUID).
-- El estado se guarda en Redis, no en memoria del proceso.
-- Compatible con múltiples workers y múltiples instancias de Gunicorn.
+- generar_thumbnail_task: genera miniaturas de fotos async sin bloquear el flujo.
+- generar_excel_task: genera reportes Excel en background.
+
+Estado se guarda en Redis. Compatible con múltiples workers y Gunicorn.
 """
+import logging
 import os
 import zipfile
 import tempfile
 import re
+import time
 from pathlib import Path
 from datetime import datetime
 
 from celery import shared_task
+
+logger = logging.getLogger(__name__)
+
+# ── Configuración de thumbnails ────────────────────────────────────────────────
+THUMB_SIZE = (300, 300)
+THUMB_QUALITY = 75
+FOTOS_PATH = os.getenv("FOTOS_PATH", "media_files/fotos")
+THUMBS_PATH = os.getenv("THUMBS_PATH", "media_files/thumbs")
+
+
+@shared_task(
+    bind=True,
+    name='calidad.tasks.generar_thumbnail_task',
+    max_retries=2,
+    default_retry_delay=10,
+    ignore_result=True,     # No necesitamos el resultado en Redis
+)
+def generar_thumbnail_task(self, user_id: int, foto_path: str) -> None:
+    """
+    Genera thumbnail JPEG (300×300) de la imagen original.
+
+    Reglas:
+    - Original NUNCA se modifica.
+    - EXIF de orientación se aplica antes de hacer thumbnail.
+    - Si falla: solo log. No propaga excepción al bot.
+    - Thumbnail en: media_files/thumbs/{user_id}/{nombre_original}
+    """
+    t0 = time.monotonic()
+    try:
+        from PIL import Image, ImageOps
+
+        foto_path_obj = Path(foto_path)
+        if not foto_path_obj.exists():
+            logger.warning("generar_thumbnail_task: archivo no encontrado %s", foto_path)
+            return
+
+        # Crear carpeta de thumbnails para este usuario
+        thumb_dir = Path(THUMBS_PATH) / str(user_id)
+        thumb_dir.mkdir(parents=True, exist_ok=True)
+        thumb_path = thumb_dir / foto_path_obj.name
+
+        with Image.open(foto_path_obj) as img:
+            # Aplicar orientación EXIF sin modificar el original
+            img = ImageOps.exif_transpose(img)
+
+            # Convertir a RGB si es necesario (RGBA, P, etc.)
+            if img.mode not in ('RGB', 'L'):
+                img = img.convert('RGB')
+
+            # Thumbnail preservando aspect ratio
+            img.thumbnail(THUMB_SIZE, Image.LANCZOS)
+            img.save(thumb_path, format='JPEG', quality=THUMB_QUALITY, optimize=True)
+
+        elapsed = (time.monotonic() - t0) * 1000
+        logger.info(
+            "Thumbnail generado | user_id=%s archivo=%s size=%s elapsed=%.1fms",
+            user_id, foto_path_obj.name,
+            f"{thumb_path.stat().st_size // 1024}KB",
+            elapsed,
+        )
+
+    except Exception as exc:
+        elapsed = (time.monotonic() - t0) * 1000
+        logger.error(
+            "Error generando thumbnail | user_id=%s foto=%s elapsed=%.1fms error=%s",
+            user_id, foto_path, elapsed, exc,
+        )
+        # NO relanzar — el upload original no debe fallar por un thumbnail
+
 
 
 # ── Alias de proveedores ────────────────────────────────────────────────────
