@@ -124,8 +124,6 @@ def create_estado(api_client):
             
             lbl_registros = "Registros del grupo" if stats.get("rol") == "admin" else "Tus registros"
             msg += f"<b>{lbl_registros}:</b> {stats['total_registros']}\n"
-            if stats.get('cantidad_total') > 0:
-                msg += f"<b>Piezas defectuosas:</b> {stats['cantidad_total']}\n"
 
             await update.message.reply_text(msg, parse_mode="HTML")
 
