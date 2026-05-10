@@ -2,6 +2,8 @@ __pycache__/
 *.py[oc]
 *.db
 *.db-journal
+*.db-wal
+*.db-shm
 *.sqlite3
 .venv/
 venv/
@@ -13,10 +15,16 @@ skills/
 scratch/
 fotos/
 media/
+media_files/
 docs/
 *.log
 *.bat
-*.sh
 .pytest_cache/
 .vscode/
 .idea/
+# Archivos de test y desarrollo
+test_*.xlsx
+test_*.jpg
+scratch.py
+resultado_plantilla.xlsx
+reporte_*.xlsx

@@ -1,8 +1,8 @@
 """
 Modelos Django para el Panel de Calidad - Versión Multiusuario.
 
-Las tablas del bot usan managed = False → Django las lee pero NO las modifica.
-Las tablas gestionadas por Django tienen managed = True (default).
+Con PostgreSQL, Django gestiona TODAS las tablas (managed = True).
+El bot consume el ORM en lugar de sqlite3 directo.
 """
 import json
 from django.db import models
@@ -10,44 +10,7 @@ from django.contrib.auth.models import User
 
 
 # ============================================================
-# TABLAS DEL BOT (managed = False - solo lectura)
-# ============================================================
-
-class RegistroDefecto(models.Model):
-    """
-    Mapea la tabla registros_defectos creada por database.py (versión multiusuario).
-    """
-    fotos          = models.TextField()
-    modelo         = models.TextField()
-    linea          = models.TextField()
-    cantidad       = models.IntegerField(null=True, blank=True)
-    responsable    = models.TextField()
-    descripcion    = models.TextField()
-    fecha_registro = models.DateTimeField(null=True, blank=True)
-    # Campos multiusuario:
-    user_id        = models.IntegerField(null=True, blank=True)
-    turno          = models.CharField(max_length=1, null=True, blank=True)
-    departamento   = models.CharField(max_length=10, null=True, blank=True)
-
-    class Meta:
-        managed  = False
-        db_table = 'registros_defectos'
-        ordering = ['-fecha_registro']
-        verbose_name        = 'Registro de Defecto'
-        verbose_name_plural = 'Registros de Defectos'
-
-    def __str__(self):
-        return f"{self.fotos} | {self.modelo} | {self.responsable}"
-
-
-
-
-    def __str__(self):
-        return f"{self.telegram_user_id} - Turno {self.turno} - {self.departamento}"
-
-
-# ============================================================
-# TABLAS DJANGO (managed = True)
+# CHOICES
 # ============================================================
 
 class Turno(models.TextChoices):
@@ -57,22 +20,90 @@ class Turno(models.TextChoices):
 
 
 class Departamento(models.TextChoices):
-    IQA = 'IQA', 'IQA (Inspección de Calidad)'
-    SQA = 'SQA', 'SQA (Aseguramiento de Calidad)'
+    IQA  = 'IQA',  'IQA (Inspección de Calidad)'
+    SQA  = 'SQA',  'SQA (Aseguramiento de Calidad)'
     PROD = 'PROD', 'Producción'
-    ENG = 'ENG', 'Ingeniería'
+    ENG  = 'ENG',  'Ingeniería'
 
+
+# ============================================================
+# REGISTROS DE DEFECTOS
+# ============================================================
+
+class RegistroDefecto(models.Model):
+    """Tabla principal del bot: cada defecto fotografiado."""
+    fotos          = models.TextField()
+    modelo         = models.TextField()
+    linea          = models.TextField()
+    cantidad       = models.IntegerField(null=True, blank=True)
+    responsable    = models.TextField()
+    descripcion    = models.TextField()
+    fecha_registro = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    user_id        = models.BigIntegerField(db_index=True)
+    turno          = models.CharField(max_length=1, null=True, blank=True)
+    departamento   = models.CharField(max_length=10, null=True, blank=True)
+
+    class Meta:
+        db_table            = 'registros_defectos'
+        ordering            = ['-fecha_registro']
+        verbose_name        = 'Registro de Defecto'
+        verbose_name_plural = 'Registros de Defectos'
+        indexes = [
+            models.Index(fields=['turno', 'departamento'], name='idx_turno_depto'),
+            models.Index(fields=['fecha_registro'],         name='idx_fecha'),
+        ]
+
+    def __str__(self):
+        return f"{self.fotos} | {self.modelo} | {self.responsable}"
+
+
+# ============================================================
+# CONTADORES DE FOTO POR GRUPO (turno + depto)
+# ============================================================
+
+class ContadorGrupo(models.Model):
+    """Secuencia de numeración de fotos por turno y departamento."""
+    turno          = models.CharField(max_length=1, choices=Turno.choices)
+    departamento   = models.CharField(max_length=10, choices=Departamento.choices)
+    contador_actual = models.IntegerField(default=1)
+
+    class Meta:
+        db_table            = 'contadores_grupo'
+        unique_together     = [('turno', 'departamento')]
+        verbose_name        = 'Contador de Grupo'
+        verbose_name_plural = 'Contadores de Grupo'
+
+    def __str__(self):
+        return f"Turno {self.turno}/{self.departamento} → {self.contador_actual}"
+
+
+# ============================================================
+# ESTADO DE CONVERSACIONES (antes en SQLite, ahora Postgres)
+# ============================================================
+
+class EstadoConversacion(models.Model):
+    """Estado de conversación activo de cada usuario del bot."""
+    user_id    = models.BigIntegerField(primary_key=True)
+    estado_json = models.JSONField(default=dict)
+
+    class Meta:
+        db_table            = 'estado_conversaciones'
+        verbose_name        = 'Estado de Conversación'
+        verbose_name_plural = 'Estados de Conversación'
+
+
+# ============================================================
+# PERFIL DE USUARIO DJANGO
+# ============================================================
 
 class PerfilUsuario(models.Model):
-    """
-    Extiende el Usuario de Django con turno y departamento.
-    Vinculado con usuarios_bot via telegram_user_id.
-    """
+    """Extiende User Django con turno, departamento y Telegram ID."""
     usuario          = models.OneToOneField(User, on_delete=models.CASCADE, related_name='perfil')
     turno            = models.CharField(max_length=1, choices=Turno.choices, default=Turno.A)
     departamento     = models.CharField(max_length=10, choices=Departamento.choices, default=Departamento.IQA)
     rol              = models.CharField(max_length=20, default='operador')
-    telegram_user_id = models.IntegerField(null=True, blank=True, help_text='ID de Telegram del operador')
+    telegram_user_id = models.BigIntegerField(null=True, blank=True, db_index=True,
+                                            help_text='ID de Telegram del operador')
 
     class Meta:
         verbose_name        = 'Perfil de Usuario'
@@ -80,5 +111,3 @@ class PerfilUsuario(models.Model):
 
     def __str__(self):
         return f"{self.usuario.get_full_name() or self.usuario.username} — {self.turno}/{self.departamento}"
-
-

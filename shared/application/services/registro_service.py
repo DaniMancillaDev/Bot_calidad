@@ -66,7 +66,7 @@ class RegistroService:
         if mensaje == 'TERMINAR' and estado_actual == EstadoConversacion.ESPERANDO_FOTOS:
             if not conv['fotos']:
                 return ProcesarRespuestaResult(
-                    mensaje="⚠️ No has enviado ninguna foto. Por favor, envía al menos una foto.",
+                    mensaje="No has enviado ninguna foto. Por favor, envía al menos una foto.",
                     error=True,
                 )
             result = ProcesarRespuestaResult(
@@ -132,7 +132,7 @@ class RegistroService:
     def _handle_cantidad(self, user_id: int, mensaje: str, conv: dict, datos: dict) -> ProcesarRespuestaResult:
         if not validar_cantidad(mensaje):
             return ProcesarRespuestaResult(
-                mensaje="⚠️ Por favor, ingresa solo números para la cantidad.",
+                mensaje="Por favor, ingresa solo números para la cantidad.",
                 error=True,
             )
         datos['cantidad'] = int(mensaje)
@@ -158,7 +158,7 @@ class RegistroService:
         usuario = self._usuario_repo.obtener(user_id)
         if not usuario:
             return ProcesarRespuestaResult(
-                mensaje="⚠️ Usuario no registrado. No se puede guardar el registro.",
+                mensaje="Usuario no registrado. No se puede guardar el registro.",
                 error=True,
             )
 
@@ -201,7 +201,7 @@ class RegistroService:
             )
 
         return ProcesarRespuestaResult(
-            mensaje="❌ Error al guardar el registro.\nPor favor, intenta nuevamente.",
+            mensaje="Error al guardar el registro.\nPor favor, intenta nuevamente.",
             finalizado=True,
             error=True,
         )

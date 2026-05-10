@@ -24,62 +24,56 @@ class JsonConversationStateRepository:
     persistir()           → guardar_estado()
     """
 
-    def __init__(self, estado_file: str = "estado_conversaciones.json"):
-        self._estado_file = estado_file
+    def __init__(self, db_manager=None):
+        if db_manager is None:
+            from database import db
+            self._db = db
+        else:
+            self._db = db_manager
         self._conversaciones: Dict[int, Dict] = {}
-        self._cargar()
-
-    def _cargar(self):
-        """Idéntico a main_sqlite.py:cargar_estado()"""
-        if os.path.exists(self._estado_file):
-            try:
-                with open(self._estado_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    self._conversaciones = {int(k): v for k, v in data.items()}
-                    for conv in self._conversaciones.values():
-                        estado = parse_estado_conversacion(conv.get('estado'))
-                        if estado is not None:
-                            conv['estado'] = estado.value
-            except Exception as e:
-                logger.error("Error al cargar estado: %s", e)
-                self._conversaciones = {}
-
-    def _guardar(self):
-        """Idéntico a main_sqlite.py:guardar_estado()"""
-        try:
-            with open(self._estado_file, 'w', encoding='utf-8') as f:
-                json.dump(self._conversaciones, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            logger.error("Error al guardar estado: %s", e)
-
-    def tiene_conversacion(self, user_id: int) -> bool:
-        return user_id in self._conversaciones
 
     def obtener(self, user_id: int) -> Optional[Dict]:
-        return self._conversaciones.get(user_id)
+        estado_json = self._db.obtener_estado_conversacion(user_id)
+        if estado_json:
+            data = json.loads(estado_json)
+            estado = parse_estado_conversacion(data.get('estado'))
+            if estado is not None:
+                data['estado'] = estado.value
+            self._conversaciones[user_id] = data
+            return self._conversaciones[user_id]
+        return None
+
+    def tiene_conversacion(self, user_id: int) -> bool:
+        return self.obtener(user_id) is not None
 
     def iniciar(self, user_id: int) -> Dict:
-        """Idéntico a main_sqlite.py:iniciar_conversacion()"""
-        self._conversaciones[user_id] = {
+        estado = {
             'estado': EstadoConversacion.ESPERANDO_FOTOS.value,
             'fotos': [],
             'datos': {},
             'fotos_sin_asignar': []
         }
-        self._guardar()
-        return self._conversaciones[user_id]
+        self._conversaciones[user_id] = estado
+        self.persistir(user_id)
+        return estado
 
     def finalizar(self, user_id: int) -> None:
-        """Idéntico a main_sqlite.py:finalizar_conversacion()"""
         if user_id in self._conversaciones:
             del self._conversaciones[user_id]
-            self._guardar()
+        self._db.eliminar_estado_conversacion(user_id)
 
-    def persistir(self) -> None:
-        """Expuesto para compatibilidad con la interfaz."""
-        self._guardar()
+    def persistir(self, user_id: int = None) -> None:
+        if user_id is not None:
+            if user_id in self._conversaciones:
+                self._db.guardar_estado_conversacion(user_id, json.dumps(self._conversaciones[user_id], ensure_ascii=False))
+                # Remove from memory to avoid stale cache
+                del self._conversaciones[user_id]
+        else:
+            # Fallback for old calls (should not be used with concurrent_updates)
+            for uid, estado in list(self._conversaciones.items()):
+                self._db.guardar_estado_conversacion(uid, json.dumps(estado, ensure_ascii=False))
+            self._conversaciones.clear()
 
     @property
     def conversaciones(self) -> Dict[int, Dict]:
-        """Acceso directo al dict interno (para transición gradual)."""
         return self._conversaciones

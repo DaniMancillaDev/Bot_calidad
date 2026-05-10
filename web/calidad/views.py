@@ -4,7 +4,6 @@ Vistas del Panel de Calidad.
 import os
 import re
 import json
-import tempfile
 from pathlib import Path
 from datetime import datetime, timedelta
 from django.shortcuts import render, get_object_or_404, redirect
@@ -14,8 +13,6 @@ from django.conf import settings
 from django.http import Http404, HttpResponse, JsonResponse
 from django.views.decorators.http import require_POST
 from .models import RegistroDefecto, PerfilUsuario
-
-EXCEL_TASKS = {}
 
 # ============================================================
 # FUNCIONES AUXILIARES DE SEGURIDAD Y PERMISOS
@@ -45,7 +42,7 @@ def get_registros_permitidos(user):
 
 def obtener_numeros_fotos_permitidas(registros):
     """
-    Parsea el campo 'fotos' de los registros (ej. '(001-003)') 
+    Parsea el campo 'fotos' de los registros (soporta legacy '(001-005)' y nuevo '1, 2, 3') 
     y extrae un set con los números enteros individuales permitidos.
     """
     numeros_permitidos = set()
@@ -53,14 +50,23 @@ def obtener_numeros_fotos_permitidas(registros):
         if not r.fotos:
             continue
         
+        # 1. Intentar formato nuevo: "1, 2, 3"
+        if ',' in r.fotos or r.fotos.isdigit():
+            try:
+                nums = [int(x.strip()) for x in r.fotos.split(',') if x.strip()]
+                numeros_permitidos.update(nums)
+                continue
+            except ValueError:
+                pass
+
+        # 2. Formato legacy: (001-005)
         # Buscar rangos: (001-005)
         rangos = re.findall(r'\((\d+)-(\d+)\)', r.fotos)
         for inicio, fin in rangos:
             numeros_permitidos.update(range(int(inicio), int(fin) + 1))
             
-        # Buscar individuales por si acaso (aunque el bot agrupa en rangos)
-        # Esto atraparía (001) si existiera
-        individuales = re.findall(r'\((\d+)\)', r.fotos.replace('-', 'X')) # Evitar contar los rangos
+        # Buscar individuales legacy: (001)
+        individuales = re.findall(r'\((\d+)\)', r.fotos.replace('-', 'X'))
         for num in individuales:
             numeros_permitidos.add(int(num))
             
@@ -359,30 +365,39 @@ def galeria_fotos(request):
 def _parse_fotos_nums(registros):
     """
     Extrae los números de foto individuales de los registros.
-    El bot guarda rangos como '(001-005)' o '(007-023)'.
-    Devuelve lista de dicts con fotos_nums (list[int]) y datos del registro.
+    Soporta formato nuevo '1, 2, 3' y legacy '(001-005)'.
+    Resistente a registros como dict (JSON) o como objeto (ORM).
     """
+    import re
     resultado = []
     for r in registros:
+        is_dict = isinstance(r, dict)
+        
+        fotos_str = r.get('fotos', '') if is_dict else getattr(r, 'fotos', '')
+        user_id = r.get('user_id') if is_dict else getattr(r, 'user_id', None)
+        
         nums = []
-        if r.fotos:
-            rangos = re.findall(r'\((\d+)-(\d+)\)', r.fotos)
+        if fotos_str:
+            # 1. Intentar detectar números individuales (formato nuevo o individuales legacy)
+            # re.findall(r'\d+', ...) saca todos los grupos de dígitos
+            nums = [int(n) for n in re.findall(r'\d+', str(fotos_str))]
+            
+            # 2. Si hay rangos legacy (001-005), completar el medio
+            # (re.findall anterior solo sacó el inicio y fin)
+            rangos = re.findall(r'\((\d+)-(\d+)\)', str(fotos_str))
             for inicio, fin in rangos:
                 nums.extend(range(int(inicio), int(fin) + 1))
-            # Fotos individuales como (007)
-            individuales = re.findall(r'\((\d+)\)(?!-)', r.fotos)
-            for n in individuales:
-                nums.append(int(n))
+
         resultado.append({
-            'id':          r.id,
-            'user_id':     r.user_id,
-            'fotos_nums':  sorted(set(nums)),
-            'fotos_str':   r.fotos,
-            'modelo':      r.modelo,
-            'linea':       r.linea,
-            'descripcion': r.descripcion,
-            'responsable': r.responsable,
-            'cantidad':    r.cantidad,
+            'id':          r.get('id') if is_dict else getattr(r, 'id', None),
+            'user_id':     user_id,
+            'fotos_nums':  sorted(list(set(nums))),
+            'fotos_str':   fotos_str,
+            'modelo':      r.get('modelo', '') if is_dict else getattr(r, 'modelo', ''),
+            'linea':       r.get('linea', '') if is_dict else getattr(r, 'linea', ''),
+            'descripcion': r.get('descripcion', '') if is_dict else getattr(r, 'descripcion', ''),
+            'responsable': r.get('responsable', '') if is_dict else getattr(r, 'responsable', ''),
+            'cantidad':    r.get('cantidad', 1) if is_dict else getattr(r, 'cantidad', 1),
         })
     return resultado
 
@@ -436,18 +451,25 @@ def revisar_orientacion(request):
         if not user_folder.exists():
             continue
             
-        for num in r['fotos_nums']:
+        for num in r.get('fotos_nums', []):
             clave = f"{user_id}_{num}"
             if clave in fotos_en_disco:
                 continue
                 
-            for ext in ['png', 'jpg']:
-                # Buscar formato exacto (001.png) o con timestamp (001_2023.png)
-                archivos = list(user_folder.glob(f"{num:03d}.{ext}")) + \
-                           list(user_folder.glob(f"{num:03d}_*.{ext}"))
-                if archivos:
+            # Buscar cualquier archivo que empiece con el número (formato 001 o 1)
+            # y que sea una imagen común.
+            prefix_3 = f"{num:03d}"
+            prefix_raw = str(num)
+            
+            # Glob case-insensitive manual (o simplemente buscar los prefijos comunes)
+            posibles = list(user_folder.glob(f"{prefix_3}*")) + \
+                      list(user_folder.glob(f"{prefix_raw}*"))
+            
+            for path in posibles:
+                ext = path.suffix.lower()
+                if ext in ['.jpg', '.jpeg', '.png']:
                     fotos_en_disco[clave] = {
-                        'path': archivos[0],
+                        'path': path,
                         'user_id': user_id,
                         'numero': num
                     }
@@ -516,12 +538,10 @@ def api_detectar_orientacion(request):
 @login_required
 def generar_excel(request):
     """
-    Inicia la generación de Excel en background y devuelve un task_id.
+    Encola la generación de Excel con Celery y devuelve un task_id.
+    El estado se almacena en Redis (no en memoria del proceso).
     """
-    import zipfile
-    import threading
-    import uuid
-    from .services.reporte_excel import generate_excel
+    from .tasks import generar_excel_task
 
     if request.method != 'POST':
         return redirect('reportes')
@@ -532,7 +552,6 @@ def generar_excel(request):
         return HttpResponse('JSON inválido', status=400)
 
     rotaciones_raw = body.get('rotaciones', {})
-    # Las claves de rotaciones ahora son strings (user_id_num)
     rotaciones = {str(k): int(v) for k, v in rotaciones_raw.items()}
     registros_data = body.get('registros', [])
 
@@ -542,136 +561,81 @@ def generar_excel(request):
     fotos_dir = settings.MEDIA_ROOT / 'fotos'
     fecha_str = datetime.now().strftime('%Y%m%d_%H%M%S')
 
-    # ── Alias de proveedores (nombres que son lo mismo) ─────────
-    ALIAS = {
-        'WH': 'TSCEM',
-    }
+    # Encolar tarea Celery — no bloquea el proceso web
+    task = generar_excel_task.delay(
+        registros_data=registros_data,
+        rotaciones=rotaciones,
+        fotos_dir_str=str(fotos_dir),
+        fecha_str=fecha_str,
+    )
 
-    # ── Agrupar registros por responsable ──────────────────────
-    grupos = {}
-    for reg in registros_data:
-        resp = (reg.get('responsable') or 'SIN_PROVEEDOR').strip().upper()
-        resp = ALIAS.get(resp, resp)  # Aplicar alias
-        grupos.setdefault(resp, []).append(reg)
+    return JsonResponse({'task_id': task.id})
 
-    def _consolidar_registros(regs):
-        """
-        Fusiona registros que tienen el mismo (modelo, descripcion).
-        Las fotos se unen y la cantidad se suma.
-        """
-        agrupados = {}
-        for reg in regs:
-            clave = (
-                (reg.get('modelo') or '').strip().upper(),
-                (reg.get('descripcion') or '').strip().upper(),
-            )
-            if clave in agrupados:
-                existente = agrupados[clave]
-                # Unir fotos sin duplicados, manteniendo orden
-                fotos_existentes = set(existente['fotos_nums'])
-                for n in reg.get('fotos_nums', []):
-                    if n not in fotos_existentes:
-                        existente['fotos_nums'].append(n)
-                        fotos_existentes.add(n)
-                # Sumar cantidades
-                existente['cantidad'] = (existente.get('cantidad') or 1) + (reg.get('cantidad') or 1)
-            else:
-                agrupados[clave] = dict(reg)  # copia
-        return list(agrupados.values())
-
-    # ── Generar Task ID ──────────────────────────────────────────
-    task_id = str(uuid.uuid4())
-    EXCEL_TASKS[task_id] = {
-        'status': 'processing',
-        'progress': 'Iniciando...',
-        'file_path': None,
-        'filename': None,
-        'error': None
-    }
-
-    # ── Función Worker ─────────────────────────────────────────
-    def _worker(task_id, grupos, rotaciones, fotos_dir, fecha_str):
-        archivos_generados = []
-        try:
-            total_grupos = len(grupos)
-            for i, (proveedor, regs) in enumerate(grupos.items(), 1):
-                EXCEL_TASKS[task_id]['progress'] = f'Procesando {proveedor} ({i}/{total_grupos})'
-                
-                tmp = tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False)
-                tmp.close()
-                output_path = Path(tmp.name)
-
-                generate_excel(
-                    registros=regs,
-                    rotaciones=rotaciones,
-                    fotos_dir=fotos_dir,
-                    output_path=output_path,
-                )
-
-                nombre = f"reporte_{proveedor}_{fecha_str}.xlsx"
-                archivos_generados.append((nombre, output_path))
-
-            # Empaquetar
-            EXCEL_TASKS[task_id]['progress'] = 'Preparando archivo final...'
-            if len(archivos_generados) == 1:
-                nombre, path = archivos_generados[0]
-                EXCEL_TASKS[task_id]['file_path'] = str(path)
-                EXCEL_TASKS[task_id]['filename'] = nombre
-            else:
-                zip_tmp = tempfile.NamedTemporaryFile(suffix='.zip', delete=False)
-                zip_tmp.close()
-                zip_path = Path(zip_tmp.name)
-                with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-                    for nombre, path in archivos_generados:
-                        zf.write(path, nombre)
-                
-                # Cleanup xlsx tmp files
-                for _, p in archivos_generados:
-                    Path(p).unlink(missing_ok=True)
-                
-                EXCEL_TASKS[task_id]['file_path'] = str(zip_path)
-                EXCEL_TASKS[task_id]['filename'] = f"reportes_por_proveedor_{fecha_str}.zip"
-
-            EXCEL_TASKS[task_id]['status'] = 'done'
-
-        except Exception as e:
-            EXCEL_TASKS[task_id]['status'] = 'error'
-            EXCEL_TASKS[task_id]['error'] = str(e)
-
-    # Iniciar Thread
-    thread = threading.Thread(target=_worker, args=(task_id, grupos, rotaciones, fotos_dir, fecha_str))
-    thread.start()
-
-    return JsonResponse({'task_id': task_id})
 
 @login_required
 def api_excel_status(request, task_id):
-    if task_id not in EXCEL_TASKS:
-        return JsonResponse({'error': 'Task not found'}, status=404)
-    return JsonResponse(EXCEL_TASKS[task_id])
+    """
+    Consulta el estado de una tarea Celery por su task_id.
+    Compatible con múltiples workers y servidores (estado en Redis).
+    """
+    from celery.result import AsyncResult
+
+    result = AsyncResult(task_id)
+
+    if result.state == 'PENDING':
+        return JsonResponse({'status': 'processing', 'progress': 'En cola...'})
+
+    if result.state == 'PROGRESS':
+        meta = result.info or {}
+        return JsonResponse({'status': 'processing', 'progress': meta.get('progress', '...')})
+
+    if result.state == 'SUCCESS':
+        data = result.result or {}
+        return JsonResponse({
+            'status': 'done',
+            'file_path': data.get('file_path'),
+            'filename': data.get('filename'),
+        })
+
+    if result.state == 'FAILURE':
+        return JsonResponse({'status': 'error', 'error': str(result.info)}, status=500)
+
+    return JsonResponse({'status': result.state.lower()})
+
 
 @login_required
 def api_download_excel(request, task_id):
-    if task_id not in EXCEL_TASKS:
-        return HttpResponse('Task not found', status=404)
-    
-    task = EXCEL_TASKS[task_id]
-    if task['status'] != 'done' or not task['file_path']:
-        return HttpResponse('File not ready', status=400)
-    
-    path = task['file_path']
-    nombre = task['filename']
-    
+    """
+    Descarga el archivo generado por la tarea Celery.
+    Lee el path desde el resultado en Redis, sirve el archivo y lo borra.
+    """
+    from celery.result import AsyncResult
+
+    result = AsyncResult(task_id)
+
+    if result.state != 'SUCCESS':
+        return HttpResponse('Archivo no listo', status=400)
+
+    data = result.result or {}
+    path = data.get('file_path')
+    nombre = data.get('filename')
+
+    if not path or not Path(path).exists():
+        return HttpResponse('Archivo no encontrado', status=404)
+
     with open(path, 'rb') as f:
         contenido = f.read()
-    
-    # Intentar limpiar el archivo
+
     try:
         Path(path).unlink(missing_ok=True)
     except Exception:
         pass
-        
-    content_type = 'application/zip' if nombre.endswith('.zip') else 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+
+    content_type = (
+        'application/zip'
+        if nombre.endswith('.zip')
+        else 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
     response = HttpResponse(contenido, content_type=content_type)
     response['Content-Disposition'] = f'attachment; filename="{nombre}"'
     return response

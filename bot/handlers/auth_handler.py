@@ -24,12 +24,12 @@ async def comando_mi_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     )
 
 
-def create_verificar_acceso(usuario_repo):
+def create_verificar_acceso(api_client):
     """
     Factory: middleware que bloquea usuarios no registrados.
 
     Args:
-        usuario_repo: implementa .tiene_acceso(user_id) → bool
+        api_client: instancia de BotApiClient
     """
     async def verificar_acceso(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not update.effective_user:
@@ -37,7 +37,17 @@ def create_verificar_acceso(usuario_repo):
 
         user_id = update.effective_user.id
 
-        if not usuario_repo.tiene_acceso(user_id):
+        try:
+            resp = await api_client.tiene_acceso(user_id)
+            tiene_acceso = resp.get("tiene_acceso", False)
+        except Exception as e:
+            # En caso de error de red, asumimos sin acceso y mostramos mensaje amigable
+            tiene_acceso = False
+            if update.message and not update.message.text.startswith("/mi_id"):
+                await update.message.reply_text("⏳ Conectando con el servidor. Por favor intenta de nuevo.")
+                raise ApplicationHandlerStop()
+
+        if not tiene_acceso:
             # /mi_id siempre permitido para que puedan solicitar acceso
             if (
                 update.message

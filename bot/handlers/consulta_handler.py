@@ -24,77 +24,61 @@ from bot.helpers.zip_helper import crear_y_enviar_zip
 
 logger = logging.getLogger(__name__)
 
-FOTOS_PATH = "fotos"
+import os
+FOTOS_PATH = os.getenv("FOTOS_PATH", "media_files/fotos")
 MAX_IMAGENES_POR_ZIP = 30
 
 
 # ─────────────────────────────────────────
 # /reporte
 # ─────────────────────────────────────────
-def create_reporte(usuario_repo, registro_repo):
+def create_reporte(api_client):
     """
     Factory para /reporte.
-
     Modos:
-      /reporte        → registros propios del usuario
-      /reporte grupo  → registros del grupo turno/depto (requiere rol admin/supervisor)
-
-    Args:
-        usuario_repo:  .obtener(user_id)
-        registro_repo: .obtener_todos(user_id), .obtener_por_turno_depto(turno, departamento, user_id)
+      /reporte        → registros propios
+      admin           → todos los del turno/depto
     """
     async def reporte(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not update.message:
             return
         try:
             user_id = update.effective_user.id if update.effective_user else None
-            usuario = usuario_repo.obtener(user_id)
-            if not usuario:
-                await update.message.reply_text("Usuario no registrado.")
-                return
+            data = await api_client.obtener_reporte(user_id)
 
-            if usuario.get("rol") == "admin":
-                # Admin ve todos los registros de su turno/departamento
-                registros = registro_repo.obtener_por_turno_depto(
-                    turno=usuario["turno"],
-                    departamento=usuario["departamento"],
-                    user_id=user_id,
-                )
-            else:
-                # Operador ve solo sus propios registros
-                registros = registro_repo.obtener_todos(user_id=user_id)
-
+            registros = data.get('registros', [])
             if not registros:
-                msg = "<b>No hay registros disponibles.</b>"
-                await update.message.reply_text(msg, parse_mode="HTML")
+                await update.message.reply_text("<b>No hay registros disponibles.</b>", parse_mode="HTML")
                 return
 
+            import tempfile
             with tempfile.NamedTemporaryFile(
                 mode="w", suffix=".txt", delete=False, encoding="utf-8"
             ) as tmp:
                 tmp.write(
-                    f"REPORTE DE DEFECTOS - TURNO {usuario['turno']} - {usuario['departamento']}\n"
+                    f"REPORTE DE DEFECTOS - TURNO {data['turno']} - {data['departamento']}\n"
+                    f"Usuario: {data['usuario']} | Generado: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                    + "=" * 60 + "\n\n"
                 )
-                tmp.write(
-                    f"Usuario: {usuario.get('nombre', user_id)} | Generado: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-                )
-                tmp.write("=" * 60 + "\n\n")
-                for reg in registros:
-                    for linea in reg["lineas_formateadas"]:
-                        tmp.write(linea + "\n")
+                for r in registros:
+                    fotos_str = str(r.get('fotos', '')) if r.get('fotos') else 'sin fotos'
+                    tmp.write(
+                        f"{fotos_str} Modelo: {r['modelo']}; Línea: {r['linea']}; "
+                        f"Cantidad: {r['cantidad']}; Responsable: {r['responsable']}; "
+                        f"Descripción: {r['descripcion']}\n"
+                    )
                 nombre_archivo = tmp.name
 
             with open(nombre_archivo, "rb") as f:
                 await update.message.reply_document(
                     document=f,
                     filename=(
-                        f"reporte_{usuario['turno']}_{usuario['departamento']}"
+                        f"reporte_{data['turno']}_{data['departamento']}"
                         f"_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
                     ),
-                    caption=(
-                        f"Reporte {usuario['turno']}/{usuario['departamento']}"
-                        f" - {len(registros)} registros"
-                    ),
+                    caption=f"Reporte {data['turno']}/{data['departamento']} — {len(registros)} registro(s)",
+                    read_timeout=300,
+                    write_timeout=300,
                 )
             os.remove(nombre_archivo)
 
@@ -108,45 +92,40 @@ def create_reporte(usuario_repo, registro_repo):
 # ─────────────────────────────────────────
 # /estado
 # ─────────────────────────────────────────
-def create_estado(usuario_repo, contador_repo, registro_repo):
+def create_estado(api_client):
     """
     Factory para /estado.
 
     Args:
-        usuario_repo:  .obtener(user_id)
-        contador_repo: .obtener_actual(user_id)
-        registro_repo: .obtener_estadisticas(turno, departamento)
+        api_client: BotApiClient
     """
     async def estado(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not update.message:
             return
         try:
             user_id = update.effective_user.id if update.effective_user else None
-            usuario = usuario_repo.obtener(user_id)
-            if not usuario:
-                await update.message.reply_text("<b>Usuario no registrado.</b>", parse_mode="HTML")
+            
+            try:
+                stats = await api_client.obtener_estadisticas(user_id)
+            except Exception as e:
+                if "404" in str(e):
+                    await update.message.reply_text("<b>Usuario no registrado.</b>", parse_mode="HTML")
+                else:
+                    raise e
                 return
 
-            contador = contador_repo.obtener_actual(user_id)
-            
-            if usuario.get("rol") == "admin":
-                stats = registro_repo.obtener_estadisticas(
-                    turno=usuario["turno"],
-                    departamento=usuario["departamento"],
-                )
-                msg = f"<b>ESTADO DEL GRUPO (Admin)</b>\n<i>(Turno {usuario['turno']} - {usuario['departamento']})</i>\n\n"
+            if stats.get("rol") == "admin":
+                msg = f"<b>ESTADO DEL GRUPO (Admin)</b>\n<i>(Turno {stats['turno']} - {stats['departamento']})</i>\n\n"
             else:
-                stats = registro_repo.obtener_estadisticas(user_id=user_id)
-                msg = f"<b>ESTADO PERSONAL</b>\n<i>(Turno {usuario['turno']} - {usuario['departamento']})</i>\n\n"
+                msg = f"<b>ESTADO PERSONAL</b>\n<i>(Turno {stats['turno']} - {stats['departamento']})</i>\n\n"
 
-            msg += f"<b>Usuario:</b> {usuario.get('nombre', user_id)}\n"
-            msg += f"<b>Rol:</b> {usuario.get('rol', 'operador').capitalize()}\n"
-            msg += f"<b>Siguiente foto:</b> {contador:03d}\n"
+            msg += f"<b>Usuario:</b> {stats['nombre']}\n"
+            msg += f"<b>Siguiente foto:</b> {stats['siguiente_foto']:03d}\n"
             
-            lbl_registros = "Registros del grupo" if usuario.get("rol") == "admin" else "Tus registros"
-            msg += f"<b>{lbl_registros}:</b> {stats.get('total_registros', 0)}\n"
-            if stats.get("ultimo_registro"):
-                msg += f"<b>Último registro:</b> {stats['ultimo_registro']}"
+            lbl_registros = "Registros del grupo" if stats.get("rol") == "admin" else "Tus registros"
+            msg += f"<b>{lbl_registros}:</b> {stats['total_registros']}\n"
+            if stats.get('cantidad_total') > 0:
+                msg += f"<b>Piezas defectuosas:</b> {stats['cantidad_total']}\n"
 
             await update.message.reply_text(msg, parse_mode="HTML")
 
@@ -160,12 +139,12 @@ def create_estado(usuario_repo, contador_repo, registro_repo):
 # ─────────────────────────────────────────
 # /info_fotos
 # ─────────────────────────────────────────
-def create_info_fotos(usuario_repo):
+def create_info_fotos(api_client):
     """
     Factory para /info_fotos.
 
     Args:
-        usuario_repo: .obtener(user_id)
+        api_client: BotApiClient
     """
     def _extraer_numero(nombre: str) -> int:
         m = re.match(r"^(\d+)", nombre)
@@ -175,8 +154,9 @@ def create_info_fotos(usuario_repo):
         if not update.message or not update.effective_user:
             return
         user_id = update.effective_user.id
-        usuario = usuario_repo.obtener(user_id)
-        if not usuario:
+        
+        perfil = await api_client.obtener_perfil(user_id)
+        if not perfil:
             await update.message.reply_text("<b>Usuario no registrado.</b>", parse_mode="HTML")
             return
         try:
@@ -194,7 +174,11 @@ def create_info_fotos(usuario_repo):
                 return
 
             numeros = [_extraer_numero(f) for f in imgs if _extraer_numero(f) != -1]
-            rango_ini, rango_fin = min(numeros), max(numeros)
+            if numeros:
+                rango_ini, rango_fin = min(numeros), max(numeros)
+            else:
+                rango_ini, rango_fin = 0, 0
+                
             jpgs = [f for f in imgs if f.lower().endswith(".jpg")]
             pngs = [f for f in imgs if f.lower().endswith(".png")]
             mb = sum(os.path.getsize(os.path.join(user_folder, f)) for f in imgs) / (1024 * 1024)
@@ -202,15 +186,19 @@ def create_info_fotos(usuario_repo):
             msg = "<b>INFORMACIÓN DE FOTOS</b>\n\n"
             msg += f"<b>Total:</b> {len(imgs)}\n"
             msg += f"<b>Formato:</b> {len(jpgs)} JPG | {len(pngs)} PNG\n"
-            msg += f"<b>Rango actual:</b> {rango_ini:03d} – {rango_fin:03d}\n"
+            if numeros:
+                msg += f"<b>Rango actual:</b> {rango_ini:03d} – {rango_fin:03d}\n"
+            else:
+                msg += "<b>Rango actual:</b> (solo archivos temporales o sin número)\n"
             msg += f"<b>Tamaño total:</b> {mb:.1f} MB\n\n"
 
             msg += "<b>Sugerencias de descarga:</b>\n"
             msg += "• Clic directo para todas: /descargar\n"
-            msg += "• O copia este comando para bajar por lotes:\n"
-            msg += f"  <code>/descargar {rango_ini:03d}-{rango_ini+49:03d}</code>\n"
-            if rango_fin > rango_ini + 49:
-                msg += f"  <code>/descargar {rango_ini+50:03d}-{rango_fin:03d}</code>\n"
+            if numeros:
+                msg += "• O copia este comando para bajar por lotes:\n"
+                msg += f"  <code>/descargar {rango_ini:03d}-{rango_ini+49:03d}</code>\n"
+                if rango_fin > rango_ini + 49:
+                    msg += f"  <code>/descargar {rango_ini+50:03d}-{rango_fin:03d}</code>\n"
 
             await update.message.reply_text(msg, parse_mode="HTML")
 
@@ -224,12 +212,12 @@ def create_info_fotos(usuario_repo):
 # ─────────────────────────────────────────
 # /descargar
 # ─────────────────────────────────────────
-def create_descargar(usuario_repo):
+def create_descargar(api_client):
     """
     Factory para /descargar [inicio-fin].
 
     Args:
-        usuario_repo: .obtener(user_id)
+        api_client: BotApiClient
     """
     def _extraer_numero(nombre: str) -> int:
         m = re.match(r"^(\d+)", nombre)
@@ -240,8 +228,9 @@ def create_descargar(usuario_repo):
             return
 
         user_id = update.effective_user.id if update.effective_user else None
-        usuario = usuario_repo.obtener(user_id)
-        if not usuario:
+        
+        perfil = await api_client.obtener_perfil(user_id)
+        if not perfil:
             await update.message.reply_text("<b>Usuario no registrado.</b>", parse_mode="HTML")
             return
 

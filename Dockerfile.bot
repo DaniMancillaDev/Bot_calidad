@@ -1,0 +1,40 @@
+FROM python:3.13-slim
+
+# Dependencias del sistema (Tesseract OCR para procesamiento de imágenes)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    tesseract-ocr \
+    tesseract-ocr-spa \
+    libpq-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Instalar uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+# Copiar dependencias primero para cache de capas
+COPY pyproject.toml uv.lock ./
+
+# Instalar solo dependencias de producción
+RUN uv sync --frozen --no-dev
+
+# Copiar código fuente del bot y de la web (para el ORM)
+COPY web/ web/
+COPY bot/ bot/
+COPY shared/ shared/
+COPY main.py ./
+
+ENV PYTHONPATH=/app/web
+
+# Usuario no-root para seguridad
+RUN useradd -m -r -u 1001 botuser && \
+    mkdir -p /app/media_files/fotos /app/data && \
+    chown -R botuser:botuser /app
+
+USER botuser
+
+# El volumen se monta externamente (DB y fotos)
+VOLUME ["/app/media_files", "/app/data"]
+
+CMD ["uv", "run", "python", "main.py"]

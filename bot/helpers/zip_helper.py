@@ -17,7 +17,7 @@ from telegram import Update
 logger = logging.getLogger(__name__)
 
 # Directorio base de fotos (constante de configuración)
-FOTOS_PATH = "fotos"
+FOTOS_PATH = os.getenv("FOTOS_PATH", "media_files/fotos")
 
 
 async def crear_y_enviar_zip(
@@ -41,30 +41,37 @@ async def crear_y_enviar_zip(
         with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmpzip:
             with zipfile.ZipFile(tmpzip.name, "w", compression=zipfile.ZIP_DEFLATED) as zipf:
                 for archivo in archivos_imagenes:
-                    ruta = os.path.join(user_folder, archivo)
-                    
-                    # Limpiar nombre para el ZIP (001_20231201_153022.jpg -> 001.jpg)
-                    partes = archivo.split('_', 1)
-                    if len(partes) > 1:
-                        ext = os.path.splitext(archivo)[1]
-                        nombre_limpio = f"{partes[0]}{ext}"
+                    # Si es tupla, asumimos (ruta_completa, nombre_en_zip)
+                    if isinstance(archivo, tuple):
+                        ruta, nombre_limpio = archivo
                     else:
-                        nombre_limpio = archivo
+                        ruta = os.path.join(user_folder, archivo)
+                        # Limpiar nombre para el ZIP (001_20231201_153022.jpg -> 001.jpg)
+                        partes = archivo.split('_', 1)
+                        if len(partes) > 1:
+                            ext = os.path.splitext(archivo)[1]
+                            nombre_limpio = f"{partes[0]}{ext}"
+                        else:
+                            nombre_limpio = archivo
                         
                     zipf.write(ruta, arcname=nombre_limpio)
             nombre_zip = tmpzip.name
 
         tamanio_mb = os.path.getsize(nombre_zip) / (1024 * 1024)
 
+        msg = update.message or update.callback_query.message
         with open(nombre_zip, "rb") as fzip:
-            await update.message.reply_document(
+            await msg.reply_document(
                 document=fzip,
                 filename=f"fotos_defectos_{sufijo}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
                 caption=f"ZIP con {len(archivos_imagenes)} imágenes ({tamanio_mb:.1f} MB)",
+                read_timeout=300,
+                write_timeout=300,
             )
 
     except Exception as e:
-        await update.message.reply_text(f"Error al enviar el archivo ZIP {sufijo}: {e}")
+        msg = update.message or update.callback_query.message
+        await msg.reply_text(f"Error al enviar el archivo ZIP {sufijo}: {e}")
     finally:
         if nombre_zip:
             try:

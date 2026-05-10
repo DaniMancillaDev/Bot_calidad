@@ -5,9 +5,8 @@ Responsabilidad única: operaciones destructivas de limpieza.
   - /limpiar       → elimina los registros de BD del usuario y reinicia contador
   - /limpiar_fotos → elimina las imágenes en disco del usuario y reinicia contador
 
-SRP : solo cambia si cambia la política de limpieza.
-DIP : recibe repos, no DatabaseManager ni acceso directo al filesystem.
-ISP : cada factory recibe SOLO las dependencias que necesita.
+Bot hace: borrado físico de fotos del volumen (solo limpiar_fotos).
+Backend hace: borrado BD + reinicio de contador (vía API).
 """
 import logging
 import os
@@ -17,43 +16,31 @@ from telegram.ext import ContextTypes
 
 logger = logging.getLogger(__name__)
 
-FOTOS_PATH = "fotos"
+import os
+FOTOS_PATH = os.getenv("FOTOS_PATH", "media_files/fotos")
 
 
-def create_limpiar(conversation_repo, usuario_repo, registro_repo, contador_repo):
+def create_limpiar(api_client):
     """
     Factory para /limpiar.
 
-    Elimina SOLO los registros de la BD del usuario actual y reinicia el
-    contador de su grupo turno/departamento.
-
     Args:
-        conversation_repo: .finalizar(user_id)
-        usuario_repo:      .obtener(user_id)
-        registro_repo:     .limpiar_por_usuario(user_id) → bool
-        contador_repo:     .reiniciar(user_id)
+        api_client:        BotApiClient
     """
     async def limpiar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not update.message:
             return
         try:
             user_id = update.effective_user.id if update.effective_user else None
-            usuario = usuario_repo.obtener(user_id)
 
-            if not usuario:
-                await update.message.reply_text("<b>Usuario no registrado.</b>", parse_mode="HTML")
-                return
+            resp = await api_client.limpiar_sesion(user_id)
 
-            exito = registro_repo.limpiar_por_usuario(user_id)
-
-            if exito:
-                contador_repo.reiniciar(user_id)
-                conversation_repo.finalizar(user_id)
+            if resp.get('status') == 'cleaned':
                 await update.message.reply_text(
                     "<b>Registros limpiados:</b>\n\n"
-                    f"• <b>Usuario:</b> {usuario.get('nombre', user_id)}\n"
-                    f"• <b>Turno:</b> {usuario['turno']}\n"
-                    f"• <b>Depto:</b> {usuario['departamento']}\n\n"
+                    f"• <b>Usuario:</b> {resp.get('nombre', user_id)}\n"
+                    f"• <b>Turno:</b> {resp.get('turno', '-')}\n"
+                    f"• <b>Depto:</b> {resp.get('departamento', '-')}\n\n"
                     "<i>Solo se eliminaron TUS registros.</i>",
                     parse_mode="HTML"
                 )
@@ -62,49 +49,46 @@ def create_limpiar(conversation_repo, usuario_repo, registro_repo, contador_repo
 
         except Exception as e:
             logger.error("Error en /limpiar: %s", e)
-            await update.message.reply_text("<b>Error interno al limpiar registros.</b>", parse_mode="HTML")
+            await update.message.reply_text(
+                "<b>Error interno al limpiar registros.</b>", parse_mode="HTML"
+            )
 
     return limpiar
 
 
-def create_limpiar_fotos(conversation_repo, usuario_repo, contador_repo):
+def create_limpiar_fotos(api_client):
     """
     Factory para /limpiar_fotos.
 
-    Elimina SOLO las imágenes en disco del usuario y reinicia su contador.
-
     Args:
-        conversation_repo: .finalizar(user_id)
-        usuario_repo:      .obtener(user_id)
-        contador_repo:     .reiniciar(user_id)
+        api_client:        BotApiClient
     """
     async def limpiar_fotos(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not update.message:
             return
         try:
             user_id = update.effective_user.id if update.effective_user else None
-            usuario = usuario_repo.obtener(user_id)
 
-            if not usuario:
-                await update.message.reply_text("<b>Usuario no registrado.</b>", parse_mode="HTML")
-                return
+            # Obtener perfil para mostrar nombre en respuesta
+            perfil = await api_client.obtener_perfil(user_id)
+            nombre = perfil.get('nombre', str(user_id)) if perfil else str(user_id)
 
+            # Borrado físico del volumen local (el bot tiene acceso al volumen)
             user_folder = os.path.join(FOTOS_PATH, str(user_id))
             fotos_eliminadas = 0
-
             if os.path.exists(user_folder):
-                for nombre in os.listdir(user_folder):
-                    ruta = os.path.join(user_folder, nombre)
+                for nombre_archivo in os.listdir(user_folder):
+                    ruta = os.path.join(user_folder, nombre_archivo)
                     if os.path.isfile(ruta):
                         os.remove(ruta)
                         fotos_eliminadas += 1
 
-            contador_repo.reiniciar(user_id)
-            conversation_repo.finalizar(user_id)
+            # Reiniciar contador en backend
+            await api_client.limpiar_fotos_sesion(user_id)
 
             await update.message.reply_text(
                 "<b>Fotos eliminadas:</b>\n\n"
-                f"• <b>Usuario:</b> {usuario.get('nombre', user_id)}\n"
+                f"• <b>Usuario:</b> {nombre}\n"
                 f"• <b>Fotos eliminadas:</b> {fotos_eliminadas}\n"
                 "• <b>Contador reiniciado a:</b> 001\n\n"
                 "<i>Solo se eliminaron TUS fotos.</i>",
@@ -113,6 +97,8 @@ def create_limpiar_fotos(conversation_repo, usuario_repo, contador_repo):
 
         except Exception as e:
             logger.error("Error en /limpiar_fotos: %s", e)
-            await update.message.reply_text("<b>Error interno al eliminar fotos.</b>", parse_mode="HTML")
+            await update.message.reply_text(
+                "<b>Error interno al eliminar fotos.</b>", parse_mode="HTML"
+            )
 
     return limpiar_fotos

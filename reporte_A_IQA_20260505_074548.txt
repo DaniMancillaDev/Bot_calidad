@@ -1,0 +1,30 @@
+REPORTE DE DEFECTOS - TURNO A - IQA
+Usuario: danim | Generado: 2026-05-05 07:45:48
+============================================================
+
+(189-193) Modelo: K-85XR30M2; Línea: T06; Cantidad: 4; Responsable: WH; Descripción: CAJA DAÑADA
+(181-188) Modelo: VQD70R-1001; Línea: T02; Cantidad: 6; Responsable: WH; Descripción: CAJA DAÑADA
+(175-180) Modelo: VQD70R-1001; Línea: T02; Cantidad: 5; Responsable: WH; Descripción: BY CARTÓN DAÑADO
+(171-174) Modelo: NS-50F501NA26; Línea: T05; Cantidad: 3; Responsable: TSCEM; Descripción: HOJA DAÑADA
+(169-170) Modelo: NS-50F501NA26; Línea: T05; Cantidad: 2; Responsable: TSCEM; Descripción: HOJA DAÑADA
+(164-168) Modelo: NS-55F501NA26; Línea: T08; Cantidad: 6; Responsable: TSCEM; Descripción: HOJA DAÑADA
+(158-163) Modelo: NS-55F501NA26; Línea: T08; Cantidad: 5; Responsable: TSCEM; Descripción: HOJA DAÑADA
+(156-157) Modelo: NS-55F501NA26; Línea: T08; Cantidad: 5; Responsable: TSCEM; Descripción: SPACER DAÑADO
+(154-155) Modelo: NS-55F501NA26; Línea: T08; Cantidad: 3; Responsable: TSCEM; Descripción: SPACER DAÑADO
+(144-153) Modelo: NS-55F501NA26; Línea: T08; Cantidad: 10; Responsable: WH; Descripción: CAJA DAÑADA
+(127-143) Modelo: VQD43R-1001; Línea: T01; Cantidad: 15; Responsable: WH; Descripción: CAJA DAÑADA
+(094-107) Modelo: NS-55F501NA26; Línea: T08; Cantidad: 8; Responsable: XM; Descripción: BACK COVER RAYADO
+(080-093) Modelo: T01; Línea: T01; Cantidad: 30; Responsable: XM; Descripción: BLU DOBLADO
+(075-079) Modelo: NS-50F501NA26 CHOT; Línea: T01; Cantidad: 10; Responsable: TSCEM; Descripción: HOJA DAÑADA
+(061-074) Modelo: NS-55F501NA26 CHOT; Línea: T08; Cantidad: 15; Responsable: TSCEM; Descripción: CAJA DAÑADA
+(058-060) Modelo: VQD70R-1001 CHOT; Línea: T02; Cantidad: 1; Responsable: TSCEM; Descripción: BACK COVER DAÑADO
+(054-057) Modelo: NS-55F501NA26; Línea: T01; Cantidad: 1; Responsable: TSCEM; Descripción: BACK COVER DAÑADO
+(051-053) Modelo: NS-50F501NA26 CHOT; Línea: T05; Cantidad: 1; Responsable: TSCEM; Descripción: BLU DAÑADO
+(045-050) Modelo: NS-55F501NA26; Línea: T03; Cantidad: 15; Responsable: TSCEM; Descripción: BOLSA DAÑADA
+(033-044) Modelo: NS-55F501NA26; Línea: T03; Cantidad: 12; Responsable: TSCEM; Descripción: CAJA DAÑADA
+(026-032) Modelo: K-100XR30M2 UCM; Línea: T06; Cantidad: 1; Responsable: XM; Descripción: TORNILLO AUSENTE
+(022-025) Modelo: 50S4V1 INX; Línea: T07; Cantidad: 21; Responsable: TSCEM; Descripción: HOJA DAÑADA
+(019-021) Modelo: K-100XR30M2 UCM; Línea: T06; Cantidad: 1; Responsable: TSCEM; Descripción: BACK COVER RAYADO
+(015-018) Modelo: NS-70F501NA26 CHOT; Línea: T03; Cantidad: 5; Responsable: TSCEM; Descripción: CAJA DAÑADA
+(010-014) Modelo: 70S4V1 CHOT; Línea: C01; Cantidad: 6; Responsable: TSCEM; Descripción: BOLSA DAÑADA
+(001-009) Modelo: K-65XR30M2; Línea: T06; Cantidad: 8; Responsable: TSCEM; Descripción: CAJA DAÑADA

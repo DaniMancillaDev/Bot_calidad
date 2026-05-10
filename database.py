@@ -20,14 +20,17 @@ class DatabaseManager:
     Versión multiusuario con soporte para turnos y departamentos.
     """
 
-    def __init__(self, db_path: str = "bot_calidad.db"):
+    def __init__(self, db_path: str = None):
         """
         Inicializa el gestor de base de datos.
 
         Args:
             db_path (str): Ruta del archivo de base de datos SQLite
         """
-        self.db_path = db_path
+        if db_path is None:
+            self.db_path = os.getenv('DB_PATH', 'bot_calidad.db')
+        else:
+            self.db_path = db_path
         # Habilitar modo WAL para permitir concurrencia real (lecturas/escrituras simultáneas)
         with sqlite3.connect(self.db_path) as conn:
             conn.execute('PRAGMA journal_mode=WAL;')
@@ -81,6 +84,16 @@ class DatabaseManager:
                 ''')
 
                 # ================================
+                # 💬 TABLA: Estado de Conversaciones
+                # ================================
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS estado_conversaciones (
+                        user_id INTEGER PRIMARY KEY,
+                        estado_json TEXT NOT NULL
+                    )
+                ''')
+
+                # ================================
                 # 🗑️ ELIMINAR TABLAS OBSOLETAS (si existen)
                 # ================================
                 tablas_obsoletas = [
@@ -96,10 +109,13 @@ class DatabaseManager:
                     cursor.execute(f'DROP TABLE IF EXISTS {tabla}')
 
                 # ================================
-                # 🚀 ÍNDICES DE RENDIMIENTO
+                # 🚀 ÍNDICES (para rendimiento)
                 # ================================
-                cursor.execute('CREATE INDEX IF NOT EXISTS idx_registros_turno_depto ON registros_defectos (turno, departamento)')
-                cursor.execute('CREATE INDEX IF NOT EXISTS idx_calidad_perfil_telegram ON calidad_perfilusuario (telegram_user_id)')
+                try:
+                    cursor.execute('CREATE INDEX IF NOT EXISTS idx_registros_fecha ON registros_defectos (fecha)')
+                    cursor.execute('CREATE INDEX IF NOT EXISTS idx_calidad_perfil_telegram ON calidad_perfilusuario (telegram_user_id)')
+                except sqlite3.OperationalError as e:
+                    logger.warning(f"No se pudieron crear índices (posiblemente tablas no listas): {e}")
 
                 conn.commit()
                 logger.info("Base de datos inicializada correctamente (multiusuario)")
@@ -499,6 +515,46 @@ class DatabaseManager:
 
 
 
+
+    # ================================
+    # 💬 ESTADO DE CONVERSACIONES
+    # ================================
+
+    def guardar_estado_conversacion(self, user_id: int, estado_json: str):
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    '''
+                    INSERT INTO estado_conversaciones (user_id, estado_json)
+                    VALUES (?, ?)
+                    ON CONFLICT(user_id) DO UPDATE SET estado_json = excluded.estado_json
+                    ''',
+                    (user_id, estado_json)
+                )
+                conn.commit()
+        except Exception as e:
+            logger.error("Error al guardar estado de conversacion para %s: %s", user_id, e)
+
+    def obtener_estado_conversacion(self, user_id: int) -> Optional[str]:
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('SELECT estado_json FROM estado_conversaciones WHERE user_id = ?', (user_id,))
+                result = cursor.fetchone()
+                return result[0] if result else None
+        except Exception as e:
+            logger.error("Error al obtener estado de conversacion para %s: %s", user_id, e)
+            return None
+
+    def eliminar_estado_conversacion(self, user_id: int):
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('DELETE FROM estado_conversaciones WHERE user_id = ?', (user_id,))
+                conn.commit()
+        except Exception as e:
+            logger.error("Error al eliminar estado de conversacion para %s: %s", user_id, e)
 
     # ================================
     # 🔧 UTILIDADES
