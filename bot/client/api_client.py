@@ -7,6 +7,14 @@ logger = logging.getLogger(__name__)
 class ApiException(Exception):
     pass
 
+import time
+import asyncio
+
+# Caché técnica en memoria para perfiles (evita ráfagas de logs)
+_CACHE_PERFIL = {}
+_CACHE_LOCK = asyncio.Lock()
+TTL_PERFIL = 300 # 5 minutos
+
 class BotApiClient:
     """
     Cliente HTTP asíncrono para comunicarse con la API de Workflows.
@@ -118,19 +126,33 @@ class BotApiClient:
     # WORKFLOW: USUARIO
     # ==========================
     async def obtener_perfil(self, telegram_id: int) -> dict:
-        """Retorna perfil del usuario (turno, depto, rol, nombre). 404 → None."""
-        try:
-            response = await self.client.get(
-                "/api/v1/workflows/usuario/perfil/",
-                params={'telegram_id': telegram_id}
-            )
-            if response.status_code == 404:
-                return None
-            response.raise_for_status()
-            return response.json()
-        except Exception as e:
-            logger.error(f"Error obteniendo perfil para {telegram_id}: {str(e)}")
-            raise ApiException("No se pudo obtener perfil del usuario.")
+        """Retorna perfil del usuario (turno, depto, rol, nombre). 404 → None. Usa caché técnica con Lock."""
+        ahora = time.time()
+        
+        async with _CACHE_LOCK:
+            # 1. Intentar desde caché
+            if telegram_id in _CACHE_PERFIL:
+                ts, data = _CACHE_PERFIL[telegram_id]
+                if ahora - ts < TTL_PERFIL:
+                    return data
+
+            # 2. Si no hay caché o expiró, pedir a la API
+            try:
+                response = await self.client.get(
+                    "/api/v1/workflows/usuario/perfil/",
+                    params={'telegram_id': telegram_id}
+                )
+                if response.status_code == 404:
+                    return None
+                response.raise_for_status()
+                
+                perfil = response.json()
+                # Guardar en caché
+                _CACHE_PERFIL[telegram_id] = (ahora, perfil)
+                return perfil
+            except Exception as e:
+                logger.error(f"Error obteniendo perfil para {telegram_id}: {str(e)}")
+                raise ApiException("No se pudo obtener perfil del usuario.")
 
     async def obtener_estadisticas(self, telegram_id: int) -> dict:
         """Obtiene las estadísticas de registros y estado actual del usuario."""

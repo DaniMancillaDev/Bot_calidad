@@ -53,6 +53,7 @@ class DefectoWorkflow:
         user_folder = self._storage.get_user_folder(user_id)  # Etapa 5: storage
 
         nuevos_contadores = []
+        rutas_para_thumbnail = []
         for msg_id in fotos_ids:
             tmp_path = user_folder / f"tmp_{msg_id}.jpg"
             if tmp_path.exists():
@@ -64,14 +65,17 @@ class DefectoWorkflow:
                 try:
                     os.rename(tmp_path, nueva_ruta)
                     nuevos_contadores.append(contador)
-                    # Etapa 3: thumbnail async
-                    try:
-                        from calidad.tasks import generar_thumbnail_task
-                        generar_thumbnail_task.delay(user_id, str(nueva_ruta))
-                    except Exception as thumb_exc:
-                        logger.warning("thumbnail dispatch failed: %s", thumb_exc)
+                    rutas_para_thumbnail.append(str(nueva_ruta))
                 except Exception as e:
                     logger.error("rename failed %s → %s: %s", tmp_path, nueva_ruta, e)
+
+        # Lanzar procesamiento de thumbnails por lote (más eficiente)
+        if rutas_para_thumbnail:
+            try:
+                from calidad.tasks import generar_thumbnails_lote_task
+                generar_thumbnails_lote_task.delay(user_id, rutas_para_thumbnail)
+            except Exception as thumb_exc:
+                logger.warning("batch thumbnail dispatch failed: %s", thumb_exc)
 
         estado_dict['fotos'] = list(set(estado_dict.get('fotos', []) + nuevos_contadores))
         estado_dict['fotos_sin_asignar'] = list(set(estado_dict.get('fotos_sin_asignar', []) + nuevos_contadores))
@@ -198,12 +202,12 @@ class DefectoWorkflow:
         datos = conv.get('datos', {})
         fotos_str = self._formatear_rango_fotos(conv.get('fotos', []))
         return (
-            f"📸 <b>Fotos:</b> {fotos_str}\n"
-            f"📱 <b>Modelo:</b> {datos.get('modelo')}\n"
-            f"🏭 <b>Línea:</b> {datos.get('linea')}\n"
-            f"⚠️ <b>Cantidad:</b> {datos.get('cantidad')}\n"
-            f"👤 <b>Responsable:</b> {datos.get('responsable')}\n"
-            f"📝 <b>Descripción:</b> {datos.get('descripcion')}"
+            f"<b>Fotos:</b> {fotos_str}\n"
+            f"<b>Modelo:</b> {datos.get('modelo')}\n"
+            f"<b>Línea:</b> {datos.get('linea')}\n"
+            f"<b>Cantidad:</b> {datos.get('cantidad')}\n"
+            f"<b>Responsable:</b> {datos.get('responsable')}\n"
+            f"<b>Descripción:</b> {datos.get('descripcion')}"
         )
 
     def _formatear_rango_fotos(self, fotos: list[int]) -> str:

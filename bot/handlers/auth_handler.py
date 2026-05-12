@@ -12,6 +12,12 @@ from telegram import Update
 from telegram.ext import ApplicationHandlerStop, ContextTypes
 
 
+import time
+
+# Caché en memoria: {user_id: (timestamp, tiene_acceso)}
+_CACHE_ACCESO = {}
+TTL_CACHE = 60 # segundos
+
 async def comando_mi_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Envía el ID de Telegram al usuario para que pueda registrarse."""
     if not update.message:
@@ -37,9 +43,20 @@ def create_verificar_acceso(api_client):
 
         user_id = update.effective_user.id if update.effective_user else None
 
+        # ── Lógica de Caché ──
+        ahora = time.time()
+        if user_id in _CACHE_ACCESO:
+            ts, cached_val = _CACHE_ACCESO[user_id]
+            if ahora - ts < TTL_CACHE:
+                if not cached_val:
+                    raise ApplicationHandlerStop()
+                return
+
         try:
             resp = await api_client.tiene_acceso(user_id)
             tiene_acceso = resp.get("tiene_acceso", False)
+            # Guardar en caché
+            _CACHE_ACCESO[user_id] = (ahora, tiene_acceso)
         except Exception as e:
             # En caso de error de red, asumimos sin acceso y mostramos mensaje amigable
             tiene_acceso = False

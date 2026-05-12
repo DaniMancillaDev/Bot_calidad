@@ -115,6 +115,12 @@ STATICFILES_DIRS = [BASE_DIR / 'static']
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BOT_DIR / 'media_files'  # Aislar archivos media
 
+# Thumbnails (generados por Celery, servidos por Nginx)
+THUMBS_ROOT = MEDIA_ROOT / 'thumbs'
+THUMBS_URL  = '/media/thumbs/'
+FOTOS_ROOT  = MEDIA_ROOT / 'fotos'
+FOTOS_URL   = '/media/fotos/'
+
 # ====================================
 # LOGIN
 # ====================================

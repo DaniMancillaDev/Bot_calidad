@@ -8,11 +8,12 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
 from django.db.models import Count, Sum, Q
 from django.conf import settings
 from django.http import Http404, HttpResponse, JsonResponse
 from django.views.decorators.http import require_POST
-from .models import RegistroDefecto, PerfilUsuario
+from .models import RegistroDefecto, PerfilUsuario, EstadoRevision
 
 # ============================================================
 # FUNCIONES AUXILIARES DE SEGURIDAD Y PERMISOS
@@ -279,82 +280,141 @@ def ver_foto(request, numero):
 
 @login_required
 def galeria_fotos(request):
-    """Muestra galería filtrada por turno/departamento, agrupada por usuario."""
-    grupos_usuarios = {}
-    total_fotos = 0
+    """
+    Feed operativo de registros con thumbnails.
+    - DB-first: lee fotos_nums + metadatos del registro, no escanea filesystem.
+    - Solo thumbnails en el feed. Original solo en modal/zoom.
+    - Paginación server-side: 30 registros por página.
+    - HTMX-ready: si request trae HX-Request header, devuelve solo el partial.
+    - Filters: turno, departamento, estado_revision, fecha, línea.
+    """
+    PAGE_SIZE = 30
 
-    # Obtener user_ids permitidos (del mismo turno/depto)
-    if request.user.is_superuser:
-        # Admin ve todos los usuarios que tienen fotos
-        usuarios_permitidos = None
-    else:
-        if hasattr(request.user, 'perfil'):
-            # Buscar usuarios del bot con mismo turno y departamento
-            usuarios_perfil = PerfilUsuario.objects.filter(
-                turno=request.user.perfil.turno,
-                departamento=request.user.perfil.departamento
-            ).values_list('telegram_user_id', flat=True)
-            usuarios_permitidos = set(usuarios_perfil)
-        else:
-            usuarios_permitidos = set()
+    # ── Queryset base con permisos ────────────────────────────────────────────
+    registros_qs = (
+        get_registros_permitidos(request.user)
+        .select_related('supervisor')         # evitar N+1 en supervisor
+        .only(
+            'id', 'fotos', 'fotos_nums', 'modelo', 'linea',
+            'cantidad', 'responsable', 'descripcion',
+            'fecha_registro', 'user_id', 'turno', 'departamento',
+            'estado_revision', 'supervisor_id', 'is_duplicate', 'is_blurry',
+        )
+        .order_by('-fecha_registro')
+    )
 
-    fotos_base_dir = settings.MEDIA_ROOT / 'fotos'
+    # ── Filtros ───────────────────────────────────────────────────────────────
+    estado_filter  = request.GET.get('estado', '')
+    turno_filter   = request.GET.get('turno', '')
+    depto_filter   = request.GET.get('depto', '')
+    linea_filter   = request.GET.get('linea', '')
+    dias_filter    = request.GET.get('dias', '')
+    q_filter       = request.GET.get('q', '')   # búsqueda libre en descripcion
 
-    if fotos_base_dir.exists():
-        # Pre-cargar nombres de usuarios para evitar N+1 queries
-        nombres_dict = {}
-        for p in PerfilUsuario.objects.select_related('usuario').exclude(telegram_user_id__isnull=True):
-            nombres_dict[p.telegram_user_id] = p.usuario.get_full_name() or p.usuario.username
+    if estado_filter:
+        registros_qs = registros_qs.filter(estado_revision=estado_filter)
+    if turno_filter:
+        registros_qs = registros_qs.filter(turno=turno_filter)
+    if depto_filter:
+        registros_qs = registros_qs.filter(departamento=depto_filter)
+    if linea_filter:
+        registros_qs = registros_qs.filter(linea__icontains=linea_filter)
+    if dias_filter:
+        try:
+            desde = datetime.now() - timedelta(days=int(dias_filter))
+            registros_qs = registros_qs.filter(fecha_registro__gte=desde)
+        except ValueError:
+            pass
+    if q_filter:
+        registros_qs = registros_qs.filter(
+            Q(descripcion__icontains=q_filter) |
+            Q(modelo__icontains=q_filter) |
+            Q(responsable__icontains=q_filter)
+        )
 
-        # Iterar sobre carpetas de usuarios
-        for user_folder in fotos_base_dir.iterdir():
-            if not user_folder.is_dir():
-                continue
+    # ── Pre-cargar nombres de usuarios (1 query, no N) ────────────────────────
+    nombres_dict = {
+        p.telegram_user_id: p.usuario.get_full_name() or p.usuario.username
+        for p in PerfilUsuario.objects.select_related('usuario')
+                                       .exclude(telegram_user_id__isnull=True)
+    }
 
+    # ── Paginación ────────────────────────────────────────────────────────────
+    paginator = Paginator(registros_qs, PAGE_SIZE)
+    page_num  = request.GET.get('page', 1)
+    try:
+        page = paginator.page(page_num)
+    except Exception:
+        page = paginator.page(1)
+
+    # ── Enriquecer registros con URLs de thumb y original ─────────────────────
+    thumbs_root = settings.THUMBS_ROOT
+    fotos_root  = settings.FOTOS_ROOT
+    thumbs_url  = settings.THUMBS_URL
+    fotos_url   = settings.FOTOS_URL
+
+    registros_enriquecidos = []
+    for reg in page.object_list:
+        fotos_data = []
+        user_folder_fotos  = fotos_root  / str(reg.user_id)
+        user_folder_thumbs = thumbs_root / str(reg.user_id)
+
+        # Usar fotos_nums (Fase 1). Fallback: parsear campo legacy.
+        nums = reg.fotos_nums if reg.fotos_nums else []
+        if not nums and reg.fotos:
             try:
-                user_id = int(user_folder.name)
-            except ValueError:
+                nums = [int(x.strip()) for x in reg.fotos.split(',') if x.strip().isdigit()]
+            except Exception:
+                nums = []
+
+        for num in nums:
+            # Buscar archivo con prefix num (ej. 001_20240101_120000.jpg)
+            patron = f"{num:03d}_*.jpg"
+            fotos_encontradas = sorted(user_folder_fotos.glob(patron))
+            if not fotos_encontradas:
                 continue
+            foto_file = fotos_encontradas[0]
+            thumb_file = user_folder_thumbs / foto_file.name
 
-            # Filtrar por usuario si no es admin
-            if not request.user.is_superuser and user_id not in usuarios_permitidos:
-                continue
+            # Thumb URL: usar thumb si existe, fallback al original
+            if thumb_file.exists():
+                thumb_src = f"{thumbs_url}{reg.user_id}/{foto_file.name}"
+            else:
+                thumb_src = f"{fotos_url}{reg.user_id}/{foto_file.name}"
 
-            fotos_del_usuario = []
-            # Buscar fotos en la carpeta del usuario (.jpg son las actuales)
-            for archivo in sorted(user_folder.glob('*.jpg')):
-                # Extraer número de secuencia (formato: 001_timestamp.png)
-                try:
-                    num = int(archivo.stem.split('_')[0])
-                except (ValueError, IndexError):
-                    num = 0
+            fotos_data.append({
+                'num':       num,
+                'thumb_url': thumb_src,
+                'orig_url':  f"{fotos_url}{reg.user_id}/{foto_file.name}",
+                'nombre':    foto_file.name,
+            })
 
-                fotos_del_usuario.append({
-                    'numero': num,
-                    'url': f"/media/fotos/{user_id}/{archivo.name}",
-                    'nombre': archivo.name,
-                    'usuario': user_id,
-                })
-                total_fotos += 1
-
-            if fotos_del_usuario:
-                fotos_del_usuario.sort(key=lambda x: x['numero'])
-                nombre_usuario = nombres_dict.get(user_id, "Desconocido")
-                grupos_usuarios[user_id] = {
-                    'user_id': user_id,
-                    'nombre_usuario': nombre_usuario,
-                    'fotos': fotos_del_usuario,
-                    'cantidad': len(fotos_del_usuario)
-                }
-
-    grupos_lista = list(grupos_usuarios.values())
-    grupos_lista.sort(key=lambda x: x['nombre_usuario'])
+        registros_enriquecidos.append({
+            'reg':            reg,
+            'fotos':          fotos_data,
+            'nombre_usuario': nombres_dict.get(reg.user_id, f'ID {reg.user_id}'),
+        })
 
     context = {
-        'grupos_usuarios': grupos_lista,
-        'total': total_fotos,
-        'seccion': 'fotos',
+        'registros':          registros_enriquecidos,
+        'page':               page,
+        'paginator':          paginator,
+        'total':              paginator.count,
+        'estados':            EstadoRevision.choices,
+        # Valores actuales de filtro
+        'f_estado':           estado_filter,
+        'f_turno':            turno_filter,
+        'f_depto':            depto_filter,
+        'f_linea':            linea_filter,
+        'f_dias':             dias_filter,
+        'f_q':                q_filter,
+        'seccion':            'fotos',
     }
+
+    # HTMX: solo el partial si viene de una solicitud incremental
+    if request.headers.get('HX-Request'):
+        return render(request, 'calidad/partials/feed_page.html', context)
+
     return render(request, 'calidad/galeria.html', context)
 
 
@@ -735,3 +795,6 @@ def api_edit_registro(request, registro_id):
         return JsonResponse({'success': True})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
+
+
+

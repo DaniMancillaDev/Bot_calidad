@@ -364,9 +364,11 @@
       const intervalId = setInterval(async () => {
           try {
               const statusRes = await fetch(`/api/excel_status/${taskId}/`);
-              if (!statusRes.ok) return;
-              
               const statusData = await statusRes.json();
+              
+              if (!statusRes.ok) {
+                  throw new Error(statusData.error || 'Error desconocido en el servidor');
+              }
               
               if (statusData.status === 'processing') {
                   overlayText.textContent = statusData.progress;
@@ -381,15 +383,15 @@
                   // Iniciar la descarga
                   window.location.href = `/api/download_excel/${taskId}/`;
               } else if (statusData.status === 'error') {
-                  clearInterval(intervalId);
-                  overlay.style.display = 'none';
-                  btn.disabled = false;
-                  
-                  msg.textContent = `Error: ${statusData.error}`;
-                  msg.style.color = 'var(--danger)';
+                  throw new Error(statusData.error);
               }
           } catch (err) {
               console.error("Error en polling:", err);
+              clearInterval(intervalId);
+              overlay.style.display = 'none';
+              btn.disabled = false;
+              msg.textContent = `Error: ${err.message}`;
+              msg.style.color = 'var(--danger)';
           }
       }, 1000);
 

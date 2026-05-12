@@ -20,6 +20,7 @@ if [[ ! -f "$ENV_FILE" ]]; then
 fi
 set -a
 source "$ENV_FILE"
+export PYTHONPATH=$(pwd)
 set +a
 
 # ── Colores ───────────────────────────────────────────────────────────────────
@@ -41,8 +42,11 @@ infra_up() {
 }
 
 infra_down() {
-    warn "Bajando infra..."
+    warn "Bajando infra Docker..."
     docker-compose stop postgres redis
+    warn "Aniquilando procesos locales (bot, web, celery, hupper)..."
+    pkill -9 -f "hupper|manage.py|celery" || true
+    info "Limpieza completada ✓"
 }
 
 migrate() {
@@ -57,8 +61,8 @@ run_web() {
 }
 
 run_bot() {
-    info "Iniciando bot Telegram..."
-    uv run python main.py
+    info "Iniciando bot Telegram (con hupper)..."
+    uv run hupper -m main
 }
 
 run_celery() {
@@ -67,14 +71,15 @@ run_celery() {
 }
 
 run_all() {
+    infra_down # Limpiar zombis antes de empezar
     infra_up
     migrate
 
     trap "warn 'Deteniendo procesos...'; kill 0; infra_down" EXIT INT TERM
 
-    info "Iniciando web + bot + celery en paralelo..."
+    info "Iniciando web + bot (hupper) + celery en paralelo..."
     uv run python web/manage.py runserver 0.0.0.0:8000 &
-    uv run python main.py &
+    uv run hupper -m main &
     (cd web && uv run celery -A calidad.celery_app worker --loglevel=info --concurrency=2) &
 
     wait
