@@ -386,12 +386,12 @@ class SesionLimpiarView(APIView):
             p = PerfilUsuario.objects.select_related('usuario').get(telegram_user_id=telegram_id)
 
             with transaction.atomic():
-                # No borrar historia ni resetear conteo en cada /start
-                # RegistroDefecto.objects.filter(user_id=telegram_id).delete()
-                # ContadorGrupo.objects.filter(
-                #     turno=p.turno, departamento=p.departamento
-                # ).update(contador_actual=1)
-                pass
+                # Borrar registros propios del turno actual para este usuario
+                RegistroDefecto.objects.filter(
+                    user_id=telegram_id,
+                    turno=p.turno,
+                    departamento=p.departamento
+                ).delete()
 
             from calidad.application.workflows.defecto_workflow import DefectoWorkflow
             DefectoWorkflow()._state_repo.finalizar(telegram_id)

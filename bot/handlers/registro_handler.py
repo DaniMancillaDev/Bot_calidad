@@ -49,8 +49,8 @@ def create_start(api_client):
         user_id = update.effective_user.id if update.effective_user else None
         
         try:
-            # Cancelamos / limpiamos la sesión anterior e iniciamos una nueva
-            await api_client.limpiar_sesion(user_id)
+            # Cancelamos la sesión anterior (FSM) sin borrar registros de BD
+            await api_client.cancelar_sesion(user_id)
             await api_client.iniciar_defecto(user_id)
 
             await update.message.reply_text(

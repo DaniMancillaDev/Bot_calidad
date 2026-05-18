@@ -86,26 +86,33 @@ class ExportService:
             m = re.match(r"^(\d+)", nombre)
             return int(m.group(1)) if m else -1
 
-        multiple_users = len(user_ids) > 1
-        count = 0
+        # 1. Recolectar todos los archivos válidos
+        archivos_validos = []
+        for uid in user_ids:
+            user_folder = Path(FOTOS_PATH) / str(uid)
+            if not user_folder.exists():
+                continue
+            for f in user_folder.iterdir():
+                if f.is_file() and f.suffix.lower() in ('.jpg', '.png'):
+                    num = _extraer_numero(f.name)
+                    if inicio is not None and fin is not None:
+                        if num == -1 or not (inicio <= num <= fin):
+                            continue
+                    archivos_validos.append(f)
+
+        # 2. Ordenar por nombre (mantiene orden cronológico por el prefijo número + timestamp)
+        archivos_validos.sort(key=lambda x: x.name)
+
+        # 3. Escribir al ZIP con numeración secuencial
+        # Si hay un inicio de rango, empezamos la cuenta desde ahí para mantener secuencia entre lotes
+        count = (inicio - 1) if inicio is not None else 0
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-            for uid in user_ids:
-                user_folder = Path(FOTOS_PATH) / str(uid)
-                if not user_folder.exists():
-                    continue
-                for f in user_folder.iterdir():
-                    if f.is_file() and f.suffix.lower() in ('.jpg', '.png'):
-                        num = _extraer_numero(f.name)
-                        if inicio is not None and fin is not None:
-                            if num == -1 or not (inicio <= num <= fin):
-                                continue
-
-                        # Usar nombre original (con timestamp) para evitar colisiones de nombres duplicados
-                        nombre_limpio = f.name
-
-                        arcname = f"{uid}_{nombre_limpio}" if multiple_users else nombre_limpio
-                        zf.write(f, arcname=arcname)
-                        count += 1
+            for f in archivos_validos:
+                count += 1
+                # Formato: 01.jpg, 02.jpg... (se expande a 100, 101 si es necesario)
+                arcname = f"{count:02d}{f.suffix}"
+                zf.write(f, arcname=arcname)
+                
         return count
 
     def generate_evidence_zip(self, requester_id: int, turno: str = None, operador_id: str = None, inicio: int = None, fin: int = None) -> tuple[str, int]:

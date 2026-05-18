@@ -17,6 +17,10 @@ SECRET_KEY = os.getenv(
 DEBUG = os.getenv('DJANGO_DEBUG', 'True').lower() in ('true', '1', 'yes')
 
 ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,0.0.0.0,web').split(',')
+if '.ngrok-free.dev' not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append('.ngrok-free.dev')
+
+USE_X_FORWARDED_HOST = True
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -152,3 +156,8 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TASK_TRACK_STARTED = True
 # Limpiar resultados de Redis después de 1 hora (evitar memory leak)
 CELERY_RESULT_EXPIRES = 3600
+
+# Ngrok support
+CSRF_TRUSTED_ORIGINS = [
+    'https://*.ngrok-free.dev',
+]

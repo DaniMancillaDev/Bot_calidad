@@ -795,6 +795,3 @@ def api_edit_registro(request, registro_id):
         return JsonResponse({'success': True})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
-
-
-

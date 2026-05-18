@@ -599,4 +599,3 @@ def create_rpt_operador_callback(api_client):
             )
 
     return rpt_operador_callback
-
