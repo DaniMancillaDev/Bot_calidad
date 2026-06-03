@@ -191,8 +191,14 @@ def generar_excel_task(self, registros_data, rotaciones, fotos_dir_str, fecha_st
         Dict con 'file_path' y 'filename' del resultado.
     """
     from calidad.services.reporte_excel import generate_excel
+    from shared.infrastructure.ai.defect_translator import build_translator
 
     fotos_dir = Path(fotos_dir_str)
+
+    # Instanciar traductor una sola vez para toda la tarea.
+    # EXCEL_AI_ENABLED=false → NullDefectTranslator (sin llamadas a Ollama).
+    # Rollback inmediato: cambiar env var + reiniciar el worker Celery.
+    translator = build_translator()
 
     # Agrupar registros por responsable
     grupos = {}
@@ -223,6 +229,7 @@ def generar_excel_task(self, registros_data, rotaciones, fotos_dir_str, fecha_st
             rotaciones=rotaciones,
             fotos_dir=fotos_dir,
             output_path=output_path,
+            translator=translator,
         )
         nombre = f"reporte_{proveedor}_{fecha_str}.xlsx"
         archivos_generados.append((nombre, str(output_path)))

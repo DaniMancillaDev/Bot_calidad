@@ -312,6 +312,53 @@ def create_terminar_callback(api_client):
 
 
 # ─────────────────────────────────────────
+# Callback: botón inline OMITIR
+# ─────────────────────────────────────────
+def create_omitir_callback(api_client):
+    """
+    Factory para el callback del botón inline OMITIR (Número de Parte).
+    """
+    async def omitir_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        query = update.callback_query
+        if not query or not update.effective_user:
+            return
+
+        await query.answer()
+
+        user_id = update.effective_user.id if update.effective_user else None
+        
+        try:
+            result = await api_client.responder_defecto(user_id, "_OMITIR_")
+            mensaje = result.get('mensaje')
+        except Exception as e:
+            logger.error("Error omitiendo numero_parte para %s: %s", user_id, e)
+            mensaje = "Error al procesar la respuesta."
+
+        # Quitar TODOS los botones inline OMITIR de este mensaje
+        try:
+            await context.bot.edit_message_reply_markup(
+                chat_id=update.effective_chat.id, message_id=update.effective_message.id, reply_markup=None
+            )
+        except Exception:
+            pass
+
+        if mensaje:
+            # Check if next step needs OMITIR button (unlikely, but just in case)
+            reply_markup = ReplyKeyboardRemove()
+            if "presiona OMITIR" in mensaje:
+                reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("⏭️ OMITIR", callback_data="omitir_num_parte")]])
+
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=mensaje,
+                parse_mode="HTML",
+                reply_markup=reply_markup,
+            )
+
+    return omitir_callback
+
+
+# ─────────────────────────────────────────
 # Texto libre → FSM
 # ─────────────────────────────────────────
 def create_procesar_respuesta(api_client):
@@ -332,10 +379,79 @@ def create_procesar_respuesta(api_client):
             mensaje = "Error al procesar tu respuesta."
 
         if mensaje:
+            reply_markup = ReplyKeyboardRemove()
+            if "presiona OMITIR" in mensaje:
+                from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+                reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("⏭️ OMITIR", callback_data="omitir_num_parte")]])
+                
             await update.message.reply_text(
                 mensaje,
-                reply_markup=ReplyKeyboardRemove(),
+                reply_markup=reply_markup,
                 parse_mode="HTML"
             )
 
     return procesar_respuesta
+
+# ─────────────────────────────────────────
+# Voz → FSM
+# ─────────────────────────────────────────
+def create_procesar_voz(api_client):
+    """
+    Factory: Descarga OGG, transcribe con local Whisper, envía texto a FSM.
+    """
+    async def procesar_voz(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        if not update.message or not update.message.voice or not update.effective_user:
+            return
+
+        user_id = update.effective_user.id
+        
+        status_msg = await update.message.reply_text("🎙️ <i>Escuchando nota de voz...</i>", parse_mode="HTML")
+        
+        try:
+            # 1. Descargar audio
+            voice_file = await update.message.voice.get_file(read_timeout=30)
+            
+            import os
+            import tempfile
+            fd, temp_path = tempfile.mkstemp(suffix=".ogg")
+            os.close(fd)
+            
+            await voice_file.download_to_drive(temp_path)
+            
+            # 2. Transcribir
+            from bot.services.voice_service import VoiceService
+            transcription = VoiceService.get_instance().transcribe(temp_path)
+            
+            # Borrar temporal
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+                
+            if not transcription:
+                await status_msg.edit_text("⚠️ <i>No pude entender el audio. Intenta hablar más claro o escribe el texto.</i>", parse_mode="HTML")
+                return
+                
+            # 3. Mostrar transcripción y enviarla a FSM
+            await status_msg.edit_text(f"📝 <b>Transcripción:</b>\n<i>\"{transcription}\"</i>\n\n⚙️ <i>Procesando...</i>", parse_mode="HTML")
+            
+            result = await api_client.responder_defecto(user_id, transcription)
+            mensaje = result.get('mensaje')
+            
+            if mensaje:
+                reply_markup = ReplyKeyboardRemove()
+                if "presiona OMITIR" in mensaje:
+                    from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+                    reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("⏭️ OMITIR", callback_data="omitir_num_parte")]])
+                    
+                await update.message.reply_text(
+                    mensaje,
+                    reply_markup=reply_markup,
+                    parse_mode="HTML"
+                )
+                
+        except Exception as e:
+            logger.error("Error procesando nota de voz para %s: %s", user_id, e)
+            await status_msg.edit_text("<b>Error al procesar la nota de voz.</b> Intenta escribiendo tu respuesta.", parse_mode="HTML")
+
+    return procesar_voz

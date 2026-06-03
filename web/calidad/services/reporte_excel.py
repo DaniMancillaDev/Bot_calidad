@@ -42,6 +42,12 @@ MAX_DISPLAY_H  = 240   # Alto máximo visual de cada foto (px)
 CELL_COL       = 15    # Columna P (0-indexed)
 START_ROW      = 7     # Fila 8 en 0-indexed
 
+# ── Columnas para campos en inglés (POC) ──────────────────────────────────
+# Ajusta estos valores según tu plantilla.
+# Valores actuales: I=9, J=10
+COL_DEFECT_EN   = 9   # Columna I: defect_en (reemplaza descripción en español)
+COL_ANALYSIS_EN = 10  # Columna J: simple_analysis_en
+
 # Plantilla — raíz del proyecto
 _BASE_DIR      = Path(__file__).resolve().parent.parent.parent.parent
 PLANTILLA_PATH = _BASE_DIR / "plantilla_reporte.xlsx"
@@ -330,6 +336,7 @@ def generate_excel(
     fotos_dir: Path,
     output_path: Path,
     plantilla_path: Path = None,
+    translator=None,  # Optional[IDefectTranslator] — si None, no escribe campos EN
 ) -> Path:
     """
     Genera el reporte Excel con fotos en tira horizontal (filmstrip).
@@ -361,13 +368,32 @@ def generate_excel(
             row_1based = row + 1
             nums_fotos = registro.get('fotos_nums', [])
 
+            # Agregar encabezado dinámicamente si es la primera fila de datos
+            if idx == 0:
+                ws.cell(row=START_ROW, column=7).value = "Part Number"
+
             # Escribir datos de texto
             ws.cell(row=row_1based, column=2).value  = today_str
             ws.cell(row=row_1based, column=3).value  = registro.get('modelo', '')
             ws.cell(row=row_1based, column=6).value  = registro.get('linea', '')
+            ws.cell(row=row_1based, column=7).value  = registro.get('numero_parte') or ""
             ws.cell(row=row_1based, column=9).value  = registro.get('descripcion', '')
             ws.cell(row=row_1based, column=12).value = registro.get('cantidad', 1)
             ws.cell(row=row_1based, column=14).value = registro.get('responsable', '')
+
+            # ── Traducción IA (POC) ────────────────────────────────────────
+            # Solo activo si EXCEL_AI_ENABLED=true. Nunca bloquea la generación.
+            if translator is not None:
+                try:
+                    area = registro.get('departamento', registro.get('turno', ''))
+                    tr   = translator.translate(registro.get('descripcion', ''), area)
+                    if tr['defect_en']:
+                        ws.cell(row=row_1based, column=COL_DEFECT_EN).value   = tr['defect_en']
+                    if tr['simple_analysis_en']:
+                        ws.cell(row=row_1based, column=COL_ANALYSIS_EN).value = tr['simple_analysis_en']
+                except Exception as _tr_err:
+                    logger.error("generate_excel: traducción falló en fila %d: %s", row_1based, _tr_err)
+            # ────────────────────────────────────────────────────────────────
 
             if not nums_fotos:
                 continue

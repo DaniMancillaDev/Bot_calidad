@@ -45,6 +45,7 @@ class RegistroDefecto(models.Model):
     # ── Campos originales (NO modificar — backward compat) ─────────────────
     fotos          = models.TextField()              # Legacy: "1, 2, 3"
     modelo         = models.TextField()
+    numero_parte   = models.CharField(max_length=50, null=True, blank=True, verbose_name="Número de Parte")
     linea          = models.TextField()
     cantidad       = models.IntegerField(null=True, blank=True)
     responsable    = models.TextField()
@@ -55,8 +56,7 @@ class RegistroDefecto(models.Model):
     departamento   = models.CharField(max_length=10, null=True, blank=True)
 
     # ── Fase 1: Normalización ──────────────────────────────────────────────
-    fotos_nums     = ArrayField(
-        models.IntegerField(),
+    fotos_nums     = models.JSONField(
         default=list,
         blank=True,
         help_text='IDs de foto como enteros. Reemplaza fotos (TextField) gradualmente.'
