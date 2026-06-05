@@ -32,7 +32,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='registrodefecto',
             name='fotos_nums',
-            field=django.contrib.postgres.fields.ArrayField(base_field=models.IntegerField(), blank=True, default=list, help_text='IDs de foto como enteros. Reemplaza fotos (TextField) gradualmente.'),
+            field=django.contrib.postgres.fields.ArrayField(base_field=models.IntegerField(), blank=True, null=True, help_text='IDs de foto como enteros. Reemplaza fotos (TextField) gradualmente.'),
         ),
         migrations.AddField(
             model_name='registrodefecto',

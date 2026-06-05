@@ -20,7 +20,8 @@ class DjangoRegistroRepository:
     def guardar(self, fotos: List[int], modelo: str, linea: str,
                 cantidad: int, responsable: str, descripcion: str,
                 user_id: int, turno: Optional[str] = None,
-                departamento: Optional[str] = None) -> bool:
+                departamento: Optional[str] = None,
+                numero_parte: Optional[str] = None) -> bool:
         from calidad.models import RegistroDefecto
         import time
         try:
@@ -29,6 +30,11 @@ class DjangoRegistroRepository:
 
             # Dual-write: legacy TextField + nuevo ArrayField
             fotos_str = ", ".join(str(f) for f in fotos_list)
+
+            # Sanitizar numero_parte
+            _np_upper = (numero_parte or "").strip().upper()
+            if _np_upper in ("N/A", "NA", "VACÍO", "VACIO", "_OMITIR_", "-"):
+                _np_upper = None
 
             t0 = time.monotonic()
             RegistroDefecto.objects.create(
@@ -42,6 +48,7 @@ class DjangoRegistroRepository:
                 user_id=user_id,
                 turno=turno,
                 departamento=departamento,
+                numero_parte=_np_upper,
             )
             elapsed = (time.monotonic() - t0) * 1000
             import logging

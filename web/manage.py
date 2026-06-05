@@ -6,6 +6,9 @@ import sys
 
 def main():
     """Run administrative tasks."""
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env.local'))
+    
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
     
     # Añadir la raíz del proyecto al path para encontrar 'shared'

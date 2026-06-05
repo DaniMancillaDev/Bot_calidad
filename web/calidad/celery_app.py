@@ -7,6 +7,11 @@ Backend: Redis (para consultar el estado de las tareas)
 """
 import os
 from celery import Celery
+from dotenv import load_dotenv
+
+# Cargar .env.local para que Celery lea variables de entorno
+base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+load_dotenv(os.path.join(base_dir, '.env.local'))
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 

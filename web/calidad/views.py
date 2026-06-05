@@ -454,6 +454,7 @@ def _parse_fotos_nums(registros):
             'fotos_nums':  sorted(list(set(nums))),
             'fotos_str':   fotos_str,
             'modelo':      r.get('modelo', '') if is_dict else getattr(r, 'modelo', ''),
+            'numero_parte': r.get('numero_parte', '') if is_dict else getattr(r, 'numero_parte', ''),
             'linea':       r.get('linea', '') if is_dict else getattr(r, 'linea', ''),
             'descripcion': r.get('descripcion', '') if is_dict else getattr(r, 'descripcion', ''),
             'responsable': r.get('responsable', '') if is_dict else getattr(r, 'responsable', ''),

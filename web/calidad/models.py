@@ -45,6 +45,7 @@ class RegistroDefecto(models.Model):
     # ── Campos originales (NO modificar — backward compat) ─────────────────
     fotos          = models.TextField()              # Legacy: "1, 2, 3"
     modelo         = models.TextField()
+    numero_parte   = models.CharField(max_length=50, null=True, blank=True)
     linea          = models.TextField()
     cantidad       = models.IntegerField(null=True, blank=True)
     responsable    = models.TextField()

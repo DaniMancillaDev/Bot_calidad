@@ -24,6 +24,7 @@ dependencies = [
     "djangorestframework>=3.17.1",
     "tenacity>=9.1.4",
     "pyzbar>=0.1.9",
+    "openai>=1.0.0",
 ]
 
 [dependency-groups]

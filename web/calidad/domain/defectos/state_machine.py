@@ -2,6 +2,8 @@ from typing import Dict, Any, Callable, Tuple
 from .entities import EstadoConversacion, FSMContext, FSMResult
 from .validators import validar_cantidad, validar_modelo, validar_linea
 
+import os
+
 class RegistroFSM:
     """
     Máquina de estados finita declarativa para el registro de defectos.
@@ -10,9 +12,58 @@ class RegistroFSM:
     """
     
     def __init__(self):
+        self.enable_part_number = os.getenv("ENABLE_PART_NUMBER", "false").lower() in ('true', '1', 't', 'yes')
+        
         # Mapeo: EstadoActual -> (FunciónValidadora, ClaveDato, SiguienteEstado, MensajeExito, MensajeError)
-        self.transitions = {
-            EstadoConversacion.ESPERANDO_MODELO: (
+        self.transitions = {}
+        
+        if self.enable_part_number:
+            self.transitions[EstadoConversacion.ESPERANDO_MODELO] = (
+                validar_modelo,
+                "modelo",
+                EstadoConversacion.ESPERANDO_NUMERO_PARTE,
+                "<b>[2/6] Número de Parte</b>\n"
+                "Anotado. ¿Cuál es el número de parte?\n"
+                "<i>Puedes presionar OMITIR si no aplica.</i>",
+                "Modelo inválido."
+            )
+            self.transitions[EstadoConversacion.ESPERANDO_NUMERO_PARTE] = (
+                lambda x: True,  # Validación permisiva o específica después
+                "numero_parte",
+                EstadoConversacion.ESPERANDO_LINEA,
+                "<b>[3/6] Línea de Producción</b>\n"
+                "Anotado. ¿En qué línea ocurrió?\n"
+                "<code>Ej: T03</code>",
+                "Número de parte inválido."
+            )
+            self.transitions[EstadoConversacion.ESPERANDO_LINEA] = (
+                validar_linea,
+                "linea",
+                EstadoConversacion.ESPERANDO_CANTIDAD,
+                "<b>[4/6] Cantidad</b>\n"
+                "Perfecto. ¿Cuántos defectos encontraste?\n"
+                "<i>Solo ingresa el número.</i>",
+                "Línea inválida."
+            )
+            self.transitions[EstadoConversacion.ESPERANDO_CANTIDAD] = (
+                validar_cantidad,
+                "cantidad",
+                EstadoConversacion.ESPERANDO_RESPONSABLE,
+                "<b>[5/6] Responsable</b>\n"
+                "Bien. ¿Quién es el responsable?\n"
+                "<code>Ej: XM</code>",
+                "⚠️ Por favor, ingresa solo números para la cantidad."
+            )
+            self.transitions[EstadoConversacion.ESPERANDO_RESPONSABLE] = (
+                lambda x: True,
+                "responsable",
+                EstadoConversacion.ESPERANDO_DESCRIPCION,
+                "<b>[6/6] Descripción</b>\n"
+                "Casi terminamos. Por último, descríbeme brevemente el defecto:",
+                "Responsable inválido."
+            )
+        else:
+            self.transitions[EstadoConversacion.ESPERANDO_MODELO] = (
                 validar_modelo,
                 "modelo",
                 EstadoConversacion.ESPERANDO_LINEA,
@@ -20,8 +71,8 @@ class RegistroFSM:
                 "Anotado. ¿En qué línea ocurrió?\n"
                 "<code>Ej: T03</code>",
                 "Modelo inválido."
-            ),
-            EstadoConversacion.ESPERANDO_LINEA: (
+            )
+            self.transitions[EstadoConversacion.ESPERANDO_LINEA] = (
                 validar_linea,
                 "linea",
                 EstadoConversacion.ESPERANDO_CANTIDAD,
@@ -29,8 +80,8 @@ class RegistroFSM:
                 "Perfecto. ¿Cuántos defectos encontraste?\n"
                 "<i>Solo ingresa el número.</i>",
                 "Línea inválida."
-            ),
-            EstadoConversacion.ESPERANDO_CANTIDAD: (
+            )
+            self.transitions[EstadoConversacion.ESPERANDO_CANTIDAD] = (
                 validar_cantidad,
                 "cantidad",
                 EstadoConversacion.ESPERANDO_RESPONSABLE,
@@ -38,23 +89,24 @@ class RegistroFSM:
                 "Bien. ¿Quién es el responsable?\n"
                 "<code>Ej: XM</code>",
                 "⚠️ Por favor, ingresa solo números para la cantidad."
-            ),
-            EstadoConversacion.ESPERANDO_RESPONSABLE: (
-                lambda x: True,  # Todo es válido por ahora
+            )
+            self.transitions[EstadoConversacion.ESPERANDO_RESPONSABLE] = (
+                lambda x: True,
                 "responsable",
                 EstadoConversacion.ESPERANDO_DESCRIPCION,
                 "<b>[5/5] Descripción</b>\n"
                 "Casi terminamos. Por último, descríbeme brevemente el defecto:",
                 "Responsable inválido."
-            ),
-            EstadoConversacion.ESPERANDO_DESCRIPCION: (
-                lambda x: True,
-                "descripcion",
-                None, # Significa que termina el flujo
-                "", # Se ignora, se generará el mensaje de resumen al guardar
-                "Descripción inválida."
             )
-        }
+            
+        # El último paso es igual para ambos flujos
+        self.transitions[EstadoConversacion.ESPERANDO_DESCRIPCION] = (
+            lambda x: True,
+            "descripcion",
+            None, # Significa que termina el flujo
+            "", # Se ignora, se generará el mensaje de resumen al guardar
+            "Descripción inválida."
+        )
 
     def procesar_evento(self, context: FSMContext, texto: str) -> FSMResult:
         """

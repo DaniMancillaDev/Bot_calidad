@@ -208,6 +208,9 @@ def generar_excel_task(self, registros_data, rotaciones, fotos_dir_str, fecha_st
     archivos_generados = []
     total_grupos = len(grupos)
 
+    from shared.infrastructure.ai.defect_translator import build_translator
+    translator = build_translator()
+
     for i, (proveedor, regs) in enumerate(grupos.items(), 1):
         # Actualizar progreso visible via Celery state
         self.update_state(
@@ -223,6 +226,7 @@ def generar_excel_task(self, registros_data, rotaciones, fotos_dir_str, fecha_st
             rotaciones=rotaciones,
             fotos_dir=fotos_dir,
             output_path=output_path,
+            translator=translator,
         )
         nombre = f"reporte_{proveedor}_{fecha_str}.xlsx"
         archivos_generados.append((nombre, str(output_path)))

@@ -169,3 +169,20 @@ class OrientationDetector(Protocol):
 
     def detectar(self, img_path) -> int: ...
     def detectar_batch(self, foto_paths: list) -> dict: ...
+
+# ============================================================
+# IA — Traducción de defectos
+# ============================================================
+
+from typing import TypedDict
+
+class DefectTranslation(TypedDict):
+    defect_en: str
+    simple_analysis_en: str
+
+@runtime_checkable
+class IDefectTranslator(Protocol):
+    """
+    Contrato para el servicio de traducción de defectos con IA.
+    """
+    def translate(self, descripcion: str, area: str) -> DefectTranslation: ...
