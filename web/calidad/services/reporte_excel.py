@@ -42,11 +42,11 @@ MAX_DISPLAY_H  = 240   # Alto máximo visual de cada foto (px)
 CELL_COL       = 15    # Columna P (0-indexed)
 START_ROW      = 7     # Fila 8 en 0-indexed
 
-# ── Columnas para campos en inglés (POC) ──────────────────────────────────
-# Ajusta estos valores según tu plantilla.
-# Valores actuales: I=9, J=10
-COL_DEFECT_EN   = 9   # Columna I: defect_en (reemplaza descripción en español)
-COL_ANALYSIS_EN = 10  # Columna J: simple_analysis_en
+# ── Columnas para campos en inglés ───────────────────────────────────────
+COL_WHERE_FOUND = 6   # Columna F: Where Found  (área derivada del material)
+COL_DEFECT_EN   = 9   # Columna I: Defect.      (nombre corporativo + síntoma)
+COL_ANALYSIS_EN = 10  # Columna J: Simple Analysis
+COL_REMARK      = 15  # Columna O: Remark       ("{MATERIAL} ISSUED")
 
 # Plantilla — raíz del proyecto
 _BASE_DIR      = Path(__file__).resolve().parent.parent.parent.parent
@@ -381,16 +381,52 @@ def generate_excel(
             ws.cell(row=row_1based, column=12).value = registro.get('cantidad', 1)
             ws.cell(row=row_1based, column=14).value = registro.get('responsable', '')
 
-            # ── Traducción IA (POC) ────────────────────────────────────────
+            # ── Traducción (Catálogo determinístico + fallback LLM) ──────────
             # Solo activo si EXCEL_AI_ENABLED=true. Nunca bloquea la generación.
             if translator is not None:
                 try:
                     area = registro.get('departamento', registro.get('turno', ''))
                     tr   = translator.translate(registro.get('descripcion', ''), area)
-                    if tr['defect_en']:
-                        ws.cell(row=row_1based, column=COL_DEFECT_EN).value   = tr['defect_en']
-                    if tr['simple_analysis_en']:
-                        ws.cell(row=row_1based, column=COL_ANALYSIS_EN).value = tr['simple_analysis_en']
+
+                    defect_en      = tr.get('defect_en', '')
+                    analysis_en    = tr.get('simple_analysis_en', '')
+
+                    # Where Found: área derivada del material (catálogo → material_areas)
+                    # simple_analysis tiene forma "AT {AREA} AREA WAS DETECTED {DEFECT}"
+                    # Extraemos el área del propio analysis para no duplicar lógica.
+                    where_found = ''
+                    if analysis_en and analysis_en.startswith('AT '):
+                        # "AT CLEAN ROOM AREA WAS DETECTED ..." → "CLEAN ROOM"
+                        try:
+                            where_found = analysis_en.split(' AREA WAS DETECTED')[0].replace('AT ', '', 1).strip()
+                        except Exception:
+                            where_found = ''
+
+                    # Remark: "{MATERIAL} ISSUED"
+                    # Material = defect_en sin el síntoma (último token si hay más de 1 token)
+                    remark = ''
+                    if defect_en:
+                        tokens = defect_en.split()
+                        # Síntomas de una sola palabra: DAMAGED, SCRATCHED, BENT, DEFORMED, MISSING, DIRTY, WET, STAINED, GAP
+                        _ONE_WORD_SYMPTOMS = {
+                            'DAMAGED', 'SCRATCHED', 'BENT', 'DEFORMED',
+                            'MISSING', 'DIRTY', 'WET', 'STAINED', 'GAP',
+                        }
+                        if len(tokens) > 1 and tokens[-1] in _ONE_WORD_SYMPTOMS:
+                            material = ' '.join(tokens[:-1])
+                        else:
+                            material = defect_en
+                        remark = f"{material} ISSUED"
+
+                    if defect_en:
+                        ws.cell(row=row_1based, column=COL_DEFECT_EN).value   = defect_en
+                    if analysis_en:
+                        ws.cell(row=row_1based, column=COL_ANALYSIS_EN).value = analysis_en
+                    if where_found:
+                        ws.cell(row=row_1based, column=COL_WHERE_FOUND).value = where_found
+                    if remark:
+                        ws.cell(row=row_1based, column=COL_REMARK).value      = remark
+
                 except Exception as _tr_err:
                     logger.error("generate_excel: traducción falló en fila %d: %s", row_1based, _tr_err)
             # ────────────────────────────────────────────────────────────────
