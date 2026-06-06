@@ -34,7 +34,8 @@ infra_up() {
     info "Levantando postgres + redis..."
     docker-compose up -d postgres redis
     info "Esperando postgres..."
-    until docker exec bot_calidad_postgres pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" &>/dev/null; do
+    until docker exec bot_calidad_postgres pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" &>/dev/null && \
+          docker exec bot_calidad_postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT 1" &>/dev/null; do
         sleep 1
     done
     info "Postgres listo ✓"
@@ -45,7 +46,15 @@ infra_down() {
     warn "Bajando infra Docker..."
     docker-compose stop postgres redis
     warn "Aniquilando procesos locales (bot, web, celery, hupper)..."
-    pkill -9 -f "hupper|manage.py|celery" || true
+    pkill -9 -f "hupper|manage.py|celery|main\.py|-m main" || true
+    
+    # Aniquilar cualquier otro dev.sh en background (excepto este mismo)
+    # para evitar que su trap de EXIT detenga los contenedores asincrónicamente
+    for pid in $(pgrep -f "dev.sh" || true); do
+        if [ "$pid" != "$$" ] && [ "$pid" != "$PPID" ]; then
+            kill -9 "$pid" 2>/dev/null || true
+        fi
+    done
     info "Limpieza completada ✓"
 }
 

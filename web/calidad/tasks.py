@@ -152,27 +152,111 @@ ALIAS = {
 }
 
 
-def _consolidar_registros(regs):
+def _consolidar_registros(regs, translator=None):
     """
-    Fusiona registros con mismo (modelo, descripcion).
-    Fotos se unen, cantidades se suman.
+    Consolidación V1: fusiona registros por defecto canónico.
+
+    Clave de agrupación: (defecto_canonico, modelo_norm, numero_parte_norm)
+    - defecto_canonico: resultado del catálogo determinístico.
+    - Si el catálogo no resuelve el defecto, se usa la descripción normalizada como fallback.
+
+    Cada grupo resultante incluye trazabilidad completa:
+    - fotos_por_usuario: dict {user_id: [nums]} para recuperar fotos de múltiples usuarios.
+    - ids_originales: lista de todos los IDs agrupados (para bulk_update REVISADO).
+    - descripciones_originales: textos capturados por operadores (causa raíz preservada).
+    - lineas_involucradas: líneas de producción donde ocurrió el defecto.
+    - cantidad: suma de todas las cantidades individuales.
+
+    IMPORTANTE: El bulk_update a REVISADO en generar_excel_task usa registros_data
+    ORIGINAL (sin consolidar), por lo que este proceso no afecta ese flujo.
     """
+    from shared.infrastructure.ai.defect_translator import normalize_text
+
     agrupados = {}
+
     for reg in regs:
+        # ── Obtener defecto canónico ─────────────────────────────────────────
+        defecto_canonico = None
+
+        # Si el translator está disponible, usar catálogo determinístico
+        if translator is not None:
+            try:
+                area_ctx = reg.get('departamento') or reg.get('turno') or ''
+                tr = translator.translate(reg.get('descripcion', ''), area_ctx)
+                defecto_canonico = (tr.get('defect_en') or '').strip().upper() or None
+            except Exception:
+                pass
+
+        # Fallback: descripción normalizada si catálogo no resolvió
+        if not defecto_canonico:
+            defecto_canonico = normalize_text(reg.get('descripcion', '')).upper()
+
+        # ── Construir clave de consolidación ────────────────────────────────
         clave = (
-            (reg.get('modelo') or '').strip().upper(),
-            (reg.get('descripcion') or '').strip().upper(),
+            defecto_canonico,
+            normalize_text(reg.get('modelo') or '').upper(),
+            normalize_text(reg.get('numero_parte') or '').upper(),
         )
+
+        user_id = reg.get('user_id')
+        fotos_reg = reg.get('fotos_nums') or []
+        linea_reg = (reg.get('linea') or '').strip()
+        desc_reg  = (reg.get('descripcion') or '').strip()
+        id_reg    = reg.get('id')
+
         if clave in agrupados:
-            existente = agrupados[clave]
-            fotos_existentes = set(existente['fotos_nums'])
-            for n in reg.get('fotos_nums', []):
-                if n not in fotos_existentes:
-                    existente['fotos_nums'].append(n)
-                    fotos_existentes.add(n)
-            existente['cantidad'] = (existente.get('cantidad') or 1) + (reg.get('cantidad') or 1)
+            grupo = agrupados[clave]
+
+            # Sumar cantidad
+            grupo['cantidad'] = (grupo.get('cantidad') or 1) + (reg.get('cantidad') or 1)
+
+            # Acumular fotos por usuario (preservando estructura para recuperación en disco)
+            if user_id and fotos_reg:
+                uid_str = str(user_id)
+                nums_existentes = set(grupo['fotos_por_usuario'].get(uid_str, []))
+                nuevos = [n for n in fotos_reg if n not in nums_existentes]
+                if nuevos:
+                    grupo['fotos_por_usuario'].setdefault(uid_str, []).extend(nuevos)
+
+            # Trazabilidad
+            if id_reg is not None:
+                grupo['ids_originales'].append(id_reg)
+            if desc_reg and desc_reg not in grupo['descripciones_originales']:
+                grupo['descripciones_originales'].append(desc_reg)
+            if linea_reg and linea_reg not in grupo['lineas_involucradas']:
+                grupo['lineas_involucradas'].append(linea_reg)
+
         else:
-            agrupados[clave] = dict(reg)
+            # Primer registro del grupo — inicializar
+            grupo_base = dict(reg)
+            grupo_base['cantidad'] = reg.get('cantidad') or 1
+
+            # fotos_por_usuario: dict para recuperación desde múltiples carpetas de usuario
+            fotos_por_usuario = {}
+            if user_id and fotos_reg:
+                fotos_por_usuario[str(user_id)] = list(fotos_reg)
+            grupo_base['fotos_por_usuario'] = fotos_por_usuario
+
+            # Trazabilidad interna (no se imprime en Excel)
+            grupo_base['ids_originales']         = [id_reg] if id_reg is not None else []
+            grupo_base['descripciones_originales'] = [desc_reg] if desc_reg else []
+            grupo_base['lineas_involucradas']      = [linea_reg] if linea_reg else []
+
+            # Campos de presentación para Excel
+            grupo_base['defecto_canonico']  = defecto_canonico
+            grupo_base['linea']             = linea_reg   # primer valor; Excel lo usará si catálogo falla
+
+            agrupados[clave] = grupo_base
+
+    # Post-proceso: construir fotos_nums plana para compatibilidad con código legacy
+    # reporte_excel.py usará fotos_por_usuario; esto es solo seguridad adicional.
+    for grupo in agrupados.values():
+        grupo['fotos_nums'] = [
+            n
+            for nums in grupo['fotos_por_usuario'].values()
+            for n in nums
+        ]
+
     return list(agrupados.values())
 
 
@@ -218,11 +302,44 @@ def generar_excel_task(self, registros_data, rotaciones, fotos_dir_str, fecha_st
             meta={'progress': f'Procesando {proveedor} ({i}/{total_grupos})'}
         )
 
+        # ── Consolidación V1 ─────────────────────────────────────────────────
+        # Agrupa registros del mismo proveedor por defecto canónico.
+        # XM y TSCEM ya están separados en listas distintas: nunca se mezclan.
+        # El bulk_update REVISADO (línea 240) usa registros_data ORIGINAL,
+        # por lo que este paso no afecta la actualización de estado en BD.
+        regs_consolidados = _consolidar_registros(regs, translator=translator)
+        logger.info(
+            "Consolidación [%s]: %d registros → %d grupos",
+            proveedor, len(regs), len(regs_consolidados)
+        )
+        
+        # ── Generación de PPTX (Umbral) ──────────────────────────────────────
+        from calidad.services.generador_pptx import generar_pptx_grupo
+        UMBRAL_PPTX = 30
+        
+        for idx_grupo, grupo in enumerate(regs_consolidados):
+            total_fotos = sum(len(nums) for nums in grupo.get('fotos_por_usuario', {}).values())
+            if total_fotos >= UMBRAL_PPTX:
+                safe_defecto = "".join(c for c in str(grupo.get('defecto_canonico', 'DEFECTO')) if c.isalnum() or c in [' ', '_']).strip().replace(' ', '_')
+                safe_modelo = "".join(c for c in str(grupo.get('modelo', 'MOD')) if c.isalnum() or c in [' ', '_']).strip().replace(' ', '_')
+                timestamp = int(datetime.now().timestamp())
+                nombre_pptx = f"{safe_defecto}_{safe_modelo}_{timestamp}.pptx"
+                pptx_output_path = temp_dir / nombre_pptx
+                
+                try:
+                    generar_pptx_grupo(grupo, fotos_dir, pptx_output_path, rotaciones=rotaciones, translator=translator)
+                    grupo['pptx_filename'] = nombre_pptx
+                    archivos_generados.append((nombre_pptx, str(pptx_output_path)))
+                    logger.info("PPTX generado: %s", nombre_pptx)
+                except Exception as e:
+                    logger.error("Error generando PPTX para grupo %s: %s", safe_defecto, e)
+        # ────────────────────────────────────────────────────────────────────
+
         # Usar el directorio compartido en lugar de /tmp del contenedor
         output_path = temp_dir / f"tmp_{proveedor}_{datetime.now().timestamp()}.xlsx"
 
         generate_excel(
-            registros=regs,
+            registros=regs_consolidados,
             rotaciones=rotaciones,
             fotos_dir=fotos_dir,
             output_path=output_path,

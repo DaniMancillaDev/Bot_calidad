@@ -122,26 +122,60 @@ def deterministic_translate_defect(descripcion: str) -> Tuple[Optional[str], Opt
     components: dict = CATALOG.get("components", {})
     symptoms: dict   = CATALOG.get("symptoms",   {})
     material_areas: dict = CATALOG.get("material_areas", {})
+    connectors: dict = CATALOG.get("connectors", {})
 
     # Normalizar claves del catálogo en tiempo de búsqueda
     found_component: Optional[str] = None
     found_symptom:   Optional[str] = None
+    component_raw_key: Optional[str] = None
+    symptom_raw_key: Optional[str] = None
 
     # Longest-match en componentes (evita que "blu" gane sobre "metal blu")
     for raw_key, canonical in sorted(components.items(), key=lambda x: len(x[0]), reverse=True):
-        if normalize_text(raw_key) in norm_desc:
+        norm_key = normalize_text(raw_key)
+        if norm_key in norm_desc:
             found_component = canonical
+            component_raw_key = norm_key
             break
 
     # Longest-match en síntomas
     for raw_key, symptom_en in sorted(symptoms.items(), key=lambda x: len(x[0]), reverse=True):
-        if normalize_text(raw_key) in norm_desc:
+        norm_key = normalize_text(raw_key)
+        if norm_key in norm_desc:
             found_symptom = symptom_en
+            symptom_raw_key = norm_key
             break
 
     if found_component:
         area = material_areas.get(found_component, "UNKNOWN")
-        defect_en = f"{found_component} {found_symptom}" if found_symptom else found_component
+        
+        connector_en: Optional[str] = None
+        if found_symptom and component_raw_key and symptom_raw_key:
+            idx_comp = norm_desc.find(component_raw_key)
+            idx_sym = norm_desc.find(symptom_raw_key)
+            if idx_comp != -1 and idx_sym != -1:
+                # Extraer texto entre componente y síntoma
+                if idx_comp < idx_sym:
+                    between = norm_desc[idx_comp + len(component_raw_key):idx_sym]
+                else:
+                    between = norm_desc[idx_sym + len(symptom_raw_key):idx_comp]
+                
+                # Buscar conectores en el texto intermedio
+                padded_between = f" {normalize_text(between)} "
+                for conn_key, conn_en in sorted(connectors.items(), key=lambda x: len(x[0]), reverse=True):
+                    norm_conn = normalize_text(conn_key)
+                    if f" {norm_conn} " in padded_between:
+                        connector_en = conn_en
+                        break
+                        
+        if found_symptom:
+            if connector_en:
+                defect_en = f"{found_component} {connector_en} {found_symptom}"
+            else:
+                defect_en = f"{found_component} {found_symptom}"
+        else:
+            defect_en = found_component
+            
         return defect_en, area
 
     # --- Sin match: log y retornar None para fallback ---

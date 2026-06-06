@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 SCALE_FACTOR   = 4     # 4x la resolución visual (nitidez extrema)
 GAP            = 5     # Separación horizontal entre fotos (px)
 MAX_DISPLAY_H  = 240   # Alto máximo visual de cada foto (px)
-CELL_COL       = 15    # Columna P (0-indexed)
+CELL_COL       = 15    # Columna P (0-indexed para AnchorMarker)
 START_ROW      = 7     # Fila 8 en 0-indexed
 
 # ── Columnas para campos en inglés ───────────────────────────────────────
@@ -47,6 +47,7 @@ COL_WHERE_FOUND = 6   # Columna F: Where Found  (área derivada del material)
 COL_DEFECT_EN   = 9   # Columna I: Defect.      (nombre corporativo + síntoma)
 COL_ANALYSIS_EN = 10  # Columna J: Simple Analysis
 COL_REMARK      = 15  # Columna O: Remark       ("{MATERIAL} ISSUED")
+COL_EVIDENCIA_PPT= 16 # Columna P: Evidencia PPT
 
 # Plantilla — raíz del proyecto
 _BASE_DIR      = Path(__file__).resolve().parent.parent.parent.parent
@@ -403,19 +404,26 @@ def generate_excel(
                             where_found = ''
 
                     # Remark: "{MATERIAL} ISSUED"
-                    # Material = defect_en sin el síntoma (último token si hay más de 1 token)
+                    # Material = defect_en sin conectores ni síntomas
                     remark = ''
                     if defect_en:
-                        tokens = defect_en.split()
-                        # Síntomas de una sola palabra: DAMAGED, SCRATCHED, BENT, DEFORMED, MISSING, DIRTY, WET, STAINED, GAP
+                        material = defect_en
+                        # 1. Quitar conectores y lo que les sigue
+                        for conn in [" WITH LITTLE", " WITH", " WITHOUT"]:
+                            if conn in material:
+                                material = material.split(conn)[0].strip()
+                                break
+                        # 2. Quitar síntomas de dos palabras
+                        if material.endswith(" LIGHT LEAK"):
+                            material = material[:-11].strip()
+                        # 3. Quitar síntomas de una palabra
+                        tokens = material.split()
                         _ONE_WORD_SYMPTOMS = {
                             'DAMAGED', 'SCRATCHED', 'BENT', 'DEFORMED',
                             'MISSING', 'DIRTY', 'WET', 'STAINED', 'GAP',
                         }
                         if len(tokens) > 1 and tokens[-1] in _ONE_WORD_SYMPTOMS:
                             material = ' '.join(tokens[:-1])
-                        else:
-                            material = defect_en
                         remark = f"{material} ISSUED"
 
                     if defect_en:
@@ -431,7 +439,28 @@ def generate_excel(
                     logger.error("generate_excel: traducción falló en fila %d: %s", row_1based, _tr_err)
             # ────────────────────────────────────────────────────────────────
 
-            if not nums_fotos:
+            # ── Vínculo PPTX ────────────────────────────────────────────────
+            pptx_filename = registro.get('pptx_filename')
+            if pptx_filename:
+                cell_pptx = ws.cell(row=row_1based, column=COL_EVIDENCIA_PPT)
+                cell_pptx.value = "Abrir PPTX"
+                cell_pptx.hyperlink = f"./{pptx_filename}"
+                cell_pptx.style = "Hyperlink"
+                
+                # Omitir la inserción de imágenes en este Excel para esta fila
+                continue
+            # ────────────────────────────────────────────────────────────────
+
+            # ── FOTOS: soporta registros consolidados (múltiples usuarios) ────
+            # fotos_por_usuario es el dict canónico: {uid_str: [nums...]}
+            # Para compatibilidad con registros no consolidados, se construye
+            # el dict a partir de user_id + fotos_nums si no existe.
+            fotos_por_usuario = registro.get('fotos_por_usuario')
+            if not fotos_por_usuario:
+                uid = registro.get('user_id')
+                fotos_por_usuario = {str(uid): list(nums_fotos)} if uid and nums_fotos else {}
+
+            if not fotos_por_usuario:
                 continue
 
             # Ancho del bloque P+Q (sin combinar celdas, solo visual)
@@ -446,65 +475,63 @@ def generate_excel(
             y_offset = 8
             max_y_reached = target_h + 8  # Rastrear qué tan alta se vuelve la fila
 
-            for num in nums_fotos:
-                user_id = registro.get('user_id')
-                if not user_id:
-                    continue
-                
-                user_folder = fotos_dir / str(user_id)
+            for uid_str, nums in fotos_por_usuario.items():
+                user_folder = fotos_dir / uid_str
                 if not user_folder.exists():
+                    logger.warning("generate_excel: carpeta de fotos no encontrada: %s", user_folder)
                     continue
 
-                img_path = None
-                for ext in ['png', 'jpg']:
-                    archivos = list(user_folder.glob(f"{num:03d}.{ext}")) + \
-                               list(user_folder.glob(f"{num:03d}_*.{ext}"))
-                    if archivos:
-                        img_path = archivos[0]
-                        break
-                        
-                if not img_path:
-                    continue
-                
-                clave_rotacion = f"{user_id}_{num}"
-                angle = rotaciones.get(clave_rotacion) or rotaciones.get(str(clave_rotacion)) or 0
-                tmp_path, disp_w, disp_h = _prepare_image_strip(
-                    img_path, angle, target_h, tmp_dir
-                )
-                if tmp_path is None:
-                    continue
+                for num in nums:
+                    img_path = None
+                    for ext in ['png', 'jpg']:
+                        archivos = list(user_folder.glob(f"{num:03d}.{ext}")) + \
+                                   list(user_folder.glob(f"{num:03d}_*.{ext}"))
+                        if archivos:
+                            img_path = archivos[0]
+                            break
 
-                # WRAP: Si esta foto se sale de P+Q, saltar a la siguiente línea
-                if x_offset + disp_w > block_w_px - 8:
-                    x_offset = 8
-                    y_offset += target_h + GAP
-                    max_y_reached = y_offset + target_h
+                    if not img_path:
+                        continue
 
-                try:
-                    xl_img = OpenpyxlImage(str(tmp_path))
-                except Exception as e:
-                    logger.error("Error openpyxl: %s", e)
-                    continue
+                    clave_rotacion = f"{uid_str}_{num}"
+                    angle = rotaciones.get(clave_rotacion) or rotaciones.get(str(clave_rotacion)) or 0
+                    tmp_path, disp_w, disp_h = _prepare_image_strip(
+                        img_path, angle, target_h, tmp_dir
+                    )
+                    if tmp_path is None:
+                        continue
 
-                # Resolver en qué columna real cae esta imagen
-                real_col, real_col_off = _resolve_col_offset(ws, CELL_COL, x_offset, max_col=CELL_COL + 1)
+                    # WRAP: Si esta foto se sale de P+Q, saltar a la siguiente línea
+                    if x_offset + disp_w > block_w_px - 8:
+                        x_offset = 8
+                        y_offset += target_h + GAP
+                        max_y_reached = y_offset + target_h
 
-                xl_img.anchor = OneCellAnchor(
-                    _from=AnchorMarker(
-                        col=real_col,
-                        colOff=pixels_to_EMU(real_col_off),
-                        row=row,
-                        rowOff=pixels_to_EMU(y_offset),
-                    ),
-                    ext=XDRPositiveSize2D(
-                        pixels_to_EMU(disp_w),
-                        pixels_to_EMU(disp_h),
-                    ),
-                )
-                ws.add_image(xl_img)
+                    try:
+                        xl_img = OpenpyxlImage(str(tmp_path))
+                    except Exception as e:
+                        logger.error("Error openpyxl: %s", e)
+                        continue
 
-                # Avanzar horizontalmente
-                x_offset += disp_w + GAP
+                    # Resolver en qué columna real cae esta imagen
+                    real_col, real_col_off = _resolve_col_offset(ws, CELL_COL, x_offset, max_col=CELL_COL + 1)
+
+                    xl_img.anchor = OneCellAnchor(
+                        _from=AnchorMarker(
+                            col=real_col,
+                            colOff=pixels_to_EMU(real_col_off),
+                            row=row,
+                            rowOff=pixels_to_EMU(y_offset),
+                        ),
+                        ext=XDRPositiveSize2D(
+                            pixels_to_EMU(disp_w),
+                            pixels_to_EMU(disp_h),
+                        ),
+                    )
+                    ws.add_image(xl_img)
+
+                    # Avanzar horizontalmente
+                    x_offset += disp_w + GAP
 
             # Expandir la altura de la fila si usamos múltiples líneas de fotos
             needed_pt = (max_y_reached + 8) * 0.75

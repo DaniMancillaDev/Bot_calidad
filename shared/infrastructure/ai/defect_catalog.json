@@ -17,6 +17,24 @@
     "separador despegado": "SPACER WITH LITTLE GLUE"
   },
   "components": {
+    "etiqueta": "LABEL",
+    "etiquetas": "LABELS",
+    "corabata": "PAPER BOARD",
+    "corabara": "PAPER BOARD",
+    "deco": "DECO",
+    "marco decorativo": "DECO",
+    "label": "LABEL",
+    "labels": "LABEL",
+    "ftc label": "LABEL",
+    "plato difusor": "DIFFUSER PLATE",
+    "placa difusora": "DIFFUSER PLATE",
+    "reflector film": "REFLECTOR FILM",
+    "reflectora": "REFLECTOR FILM",
+    "reflextor film": "REFLECTOR FILM",
+    "hoja reflectora": "REFLECTOR FILM",
+    "papel reflector": "REFLECTOR FILM",
+    "barilla": "MIDDLE FRAME",
+    "barillas": "MIDDLE FRAME",
     "hoja 1": "REFLECTOR FILM",
     "hojas 1": "REFLECTOR FILM",
     "hoja 2": "DIFFUSER PLATE",
@@ -51,7 +69,8 @@
     "rubber": "RUBBER",
     "bezel": "BEZEL",
     "bkz": "BEZEL",
-    "marco": "BEZEL"
+    "marco": "BEZEL",
+    "cushion": "CUSHION"
   },
   "material_areas": {
     "REFLECTOR FILM": "CLEAN ROOM",
@@ -64,7 +83,10 @@
     "SPACER": "PRODUCTION",
     "SPACER WITH LITTLE GLUE": "PRODUCTION",
     "RUBBER": "PRODUCTION",
-    "BEZEL": "PRODUCTION"
+    "BEZEL": "PRODUCTION",
+    "LABEL": "INPUT",
+    "LABELS": "INPUT",
+    "DECO": "INPUT"
   },
   "symptoms": {
     "dañad": "DAMAGED",
@@ -85,6 +107,16 @@
     "suci": "DIRTY",
     "mojad": "WET",
     "manchad": "STAINED",
-    "abertura": "GAP"
+    "abertura": "GAP",
+    "fuga de luz": "LIGHT LEAK"
+  },
+  "connectors": {
+    "con poco de": "WITH LITTLE",
+    "con poca de": "WITH LITTLE",
+    "con poco": "WITH LITTLE",
+    "con poca": "WITH LITTLE",
+    "sin mucho": "WITH LITTLE",
+    "con": "WITH",
+    "sin": "WITHOUT"
   }
 }
