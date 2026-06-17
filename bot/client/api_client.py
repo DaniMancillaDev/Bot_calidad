@@ -254,18 +254,25 @@ class BotApiClient:
             params["fin"] = fin
 
         try:
-            # Aumentamos timeout por si el ZIP es grande o toma tiempo en generarse
-            async with self.client.stream("GET", "/api/v1/export/evidencia/", params=params, timeout=60.0) as response:
+            # Aumentamos timeout por si el ZIP es grande o toma tiempo en la red
+            async with self.client.stream("GET", "/api/v1/export/evidencia/", params=params, timeout=300.0) as response:
                 if response.status_code != 200:
                     await response.aread()
                     response.raise_for_status()
 
                 count = int(response.headers.get("X-Image-Count", "0"))
                 fd, temp_path = tempfile.mkstemp(suffix=".zip")
-                with os.fdopen(fd, 'wb') as f:
-                    async for chunk in response.aiter_bytes():
-                        f.write(chunk)
-                return temp_path, count
+                try:
+                    with os.fdopen(fd, 'wb') as f:
+                        async for chunk in response.aiter_bytes():
+                            f.write(chunk)
+                    return temp_path, count
+                except Exception:
+                    try:
+                        os.unlink(temp_path)
+                    except OSError:
+                        pass
+                    raise
         except httpx.HTTPStatusError as e:
             logger.error(f"Error HTTP {e.response.status_code} descargando evidencia: {e.response.text}")
             raise ApiException(f"HTTP {e.response.status_code}")

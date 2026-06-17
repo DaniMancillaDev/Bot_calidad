@@ -10,6 +10,7 @@ from shared.infrastructure.database.django_registro_repository import DjangoRegi
 from shared.infrastructure.database.django_usuario_repository import DjangoUsuarioRepository
 from shared.infrastructure.database.django_contador_repository import DjangoContadorRepository
 from shared.infrastructure.storage.foto_storage import LocalFotoStorage
+from shared.utils.format_utils import formatear_rango_fotos
 
 logger = logging.getLogger(__name__)
 
@@ -61,10 +62,13 @@ class DefectoWorkflow:
 
         nuevos_contadores = []
         rutas_para_thumbnail = []
-        for msg_id in fotos_ids:
-            tmp_path = user_folder / f"tmp_{msg_id}.jpg"
-            if tmp_path.exists():
-                contador = self._contador_repo.obtener_y_avanzar(user_id)
+        archivos_existentes = [msg_id for msg_id in fotos_ids if (user_folder / f"tmp_{msg_id}.jpg").exists()]
+        
+        if archivos_existentes:
+            contadores_lote = self._contador_repo.obtener_y_avanzar_lote(user_id, len(archivos_existentes))
+            
+            for msg_id, contador in zip(archivos_existentes, contadores_lote):
+                tmp_path = user_folder / f"tmp_{msg_id}.jpg"
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 nuevo_nombre = f"{contador:03d}_{timestamp}.jpg"
                 nueva_ruta = user_folder / nuevo_nombre
@@ -182,7 +186,15 @@ class DefectoWorkflow:
                 if guardado:
                     resumen = self._generar_resumen(estado_dict)
                     result.mensaje = f"<b>¡Reporte guardado con éxito!</b>\n\n{resumen}\n\n<i>Para reportar otro defecto, simplemente envíame fotos nuevas.</i>"
-                    self._state_repo.finalizar(user_id)
+                    try:
+                        self._state_repo.finalizar(user_id)
+                    except Exception as redis_exc:
+                        # DB guardado OK; Redis falló → estado huérfano en Redis.
+                        # Se requiere reconciliación manual o tarea de limpieza.
+                        logger.error(
+                            "RECONCILE_NEEDED | user_id=%s DB=OK Redis.finalizar FAILED: %s",
+                            user_id, redis_exc
+                        )
                 else:
                     result.exito = False
                     result.mensaje = "Error al guardar en base de datos."
@@ -202,38 +214,45 @@ class DefectoWorkflow:
     def _guardar_registro(self, user_id: int, conv: Dict) -> bool:
         """Guarda físicamente en DjangoRegistroRepository."""
         t0 = time.monotonic()
-        usuario = self._usuario_repo.obtener(user_id)
-        if not usuario:
-            logger.error("_guardar_registro: user_id=%s no encontrado en repositorio", user_id)
-            return False
+        try:
+            usuario = self._usuario_repo.obtener(user_id)
+            if not usuario:
+                logger.error("_guardar_registro: user_id=%s no encontrado en repositorio", user_id)
+                return False
 
-        datos = conv.get('datos', {})
-        exito = self._registro_repo.guardar(
-            user_id=user_id,
-            turno=usuario['turno'],
-            departamento=usuario['departamento'],
-            modelo=datos.get('modelo', ''),
-            numero_parte=datos.get('numero_parte'),
-            linea=datos.get('linea', ''),
-            cantidad=datos.get('cantidad', 1),
-            responsable=datos.get('responsable', ''),
-            descripcion=datos.get('descripcion', ''),
-            fotos=conv.get('fotos', [])
-        )
-        elapsed = (time.monotonic() - t0) * 1000
-        # Etapa 6: structured log con timing
-        logger.info(
-            "_guardar_registro | user_id=%s exito=%s fotos=%s elapsed=%.1fms",
-            user_id, exito, conv.get('fotos', []), elapsed
-        )
-        return exito
+            datos = conv.get('datos', {})
+            exito = self._registro_repo.guardar(
+                user_id=user_id,
+                turno=usuario['turno'],
+                departamento=usuario['departamento'],
+                modelo=datos.get('modelo', ''),
+                numero_parte=datos.get('numero_parte'),
+                linea=datos.get('linea', ''),
+                cantidad=datos.get('cantidad', 1),
+                responsable=datos.get('responsable', ''),
+                descripcion=datos.get('descripcion', ''),
+                fotos=conv.get('fotos', [])
+            )
+            elapsed = (time.monotonic() - t0) * 1000
+            logger.info(
+                "_guardar_registro | user_id=%s exito=%s fotos=%s elapsed=%.1fms",
+                user_id, exito, conv.get('fotos', []), elapsed
+            )
+            return exito
+        except Exception as exc:
+            elapsed = (time.monotonic() - t0) * 1000
+            logger.exception(
+                "_guardar_registro | user_id=%s DB_ERROR elapsed=%.1fms error=%s",
+                user_id, elapsed, exc
+            )
+            return False
         
     def _generar_resumen(self, conv: Dict) -> str:
         """Genera el texto de resumen para el usuario."""
         datos = conv.get('datos', {})
-        fotos_str = self._formatear_rango_fotos(conv.get('fotos', []))
-        
-        part_str = f"<b>Num Parte:</b> {datos.get('numero_parte')}\n" if datos.get('numero_parte') else ""
+        fotos_str = formatear_rango_fotos(conv.get('fotos', []))
+        num_parte = datos.get('numero_parte')
+        part_str = f"<b>Num Parte:</b> {num_parte}\n" if num_parte and num_parte != "_OMITIR_" else ""
         
         return (
             f"<b>Fotos:</b> {fotos_str}\n"
@@ -245,28 +264,6 @@ class DefectoWorkflow:
             f"<b>Descripción:</b> {datos.get('descripcion')}"
         )
 
-    def _formatear_rango_fotos(self, fotos: list[int]) -> str:
-        if not fotos:
-            return ""
-        
-        fotos_unicas = sorted(list(set(fotos)))
-        rangos = []
-        rango_actual = [fotos_unicas[0]]
-        
-        for i in range(1, len(fotos_unicas)):
-            if fotos_unicas[i] == fotos_unicas[i-1] + 1:
-                rango_actual.append(fotos_unicas[i])
-            else:
-                if len(rango_actual) > 1:
-                    rangos.append(f"{rango_actual[0]}-{rango_actual[-1]}")
-                else:
-                    rangos.append(str(rango_actual[0]))
-                rango_actual = [fotos_unicas[i]]
-                
-        if len(rango_actual) > 1:
-            rangos.append(f"{rango_actual[0]}-{rango_actual[-1]}")
-        else:
-            rangos.append(str(rango_actual[0]))
             
         return ", ".join(rangos)
 
@@ -364,7 +361,15 @@ class DefectoWorkflow:
             guardado = self._guardar_registro(user_id, conv)
             if guardado:
                 resumen = self._generar_resumen(conv)
-                self._state_repo.finalizar(user_id)
+                try:
+                    self._state_repo.finalizar(user_id)
+                except Exception as redis_exc:
+                    # DB guardado OK; Redis falló → estado huérfano en Redis.
+                    # Se requiere reconciliación manual o tarea de limpieza.
+                    logger.error(
+                        "RECONCILE_NEEDED | user_id=%s DB=OK Redis.finalizar FAILED: %s",
+                        user_id, redis_exc
+                    )
                 return FSMResult(exito=True, finalizado=True, mensaje=f"<b>¡Reporte guardado con éxito!</b>\n\n{resumen}\n\n<i>Para reportar otro defecto, simplemente envíame fotos nuevas.</i>")
             else:
                 return FSMResult(exito=False, finalizado=True, mensaje="Error al guardar el registro en base de datos.")

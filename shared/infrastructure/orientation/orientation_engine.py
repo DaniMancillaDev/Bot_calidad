@@ -37,7 +37,12 @@ def _get_onnx_session():
                 repo_id='Chuckame/deep-image-orientation-angle-detection',
                 filename='deep-image-orientation-angle-detection.onnx'
             )
-            _onnx_session = ort.InferenceSession(model_path)
+            
+            opts = ort.SessionOptions()
+            opts.intra_op_num_threads = 4
+            opts.inter_op_num_threads = 1
+            
+            _onnx_session = ort.InferenceSession(model_path, sess_options=opts)
         except Exception as e:
             logger.warning("No se pudo cargar modelo ONNX: %s", e)
             _onnx_session = None

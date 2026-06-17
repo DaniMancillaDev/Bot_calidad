@@ -6,7 +6,9 @@
     "sqa": "OUTGOING QUALITY",
     "prod": "PRODUCTION",
     "eng": "ENGINEERING",
-    "cuarto limpio": "CLEAN ROOM"
+    "cuarto limpio": "CLEAN ROOM",
+    "incoming inspection": "INCOMING INSPECTION",
+    "incoming": "INCOMING INSPECTION"
   },
   "exact_matches": {
     "separador con poca pega": "SPACER WITH LITTLE GLUE",
@@ -28,6 +30,7 @@
     "ftc label": "LABEL",
     "plato difusor": "DIFFUSER PLATE",
     "placa difusora": "DIFFUSER PLATE",
+    "plato": "DIFFUSER PLATE",
     "reflector film": "REFLECTOR FILM",
     "reflectora": "REFLECTOR FILM",
     "reflextor film": "REFLECTOR FILM",
@@ -70,7 +73,10 @@
     "bezel": "BEZEL",
     "bkz": "BEZEL",
     "marco": "BEZEL",
-    "cushion": "CUSHION"
+    "cushion": "CUSHION",
+    "cover lateral": "REAR COVER",
+    "mylar": "MYLAR",
+    "bolsa": "PROTECT BAG"
   },
   "material_areas": {
     "REFLECTOR FILM": "CLEAN ROOM",
@@ -80,13 +86,16 @@
     "BACK COVER": "INPUT",
     "METAL BLU": "INPUT",
     "PAPER BOARD": "INPUT",
-    "SPACER": "PRODUCTION",
-    "SPACER WITH LITTLE GLUE": "PRODUCTION",
-    "RUBBER": "PRODUCTION",
+    "SPACER": "CLEAN ROOM",
+    "SPACER WITH LITTLE GLUE": "CLEAN ROOM",
+    "RUBBER": "INPUT",
     "BEZEL": "PRODUCTION",
     "LABEL": "INPUT",
     "LABELS": "INPUT",
-    "DECO": "INPUT"
+    "DECO": "INPUT",
+    "mylar": "INPUT",
+    "CUSHION": "INPUT",
+    "PROTECT BAG": "INPUT"
   },
   "symptoms": {
     "dañad": "DAMAGED",

@@ -20,6 +20,7 @@ from datetime import datetime
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
+from bot.handlers.lock_utils import prevent_double_tap
 
 from bot.helpers.zip_helper import crear_y_enviar_zip
 
@@ -74,8 +75,7 @@ def create_reporte(api_client):
                 await update.message.reply_document(
                     document=f,
                     filename=(
-                        f"reporte_{data['turno']}_{data['departamento']}"
-                        f"_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+                        f"rep_{data['turno']}_{data['departamento']}_{datetime.now().strftime('%H%M')}.txt"
                     ),
                     caption=f"Reporte {data['turno']}/{data['departamento']} — {len(registros)} registro(s)",
                     read_timeout=300,
@@ -226,18 +226,29 @@ def create_descargar(api_client):
             if info.get("total", 0) == 0:
                 await update.message.reply_text("<b>No tienes imágenes guardadas.</b>", parse_mode="HTML")
                 return
+                
+            try:
+                stats = await api_client.obtener_estadisticas(user_id)
+                nombre_op = stats.get('nombre')
+                if not nombre_op:
+                    nombre_op = f"Usuario_{user_id}"
+            except Exception:
+                nombre_op = f"Usuario_{user_id}"
+                
+            nombre_limpio = str(nombre_op).replace(" ", "_")
 
             if rango:
                 ini, fin = rango
                 msg = await update.message.reply_text(f"<b>Generando ZIP ({ini:03d}-{fin:03d})...</b>", parse_mode="HTML")
+                zip_path = None
                 try:
                     zip_path, count = await api_client.descargar_evidencia(user_id, inicio=ini, fin=fin)
                     from datetime import datetime
-                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                    timestamp = datetime.now().strftime('%H%M')
                     with open(zip_path, "rb") as f:
                         await update.message.reply_document(
                             document=f,
-                            filename=f"fotos_defectos_{ini:03d}_{fin:03d}_{timestamp}.zip",
+                            filename=f"{nombre_limpio}_{ini:03d}-{fin:03d}_{timestamp}.zip",
                             caption=f"{count} imagen(es) — rango {ini:03d}-{fin:03d}.",
                             read_timeout=300,
                             write_timeout=300,
@@ -266,11 +277,11 @@ def create_descargar(api_client):
                     try:
                         zip_path, count = await api_client.descargar_evidencia(user_id, inicio=ini, fin=fin)
                         from datetime import datetime
-                        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                        timestamp = datetime.now().strftime('%H%M')
                         with open(zip_path, "rb") as f:
                             await update.message.reply_document(
                                 document=f,
-                                filename=f"fotos_defectos_lote_{i:02d}_de_{len(lotes):02d}_{timestamp}.zip",
+                                filename=f"{nombre_limpio}_p{i}_{timestamp}.zip",
                                 caption=f"Lote {i} de {len(lotes)} — {count} imagen(es).",
                                 read_timeout=300,
                                 write_timeout=300,
@@ -283,23 +294,33 @@ def create_descargar(api_client):
                 await update.message.reply_text("<b>Descarga completada.</b> Todas las imágenes han sido enviadas.", parse_mode="HTML")
             else:
                 msg = await update.message.reply_text(f"<b>Generando ZIP con {info['total']} imagen(es)...</b>", parse_mode="HTML")
-                zip_path, count = await api_client.descargar_evidencia(user_id)
-                from datetime import datetime
-                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                with open(zip_path, "rb") as f:
-                    await update.message.reply_document(
-                        document=f,
-                        filename=f"fotos_defectos_completo_{timestamp}.zip",
-                        caption=f"{count} imagen(es) en total.",
-                        read_timeout=300,
-                        write_timeout=300,
-                    )
-                os.remove(zip_path)
-                await msg.delete()
+                zip_path = None
+                try:
+                    zip_path, count = await api_client.descargar_evidencia(user_id)
+                    from datetime import datetime
+                    timestamp = datetime.now().strftime('%H%M')
+                    with open(zip_path, "rb") as f:
+                        await update.message.reply_document(
+                            document=f,
+                            filename=f"{nombre_limpio}_{timestamp}.zip",
+                            caption=f"{count} imagen(es) en total.",
+                            read_timeout=300,
+                            write_timeout=300,
+                        )
+                    await msg.delete()
+                finally:
+                    if zip_path and os.path.exists(zip_path):
+                        try:
+                            os.remove(zip_path)
+                        except OSError:
+                            pass
 
         except Exception as e:
             logger.error("Error en /descargar: %s", e)
-            await update.message.reply_text("<b>Error interno al descargar evidencia.</b> " + (str(e) if "404" in str(e) else ""), parse_mode="HTML")
+            if "404" in str(e):
+                await update.message.reply_text("<b>No tienes imágenes guardadas para descargar.</b>", parse_mode="HTML")
+            else:
+                await update.message.reply_text("<b>Error de red o timeout. Inténtalo de nuevo.</b>", parse_mode="HTML")
 
     return descargar
 
@@ -337,6 +358,7 @@ def create_descargar_turno(api_client):
 def create_turno_callback(api_client):
     """Factory para manejar la selección de turno."""
 
+    @prevent_double_tap
     async def turno_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
         await query.answer()
@@ -371,6 +393,7 @@ def create_turno_callback(api_client):
 
 def create_operador_callback(api_client):
     """Factory para manejar la selección de operador y descargar el ZIP."""
+    @prevent_double_tap
     async def operador_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
         await query.answer()
@@ -381,28 +404,48 @@ def create_operador_callback(api_client):
         await query.edit_message_text("<b>Generando ZIP desde el servidor...</b>", parse_mode="HTML")
 
         try:
-            zip_path, count = await api_client.descargar_evidencia(user_id, turno=turno, operador=op_id)
-            
-            from datetime import datetime
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            op_nombres = context.user_data.get("op_nombres", {})
-            nombre = op_nombres.get(str(op_id), op_id)
-            nombre_limpio = nombre.replace(" ", "_")
-            sufijo = f"T{turno}_{nombre_limpio}"
-            with open(zip_path, "rb") as f:
-                await query.message.reply_document(
-                    document=f,
-                    filename=f"fotos_defectos_{sufijo}_{timestamp}.zip",
-                    caption=f"Evidencia Turno {turno} — Operador: {nombre}.",
-                    read_timeout=300,
-                    write_timeout=300,
-                )
-            
-            os.remove(zip_path)
-            await query.delete_message()
+            zip_path = None
+            try:
+                zip_path, count = await api_client.descargar_evidencia(user_id, turno=turno, operador=op_id)
+                
+                from datetime import datetime
+                timestamp = datetime.now().strftime('%H%M')
+                op_nombres = context.user_data.get("op_nombres", {})
+                nombre = op_nombres.get(str(op_id), op_id)
+                nombre_limpio = nombre.replace(" ", "_")
+                sufijo = f"T{turno}_{nombre_limpio}"
+                
+                size_mb = os.path.getsize(zip_path) / (1024 * 1024)
+                if size_mb > 49.0:
+                    await query.message.reply_text(
+                        f"⚠️ <b>El archivo es demasiado grande para enviarlo por Telegram ({size_mb:.1f} MB).</b>\n"
+                        f"El límite de Telegram es de 50 MB.\n\n"
+                        f"<i>Sugerencia: Descarga la evidencia de cada operador de forma individual en lugar de usar el botón 'Todos'.</i>",
+                        parse_mode="HTML"
+                    )
+                else:
+                    with open(zip_path, "rb") as f:
+                        await query.message.reply_document(
+                            document=f,
+                            filename=f"{sufijo}_{timestamp}.zip",
+                            caption=f"Evidencia Turno {turno} — Operador: {nombre}.",
+                            read_timeout=300,
+                            write_timeout=300,
+                        )
+                
+                await query.delete_message()
+            finally:
+                if zip_path and os.path.exists(zip_path):
+                    try:
+                        os.remove(zip_path)
+                    except OSError:
+                        pass
         except Exception as e:
             logger.error("Error en operador_callback: %s", e)
-            await query.edit_message_text("<b>Error interno al descargar evidencia.</b> " + (str(e) if "404" in str(e) else ""), parse_mode="HTML")
+            if "404" in str(e):
+                await query.edit_message_text("<b>No se encontraron imágenes para este turno/operador.</b>", parse_mode="HTML")
+            else:
+                await query.edit_message_text("<b>Error de red o timeout al generar ZIP. Intenta de nuevo.</b>", parse_mode="HTML")
 
     return operador_callback
 
@@ -497,6 +540,7 @@ def create_reporte_turno(api_client):
 def create_rpt_turno_callback(api_client):
     """Factory para el callback de seleccion de turno en /reporte_turno."""
 
+    @prevent_double_tap
     async def rpt_turno_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
         await query.answer()
@@ -536,6 +580,7 @@ def create_rpt_turno_callback(api_client):
 
 def create_rpt_operador_callback(api_client):
     """Factory para el callback de seleccion de operador: genera y envia el .txt."""
+    @prevent_double_tap
     async def rpt_operador_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
         await query.answer()
@@ -565,9 +610,9 @@ def create_rpt_operador_callback(api_client):
 
             contenido = _generar_txt_reporte(data, nombre_op)
 
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            timestamp = datetime.now().strftime('%H%M')
             nombre_limpio = nombre_op.replace(" ", "_")
-            nombre_archivo = f"reporte_T{turno}_{nombre_limpio}_{timestamp}.txt"
+            nombre_archivo = f"rep_{turno}_{nombre_limpio}_{timestamp}.txt"
 
             import tempfile
             fd, tmp_path = tempfile.mkstemp(suffix=".txt")

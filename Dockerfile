@@ -23,7 +23,6 @@ RUN uv sync --frozen --no-dev && \
 # Copiar código fuente de la web
 COPY web/ web/
 COPY shared/ shared/
-COPY database.py ./
 COPY plantilla_reporte.xlsx ./
 
 # Usuario no-root para seguridad

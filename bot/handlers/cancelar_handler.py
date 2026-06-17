@@ -16,7 +16,9 @@ from telegram.ext import ContextTypes
 logger = logging.getLogger(__name__)
 
 import os
-FOTOS_PATH = os.getenv("FOTOS_PATH", "media_files/fotos")
+FOTOS_PATH   = os.getenv("FOTOS_PATH",   "media_files/fotos")
+THUMBS_PATH  = os.getenv("THUMBS_PATH",  "media_files/thumbs")
+PROXIES_PATH = os.getenv("PROXIES_PATH", "media_files/proxies")
 
 
 def create_cancelar(api_client):
@@ -62,18 +64,36 @@ def create_cancelar(api_client):
 
             fotos_eliminadas = 0
 
-            # Borrado físico de fotos en el volumen local
-            user_folder = os.path.join(FOTOS_PATH, str(user_id))
-            if fotos and os.path.exists(user_folder):
+            # Borrado físico en fotos/, thumbs/ y proxies/ para no dejar huérfanos
+            for base_path in [FOTOS_PATH, THUMBS_PATH, PROXIES_PATH]:
+                user_folder = os.path.join(base_path, str(user_id))
+                if not os.path.exists(user_folder):
+                    continue
                 archivos = os.listdir(user_folder)
+
+                # 1. Borrar por número de foto de la sesión cancelada
                 for numero_foto in fotos:
                     prefijo = f"{int(numero_foto):03d}_"
                     for archivo in archivos:
                         if archivo.startswith(prefijo):
                             ruta = os.path.join(user_folder, archivo)
-                            if os.path.exists(ruta):
+                            try:
                                 os.remove(ruta)
                                 fotos_eliminadas += 1
+                                logger.info("Foto eliminada: %s", ruta)
+                            except OSError as e:
+                                logger.warning("No se pudo eliminar %s: %s", ruta, e)
+
+                # 2. Borrar temporales huérfanas (tmp_*.jpg) del debounce
+                for archivo in archivos:
+                    if archivo.startswith("tmp_") and archivo.endswith(".jpg"):
+                        ruta = os.path.join(user_folder, archivo)
+                        try:
+                            os.remove(ruta)
+                            fotos_eliminadas += 1
+                            logger.info("Temporal huérfana eliminada: %s", ruta)
+                        except OSError as e:
+                            logger.warning("No se pudo eliminar temporal %s: %s", ruta, e)
 
             msg = "<b>Registro cancelado.</b>\n\n"
             msg += f"<b>Fotos eliminadas:</b> {fotos_eliminadas}\n"

@@ -18,4 +18,8 @@ urlpatterns = [
     path('api/get_nuevos/',     views.api_get_nuevos,      name='api_get_nuevos'),
     path('api/registro/<int:registro_id>/delete/', views.api_delete_registro, name='api_delete_registro'),
     path('api/registro/<int:registro_id>/edit/', views.api_edit_registro, name='api_edit_registro'),
+    
+    # Diccionario AI
+    path('diccionario/', views.gestionar_diccionario, name='gestionar_diccionario'),
+    path('api/diccionario/guardar/', views.api_guardar_diccionario, name='api_guardar_diccionario'),
 ]

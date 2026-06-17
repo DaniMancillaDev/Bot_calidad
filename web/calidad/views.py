@@ -14,6 +14,7 @@ from django.conf import settings
 from django.http import Http404, HttpResponse, JsonResponse
 from django.views.decorators.http import require_POST
 from .models import RegistroDefecto, PerfilUsuario, EstadoRevision
+from calidad.utils import get_best_image_path
 
 # ============================================================
 # FUNCIONES AUXILIARES DE SEGURIDAD Y PERMISOS
@@ -242,14 +243,11 @@ def ver_foto(request, numero):
         if not request.user.is_superuser and user_id not in usuarios_permitidos:
             continue
 
-        # Buscar archivo que empiece con el número de secuencia
-        for ext in ['.png', '.jpg']:
-            for archivo in user_folder.glob(f"{numero:03d}_*{ext}"):
-                url_foto = f"/media/fotos/{user_id}/{archivo.name}"
-                nombre = archivo.name
-                user_id_encontrado = user_id
-                break
-        if url_foto:
+        img_path = get_best_image_path(fotos_base_dir, str(user_id), numero)
+        if img_path:
+            url_foto = f"/media/proxies/{user_id}/{img_path.name}" if "proxies" in str(img_path) else f"/media/fotos/{user_id}/{img_path.name}"
+            nombre = img_path.name
+            user_id_encontrado = user_id
             break
 
     if not url_foto:
@@ -382,10 +380,17 @@ def galeria_fotos(request):
             else:
                 thumb_src = f"{fotos_url}{reg.user_id}/{foto_file.name}"
 
+            proxies_root = Path(settings.MEDIA_ROOT) / 'proxies'
+            proxies_url = settings.MEDIA_URL + 'proxies/'
+            if (proxies_root / str(reg.user_id) / foto_file.name).exists():
+                orig_src = f"{proxies_url}{reg.user_id}/{foto_file.name}"
+            else:
+                orig_src = f"{fotos_url}{reg.user_id}/{foto_file.name}"
+
             fotos_data.append({
                 'num':       num,
                 'thumb_url': thumb_src,
-                'orig_url':  f"{fotos_url}{reg.user_id}/{foto_file.name}",
+                'orig_url':  orig_src,
                 'nombre':    foto_file.name,
             })
 
@@ -459,6 +464,7 @@ def _parse_fotos_nums(registros):
             'descripcion': r.get('descripcion', '') if is_dict else getattr(r, 'descripcion', ''),
             'responsable': r.get('responsable', '') if is_dict else getattr(r, 'responsable', ''),
             'cantidad':    r.get('cantidad', 1) if is_dict else getattr(r, 'cantidad', 1),
+            'fecha_registro': r.get('fecha_registro') if is_dict else getattr(r, 'fecha_registro', None),
         })
     return resultado
 
@@ -517,24 +523,13 @@ def revisar_orientacion(request):
             if clave in fotos_en_disco:
                 continue
                 
-            # Buscar cualquier archivo que empiece con el número (formato 001 o 1)
-            # y que sea una imagen común.
-            prefix_3 = f"{num:03d}"
-            prefix_raw = str(num)
-            
-            # Glob case-insensitive manual (o simplemente buscar los prefijos comunes)
-            posibles = list(user_folder.glob(f"{prefix_3}*")) + \
-                      list(user_folder.glob(f"{prefix_raw}*"))
-            
-            for path in posibles:
-                ext = path.suffix.lower()
-                if ext in ['.jpg', '.jpeg', '.png']:
-                    fotos_en_disco[clave] = {
-                        'path': path,
-                        'user_id': user_id,
-                        'numero': num
-                    }
-                    break
+            img_path = get_best_image_path(fotos_dir, str(user_id), num)
+            if img_path:
+                fotos_en_disco[clave] = {
+                    'path': img_path,
+                    'user_id': user_id,
+                    'numero': num
+                }
 
     # Construir lista de fotos para el template
     fotos_preview = []
@@ -582,14 +577,11 @@ def api_detectar_orientacion(request):
             user_folder = fotos_dir / user_id_str
             num_int = int(num_str)
             
-            for ext in ['png', 'jpg']:
-                # Buscar formato exacto (001.png) o con timestamp (001_2023.png)
-                archivos = list(user_folder.glob(f"{num_int:03d}.{ext}")) + \
-                           list(user_folder.glob(f"{num_int:03d}_*.{ext}"))
-                if archivos:
-                    ang = detect_orientation(archivos[0])
-                    orientaciones[clave] = ang
-                    break
+            from .utils import get_orientation_image_path
+            img_path = get_orientation_image_path(fotos_dir, user_id_str, num_int)
+            if img_path:
+                ang = detect_orientation(img_path)
+                orientaciones[clave] = ang
         except Exception:
             pass
 
@@ -619,12 +611,14 @@ def generar_excel(request):
     if not registros_data:
         return HttpResponse('Sin registros para generar.', status=400)
 
+    registros_ids = [int(r['id']) for r in registros_data if 'id' in r]
+
     fotos_dir = settings.MEDIA_ROOT / 'fotos'
     fecha_str = datetime.now().strftime('%Y%m%d_%H%M%S')
 
     # Encolar tarea Celery — no bloquea el proceso web
     task = generar_excel_task.delay(
-        registros_data=registros_data,
+        registros_ids=registros_ids,
         rotaciones=rotaciones,
         fotos_dir_str=str(fotos_dir),
         fecha_str=fecha_str,
@@ -796,3 +790,57 @@ def api_edit_registro(request, registro_id):
         return JsonResponse({'success': True})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
+
+# ============================================================
+# DICCIONARIO AI
+# ============================================================
+
+@login_required
+def gestionar_diccionario(request):
+    """Vista para editar el diccionario (materiales, defectos, síntomas)."""
+    # BASE_DIR apunta a la carpeta "web", por lo que "shared" está en el nivel superior.
+    catalog_path = settings.BASE_DIR.parent / 'shared' / 'infrastructure' / 'ai' / 'defect_catalog.json'
+    
+    try:
+        with open(catalog_path, 'r', encoding='utf-8') as f:
+            catalog = json.load(f)
+    except FileNotFoundError:
+        catalog = {}
+        
+    # Formatear como JSON string para el frontend
+    catalog_json = json.dumps(catalog, indent=2, ensure_ascii=False)
+        
+    context = {
+        'catalog_json': catalog_json,
+        'seccion': 'diccionario',
+    }
+    return render(request, 'calidad/diccionario.html', context)
+
+@require_POST
+@login_required
+def api_guardar_diccionario(request):
+    """Guarda el diccionario editado en el archivo JSON."""
+    if not request.user.is_superuser:
+        return JsonResponse({'error': 'Solo administradores pueden modificar el diccionario.'}, status=403)
+        
+    try:
+        data = json.loads(request.body)
+        nuevo_diccionario = data.get('diccionario')
+        
+        if not nuevo_diccionario:
+            return JsonResponse({'error': 'No se recibió el diccionario.'}, status=400)
+            
+        # Validar que es un dict válido
+        if not isinstance(nuevo_diccionario, dict):
+            return JsonResponse({'error': 'El diccionario debe ser un objeto JSON válido.'}, status=400)
+            
+        catalog_path = settings.BASE_DIR.parent / 'shared' / 'infrastructure' / 'ai' / 'defect_catalog.json'
+        
+        with open(catalog_path, 'w', encoding='utf-8') as f:
+            json.dump(nuevo_diccionario, f, indent=2, ensure_ascii=False)
+            
+        return JsonResponse({'success': True})
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'JSON inválido.'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)

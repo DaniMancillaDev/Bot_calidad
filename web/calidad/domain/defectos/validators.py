@@ -24,8 +24,16 @@ def validar_modelo(texto: str) -> bool:
 
 def validar_linea(texto: str) -> bool:
     """
-    En el flujo actual cualquier string es aceptado como línea.
-    Se deja el hook para endurecer reglas en futuras fases.
+    Valida que la línea exista en el Enum definido en models.
     """
-    return True
+    from calidad.models import Linea
+    return texto.upper() in Linea.values
+
+
+def validar_responsable(texto: str) -> bool:
+    """
+    Se permite cualquier texto libre para responsable (ej. "Otro").
+    El Enum en models sirve solo como sugerencias principales.
+    """
+    return bool(texto.strip())
 

@@ -24,8 +24,11 @@ logger = logging.getLogger(__name__)
 # ── Configuración de thumbnails ────────────────────────────────────────────────
 THUMB_SIZE = (300, 300)
 THUMB_QUALITY = 75
+PROXY_SIZE = (1280, 1280)
+PROXY_QUALITY = 85
 FOTOS_PATH = os.getenv("FOTOS_PATH", "media_files/fotos")
 THUMBS_PATH = os.getenv("THUMBS_PATH", "media_files/thumbs")
+PROXIES_PATH = os.getenv("PROXIES_PATH", "media_files/proxies")
 
 
 @shared_task(
@@ -59,22 +62,37 @@ def generar_thumbnail_task(self, user_id: int, foto_path: str) -> None:
             logger.error("generar_thumbnail_task: archivo NO ENCONTRADO tras reintentos: %s", foto_path)
             return
 
-        # Crear carpeta de thumbnails para este usuario
+        # Carpetas
         thumb_dir = Path(THUMBS_PATH) / str(user_id)
         thumb_dir.mkdir(parents=True, exist_ok=True)
         thumb_path = thumb_dir / foto_path_obj.name
 
-        with Image.open(foto_path_obj) as img:
+        proxy_dir = Path(PROXIES_PATH) / str(user_id)
+        proxy_dir.mkdir(parents=True, exist_ok=True)
+        proxy_path = proxy_dir / foto_path_obj.name
+        tmp_proxy_path = proxy_dir / f"{foto_path_obj.name}.tmp"
+
+        with Image.open(foto_path_obj) as original:
             # Aplicar orientación EXIF sin modificar el original
-            img = ImageOps.exif_transpose(img)
+            img = ImageOps.exif_transpose(original)
 
             # Convertir a RGB si es necesario (RGBA, P, etc.)
             if img.mode not in ('RGB', 'L'):
                 img = img.convert('RGB')
 
-            # Thumbnail preservando aspect ratio
+            # 1. Bajar a Proxy (1280x1280) in-place
+            img.thumbnail(PROXY_SIZE, Image.LANCZOS)
+            # Guardado atómico
+            img.save(tmp_proxy_path, format='JPEG', quality=PROXY_QUALITY, optimize=True)
+            os.replace(tmp_proxy_path, proxy_path)
+
+            # 2. Bajar a Thumb (300x300) in-place desde el tamaño de proxy
             img.thumbnail(THUMB_SIZE, Image.LANCZOS)
             img.save(thumb_path, format='JPEG', quality=THUMB_QUALITY, optimize=True)
+            
+            # Liberar si ImageOps retornó copia
+            if img is not original:
+                img.close()
 
         elapsed = (time.monotonic() - t0) * 1000
         logger.info(
@@ -111,6 +129,9 @@ def generar_thumbnails_lote_task(self, user_id: int, fotos_paths: list[str]) -> 
 
     thumb_dir = Path(THUMBS_PATH) / str(user_id)
     thumb_dir.mkdir(parents=True, exist_ok=True)
+    
+    proxy_dir = Path(PROXIES_PATH) / str(user_id)
+    proxy_dir.mkdir(parents=True, exist_ok=True)
 
     for foto_path in fotos_paths:
         try:
@@ -127,12 +148,26 @@ def generar_thumbnails_lote_task(self, user_id: int, fotos_paths: list[str]) -> 
                 continue
 
             thumb_path = thumb_dir / foto_path_obj.name
-            with Image.open(foto_path_obj) as img:
-                img = ImageOps.exif_transpose(img)
+            proxy_path = proxy_dir / foto_path_obj.name
+            tmp_proxy_path = proxy_dir / f"{foto_path_obj.name}.tmp"
+            
+            with Image.open(foto_path_obj) as original:
+                img = ImageOps.exif_transpose(original)
                 if img.mode not in ('RGB', 'L'):
                     img = img.convert('RGB')
+                    
+                # 1. Bajar a Proxy in-place y guardado atómico
+                img.thumbnail(PROXY_SIZE, Image.LANCZOS)
+                img.save(tmp_proxy_path, format='JPEG', quality=PROXY_QUALITY, optimize=True)
+                os.replace(tmp_proxy_path, proxy_path)
+                
+                # 2. Bajar a Thumb in-place
                 img.thumbnail(THUMB_SIZE, Image.LANCZOS)
                 img.save(thumb_path, format='JPEG', quality=THUMB_QUALITY, optimize=True)
+                
+                if img is not original:
+                    img.close()
+                    
             procesadas += 1
 
         except Exception as e:
@@ -177,13 +212,14 @@ def _consolidar_registros(regs, translator=None):
     for reg in regs:
         # ── Obtener defecto canónico ─────────────────────────────────────────
         defecto_canonico = None
+        _translation = None
 
         # Si el translator está disponible, usar catálogo determinístico
         if translator is not None:
             try:
                 area_ctx = reg.get('departamento') or reg.get('turno') or ''
-                tr = translator.translate(reg.get('descripcion', ''), area_ctx)
-                defecto_canonico = (tr.get('defect_en') or '').strip().upper() or None
+                _translation = translator.translate(reg.get('descripcion', ''), area_ctx)
+                defecto_canonico = (_translation.get('defect_en') or '').strip().upper() or None
             except Exception:
                 pass
 
@@ -245,6 +281,9 @@ def _consolidar_registros(regs, translator=None):
             # Campos de presentación para Excel
             grupo_base['defecto_canonico']  = defecto_canonico
             grupo_base['linea']             = linea_reg   # primer valor; Excel lo usará si catálogo falla
+            
+            if _translation is not None:
+                grupo_base['_translation'] = _translation
 
             agrupados[clave] = grupo_base
 
@@ -261,12 +300,12 @@ def _consolidar_registros(regs, translator=None):
 
 
 @shared_task(bind=True, name='calidad.tasks.generar_excel_task')
-def generar_excel_task(self, registros_data, rotaciones, fotos_dir_str, fecha_str):
+def generar_excel_task(self, registros_ids, rotaciones, fotos_dir_str, fecha_str):
     """
     Tarea Celery: genera reportes Excel en background.
 
     Args:
-        registros_data: Lista de dicts de registros.
+        registros_ids: Lista de IDs (enteros).
         rotaciones:     Dict {clave: angulo}.
         fotos_dir_str:  Ruta al directorio de fotos como string.
         fecha_str:      Timestamp string para el nombre del archivo.
@@ -275,8 +314,57 @@ def generar_excel_task(self, registros_data, rotaciones, fotos_dir_str, fecha_st
         Dict con 'file_path' y 'filename' del resultado.
     """
     from calidad.services.reporte_excel import generate_excel
+    from calidad.models import RegistroDefecto
 
     fotos_dir = Path(fotos_dir_str)
+
+    # 1. Recuperar datos actualizados de DB
+    qs = RegistroDefecto.objects.filter(id__in=registros_ids)
+    
+    # Preservar el orden original exacto del frontend
+    orden = {id_: idx for idx, id_ in enumerate(registros_ids)}
+    registros_orm = sorted(qs, key=lambda r: orden[r.id])
+
+    # 2. Reconstruir diccionarios (mantener compatibilidad y parseo de legacy)
+    # Reutilizamos la misma lógica que usa el panel operativo para evitar omisiones.
+    import re
+    registros_data = []
+    for r in registros_orm:
+        try:
+            raw_fotos = r.fotos
+            nums = []
+            if raw_fotos:
+                if isinstance(raw_fotos, list):
+                    nums = [int(x) for x in raw_fotos]
+                else:
+                    # 1. Intentar formato nuevo o individuales "1, 2" o "(001)"
+                    nums = [int(n) for n in re.findall(r'\d+', str(raw_fotos))]
+                    # 2. Parsear rangos legacy "(001-005)" o "1-5"
+                    rangos = re.findall(r'(\d+)\s*-\s*(\d+)', str(raw_fotos))
+                    for inicio, fin in rangos:
+                        nums.extend(range(int(inicio), int(fin) + 1))
+            f_list = sorted(list(set(nums)))
+        except Exception:
+            f_list = []
+        if r.fecha_registro:
+            fecha_obj = r.fecha_registro.date()
+        else:
+            fecha_obj = datetime.now().date()
+
+        registros_data.append({
+            'id': r.id,
+            'user_id': r.user_id,
+            'fotos_nums': f_list,
+            'modelo': r.modelo,
+            'numero_parte': r.numero_parte,
+            'linea': r.linea,
+            'cantidad': r.cantidad,
+            'responsable': r.responsable,
+            'descripcion': r.descripcion,
+            'departamento': r.departamento,
+            'turno': r.turno,
+            'fecha_obj': fecha_obj,
+        })
 
     # Agrupar registros por responsable
     grupos = {}

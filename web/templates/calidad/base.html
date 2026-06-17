@@ -389,6 +389,9 @@
     <a href="{% url 'galeria_fotos' %}" class="nav-link {% if seccion == 'fotos' %}active{% endif %}">
       <span class="icon">🖼️</span> Galería de Fotos
     </a>
+    <a href="{% url 'gestionar_diccionario' %}" class="nav-link {% if seccion == 'diccionario' %}active{% endif %}">
+      <span class="icon">📖</span> Diccionario AI
+    </a>
 
     {% if user.is_staff %}
     <a href="{% url 'admin:index' %}" class="nav-link">

@@ -65,6 +65,10 @@ migrate() {
 }
 
 run_web() {
+    if command -v ngrok &> /dev/null; then
+        info "Iniciando tunnel 'otro' de ngrok..."
+        ngrok start otro --log stdout &
+    fi
     info "Iniciando Django en localhost:8000..."
     uv run python web/manage.py runserver 0.0.0.0:8000
 }
@@ -85,6 +89,11 @@ run_all() {
     migrate
 
     trap "warn 'Deteniendo procesos...'; kill 0; infra_down" EXIT INT TERM
+
+    if command -v ngrok &> /dev/null; then
+        info "Iniciando tunnel 'otro' de ngrok..."
+        ngrok start otro --log stdout &
+    fi
 
     info "Iniciando web + bot (hupper) + celery en paralelo..."
     uv run python web/manage.py runserver 0.0.0.0:8000 &

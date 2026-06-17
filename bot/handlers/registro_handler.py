@@ -17,6 +17,7 @@ from datetime import datetime
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import ContextTypes
+from bot.handlers.lock_utils import prevent_double_tap
 from telegram.constants import ReactionEmoji
 
 logger = logging.getLogger(__name__)
@@ -230,9 +231,9 @@ def create_guardar_foto(api_client):
                 except Exception:
                     pass
 
-            # Quitar botones TERMINAR de mensajes anteriores (si hay)
-            terminar_msg_ids = context.user_data.get("terminar_msg_ids", [])
-            for old_msg_id in terminar_msg_ids:
+            # Quitar botones de mensajes anteriores (si hay)
+            inline_msg_ids = context.user_data.get("inline_msg_ids", [])
+            for old_msg_id in inline_msg_ids:
                 try:
                     await context.bot.edit_message_reply_markup(
                         chat_id=chat_id, message_id=old_msg_id, reply_markup=None
@@ -247,11 +248,11 @@ def create_guardar_foto(api_client):
                 reply_markup=reply_markup,
             )
 
-            # Rastrear ID del mensaje con botón TERMINAR para limpiarlo después
+            # Rastrear ID del mensaje con botón para limpiarlo después
             if reply_markup:
-                if "terminar_msg_ids" not in context.user_data:
-                    context.user_data["terminar_msg_ids"] = []
-                context.user_data["terminar_msg_ids"].append(sent_msg.message_id)
+                if "inline_msg_ids" not in context.user_data:
+                    context.user_data["inline_msg_ids"] = []
+                context.user_data["inline_msg_ids"].append(sent_msg.message_id)
 
         except asyncio.CancelledError:
             # Esperado: llegó otra foto antes del debounce
@@ -269,6 +270,7 @@ def create_terminar_callback(api_client):
     """
     Factory para el callback del botón inline TERMINAR.
     """
+    @prevent_double_tap
     async def terminar_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
         if not query or not update.effective_user:
@@ -282,14 +284,17 @@ def create_terminar_callback(api_client):
             result = await api_client.responder_defecto(user_id, "TERMINAR")
             exito = result.get('exito', False)
             mensaje = result.get('mensaje')
+            estado = result.get('estado')
+            context_data = result.get('context_data')
+
         except Exception as e:
             logger.error("Error terminando fotos para %s: %s", user_id, e)
             exito = False
             mensaje = "Error al procesar la terminación del álbum."
 
-        # Quitar TODOS los botones inline TERMINAR de mensajes previos
-        terminar_msg_ids = context.user_data.pop("terminar_msg_ids", [])
-        for msg_id in terminar_msg_ids:
+        # Quitar TODOS los botones inline de mensajes previos
+        inline_msg_ids = context.user_data.pop("inline_msg_ids", [])
+        for msg_id in inline_msg_ids:
             try:
                 await context.bot.edit_message_reply_markup(
                     chat_id=update.effective_chat.id, message_id=msg_id, reply_markup=None
@@ -299,11 +304,18 @@ def create_terminar_callback(api_client):
 
         # Solo enviar mensaje si TERMINAR fue exitoso (álbum cerrado)
         if exito and mensaje:
-            await context.bot.send_message(
+            reply_markup = _get_reply_markup_for_mensaje(mensaje, estado, context_data)
+
+            sent_msg = await context.bot.send_message(
                 chat_id=update.effective_chat.id,
                 text=mensaje,
                 parse_mode="HTML",
+                reply_markup=reply_markup,
             )
+            if reply_markup and isinstance(reply_markup, InlineKeyboardMarkup):
+                if "inline_msg_ids" not in context.user_data:
+                    context.user_data["inline_msg_ids"] = []
+                context.user_data["inline_msg_ids"].append(sent_msg.message_id)
         elif not exito and mensaje:
             # TERMINAR rechazado (ya no en ESPERANDO_FOTOS) — feedback breve
             await query.answer(text=mensaje, show_alert=True)
@@ -318,6 +330,7 @@ def create_omitir_callback(api_client):
     """
     Factory para el callback del botón inline OMITIR (Número de Parte).
     """
+    @prevent_double_tap
     async def omitir_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
         if not query or not update.effective_user:
@@ -330,30 +343,39 @@ def create_omitir_callback(api_client):
         try:
             result = await api_client.responder_defecto(user_id, "_OMITIR_")
             mensaje = result.get('mensaje')
+            estado = result.get('estado')
+            context_data = result.get('context_data')
         except Exception as e:
             logger.error("Error omitiendo numero_parte para %s: %s", user_id, e)
             mensaje = "Error al procesar la respuesta."
 
-        # Quitar TODOS los botones inline OMITIR de este mensaje
-        try:
-            await context.bot.edit_message_reply_markup(
-                chat_id=update.effective_chat.id, message_id=update.effective_message.id, reply_markup=None
-            )
-        except Exception:
-            pass
+        # Quitar TODOS los botones inline de mensajes previos
+        inline_msg_ids = context.user_data.pop("inline_msg_ids", [])
+        if update.effective_message.id not in inline_msg_ids:
+            inline_msg_ids.append(update.effective_message.id)
+            
+        for msg_id in inline_msg_ids:
+            try:
+                await context.bot.edit_message_reply_markup(
+                    chat_id=update.effective_chat.id, message_id=msg_id, reply_markup=None
+                )
+            except Exception:
+                pass
 
         if mensaje:
             # Check if next step needs OMITIR button (unlikely, but just in case)
-            reply_markup = ReplyKeyboardRemove()
-            if "presiona OMITIR" in mensaje:
-                reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("⏭️ OMITIR", callback_data="omitir_num_parte")]])
+            reply_markup = _get_reply_markup_for_mensaje(mensaje, estado, context_data)
 
-            await context.bot.send_message(
+            sent_msg = await context.bot.send_message(
                 chat_id=update.effective_chat.id,
                 text=mensaje,
                 parse_mode="HTML",
                 reply_markup=reply_markup,
             )
+            if reply_markup and isinstance(reply_markup, InlineKeyboardMarkup):
+                if "inline_msg_ids" not in context.user_data:
+                    context.user_data["inline_msg_ids"] = []
+                context.user_data["inline_msg_ids"].append(sent_msg.message_id)
 
     return omitir_callback
 
@@ -374,20 +396,133 @@ def create_procesar_respuesta(api_client):
         try:
             result = await api_client.responder_defecto(user_id, update.message.text)
             mensaje = result.get('mensaje')
+            estado = result.get('estado')
+            context_data = result.get('context_data')
         except Exception as e:
             logger.error("Error procesando texto libre para %s: %s", user_id, e)
             mensaje = "Error al procesar tu respuesta."
 
+        # Quitar teclados inline anteriores si el usuario responde con texto libre
+        inline_msg_ids = context.user_data.pop("inline_msg_ids", [])
+        for msg_id in inline_msg_ids:
+            try:
+                await context.bot.edit_message_reply_markup(
+                    chat_id=update.effective_chat.id, message_id=msg_id, reply_markup=None
+                )
+            except Exception:
+                pass
+
         if mensaje:
-            reply_markup = ReplyKeyboardRemove()
-            if "presiona OMITIR" in mensaje:
-                from telegram import InlineKeyboardMarkup, InlineKeyboardButton
-                reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("⏭️ OMITIR", callback_data="omitir_num_parte")]])
+            reply_markup = _get_reply_markup_for_mensaje(mensaje, estado, context_data)
                 
-            await update.message.reply_text(
+            sent_msg = await update.message.reply_text(
                 mensaje,
                 reply_markup=reply_markup,
                 parse_mode="HTML"
             )
+            
+            if reply_markup and isinstance(reply_markup, InlineKeyboardMarkup):
+                if "inline_msg_ids" not in context.user_data:
+                    context.user_data["inline_msg_ids"] = []
+                context.user_data["inline_msg_ids"].append(sent_msg.message_id)
 
     return procesar_respuesta
+
+
+# ─────────────────────────────────────────
+# Callback: botones inline personalizados (Línea, Responsable)
+# ─────────────────────────────────────────
+def create_opcion_callback(api_client):
+    """
+    Factory para el callback de botones inline de opciones.
+    """
+    @prevent_double_tap
+    async def opcion_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        query = update.callback_query
+        if not query or not update.effective_user:
+            return
+
+        await query.answer()
+
+        user_id = update.effective_user.id if update.effective_user else None
+        opcion = query.data.split(":", 1)[1]
+
+        # Quitar el teclado inline del mensaje actual y anteriores
+        inline_msg_ids = context.user_data.pop("inline_msg_ids", [])
+        if update.effective_message.id not in inline_msg_ids:
+            inline_msg_ids.append(update.effective_message.id)
+            
+        for msg_id in inline_msg_ids:
+            try:
+                await context.bot.edit_message_reply_markup(
+                    chat_id=update.effective_chat.id, message_id=msg_id, reply_markup=None
+                )
+            except Exception:
+                pass
+
+        if opcion in ["Otra", "Otro"]:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="<i>Por favor, escribe el valor manualmente:</i>",
+                parse_mode="HTML"
+            )
+            return
+
+        try:
+            result = await api_client.responder_defecto(user_id, opcion)
+            mensaje = result.get('mensaje')
+            estado = result.get('estado')
+            context_data = result.get('context_data')
+        except Exception as e:
+            logger.error("Error procesando opcion %s para %s: %s", opcion, user_id, e)
+            mensaje = "Error al procesar la opción."
+
+        if mensaje:
+            reply_markup = _get_reply_markup_for_mensaje(mensaje, estado, context_data)
+
+            sent_msg = await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=mensaje,
+                parse_mode="HTML",
+                reply_markup=reply_markup,
+            )
+            if reply_markup and isinstance(reply_markup, InlineKeyboardMarkup):
+                if "inline_msg_ids" not in context.user_data:
+                    context.user_data["inline_msg_ids"] = []
+                context.user_data["inline_msg_ids"].append(sent_msg.message_id)
+
+    return opcion_callback
+
+
+def _get_reply_markup_for_mensaje(mensaje: str, estado: str = None, context_data: dict = None):
+    """
+    Analiza el texto de respuesta del backend y determina si debe llevar teclado inline.
+    """
+    reply_markup = ReplyKeyboardRemove()
+    
+    if estado == "ESPERANDO_MODELO":
+        modelos = context_data.get('historial_modelos', []) if context_data else []
+        if modelos:
+            from shared.utils.format_utils import abreviar_modelo
+            # Texto corto en el botón, valor completo en callback_data
+            botones = [InlineKeyboardButton(abreviar_modelo(m), callback_data=f"opcion:{m}") for m in modelos]
+            # Como están abreviados, caben perfectamente 2 por fila
+            keyboard = [botones[i:i+2] for i in range(0, len(botones), 2)]
+            keyboard.append([InlineKeyboardButton("Otro", callback_data="opcion:Otro")])
+            reply_markup = InlineKeyboardMarkup(keyboard)
+    elif estado == "ESPERANDO_NUMERO_PARTE":
+        reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("OMITIR", callback_data="omitir_num_parte")]])
+    elif estado == "ESPERANDO_LINEA":
+        lineas = context_data.get('lineas_validas', []) if context_data else []
+        botones = [InlineKeyboardButton(val, callback_data=f"opcion:{val}") for val in lineas]
+        keyboard = [botones[i:i+3] for i in range(0, len(botones), 3)]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+    elif estado == "ESPERANDO_RESPONSABLE":
+        responsables = context_data.get('responsables_validos', []) if context_data else []
+        botones = [InlineKeyboardButton(r, callback_data=f"opcion:{r}") for r in responsables]
+        # Distribuir en filas de máximo 3
+        keyboard = [botones[i:i+3] for i in range(0, len(botones), 3)]
+        keyboard.append([InlineKeyboardButton("Otro", callback_data="opcion:Otro")])
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+    return reply_markup

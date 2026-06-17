@@ -1,6 +1,6 @@
 from typing import Dict, Any, Callable, Tuple
 from .entities import EstadoConversacion, FSMContext, FSMResult
-from .validators import validar_cantidad, validar_modelo, validar_linea
+from .validators import validar_cantidad, validar_modelo, validar_linea, validar_responsable
 
 import os
 
@@ -52,10 +52,10 @@ class RegistroFSM:
                 "<b>[5/6] Responsable</b>\n"
                 "Bien. ¿Quién es el responsable?\n"
                 "<code>Ej: XM</code>",
-                "⚠️ Por favor, ingresa solo números para la cantidad."
+                "Por favor, ingresa solo números para la cantidad."
             )
             self.transitions[EstadoConversacion.ESPERANDO_RESPONSABLE] = (
-                lambda x: True,
+                validar_responsable,
                 "responsable",
                 EstadoConversacion.ESPERANDO_DESCRIPCION,
                 "<b>[6/6] Descripción</b>\n"
@@ -88,10 +88,10 @@ class RegistroFSM:
                 "<b>[4/5] Responsable</b>\n"
                 "Bien. ¿Quién es el responsable?\n"
                 "<code>Ej: XM</code>",
-                "⚠️ Por favor, ingresa solo números para la cantidad."
+                "Por favor, ingresa solo números para la cantidad."
             )
             self.transitions[EstadoConversacion.ESPERANDO_RESPONSABLE] = (
-                lambda x: True,
+                validar_responsable,
                 "responsable",
                 EstadoConversacion.ESPERANDO_DESCRIPCION,
                 "<b>[5/5] Descripción</b>\n"
@@ -131,8 +131,13 @@ class RegistroFSM:
                 nuevo_estado=estado_actual
             )
             
-        # Parse especial para cantidad
-        valor = int(texto) if clave == "cantidad" else texto
+        # Parse y normalización
+        if clave == "cantidad":
+            valor = int(texto)
+        elif clave == "descripcion":
+            valor = texto.strip()
+        else:
+            valor = texto.strip().upper()
         
         # Muta el contexto
         context.update_dato(clave, valor)

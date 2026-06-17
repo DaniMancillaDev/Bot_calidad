@@ -45,6 +45,7 @@ class PanelOperativo {
         // Edit form fields
         this.editId = document.getElementById('edit-id');
         this.editCant = document.getElementById('edit-cant');
+        this.editLinea = document.getElementById('edit-linea');
         this.editResp = document.getElementById('edit-resp');
         this.editDesc = document.getElementById('edit-desc');
     }
@@ -68,6 +69,11 @@ class PanelOperativo {
             // Toggle Group
             const groupHeader = target.closest('.group-header');
             if (groupHeader) {
+                const btnSelectUser = target.closest('.btn-select-user');
+                if (btnSelectUser) {
+                    this.toggleSelectUser(btnSelectUser.dataset.user);
+                    return;
+                }
                 this.toggleGrupo(groupHeader.dataset.groupId);
                 return;
             }
@@ -87,11 +93,18 @@ class PanelOperativo {
             // Row click for selection
             const tr = target.closest('tr');
             if (tr && tr.dataset.index !== undefined && !target.closest('th')) {
-                // If clicked checkbox directly, prevent double toggle
-                if (target.type !== 'checkbox') {
-                    this.toggleSelect(parseInt(tr.dataset.index));
-                } else {
+                // Evitar selección de texto con doble click rápido
+                if (e.detail > 1) {
+                    window.getSelection().removeAllRanges();
+                }
+                // Si hizo clic en checkbox directamente, actualizar estado
+                if (target.type === 'checkbox') {
+                    const idx = parseInt(tr.dataset.index);
+                    this.registros[idx]._selected = target.checked;
+                    tr.classList.toggle('selected', target.checked);
                     this.updateSelectionState();
+                } else {
+                    this.toggleSelect(parseInt(tr.dataset.index));
                 }
                 return;
             }
@@ -169,11 +182,20 @@ class PanelOperativo {
         const colspan = this.isSuperUser ? 10 : 9;
         const headerTbody = document.createElement('tbody');
         headerTbody.innerHTML = `
-            <tr class="group-header" data-group-id="group-${userId}" style="background: var(--surface2); cursor: pointer; transition: background 0.2s;" role="button" aria-expanded="false">
-                <td colspan="${colspan}">
-                    <span id="icon-group-${userId}" style="display:inline-block; width:20px;">▶</span>
-                    <strong style="margin-left: 8px;">Usuario ID: ${userId}</strong>
-                    <span class="badge" style="margin-left:12px; background: var(--surface); border: 1px solid var(--border);">${g.length} registros</span>
+            <tr class="group-header" data-group-id="group-${userId}" style="background: var(--surface2); cursor: pointer; transition: background 0.2s; user-select: none;" role="button" aria-expanded="false">
+                <td style="vertical-align: middle;">
+                    <span class="drag-handle" style="visibility: hidden;">⠿</span>
+                    <input type="checkbox" class="group-check btn-select-user" data-user="${userId}" aria-label="Seleccionar grupo completo" style="cursor: pointer; transform: scale(1.1); margin: 0;">
+                </td>
+                <td colspan="${colspan - 1}">
+                    <div style="display:flex; align-items:center;">
+                        <span id="icon-group-${userId}" style="display:inline-block; width:24px; color: var(--text-muted); transition: transform 0.2s; font-size: 0.9rem;">▶</span>
+                        <span style="font-weight: 500; margin-right: 8px; color: var(--text);">Usuario</span>
+                        <span class="badge-user" style="font-size: 0.9rem; padding: 4px 8px;">${userId}</span>
+                        <span class="badge" style="margin-left: 12px; background: rgba(255,255,255,0.05); color: var(--text-muted); border: 1px solid var(--border); font-size: 0.8rem;">
+                            ${g.length} registro${g.length !== 1 ? 's' : ''}
+                        </span>
+                    </div>
                 </td>
             </tr>
         `;
@@ -233,7 +255,7 @@ class PanelOperativo {
         const isHidden = tbody.style.display === 'none';
 
         tbody.style.display = isHidden ? '' : 'none';
-        icon.textContent = isHidden ? '▼' : '▶';
+        icon.style.transform = isHidden ? 'rotate(90deg)' : 'rotate(0deg)';
         header.setAttribute('aria-expanded', isHidden);
     }
 
@@ -241,7 +263,36 @@ class PanelOperativo {
         const checked = this.selectAllCheckbox.checked;
         this.registros.forEach(r => { if (!r._hidden) r._selected = checked; });
         this.updateSelectionState();
-        this.renderTabla();
+        
+        // Actualizar UI sin re-renderizar todo el DOM
+        this.registros.forEach(r => {
+            if (!r._hidden) {
+                const tr = document.querySelector(`tr[data-index="${r._originalIndex}"]`);
+                if (tr) {
+                    tr.classList.toggle('selected', checked);
+                    const cb = tr.querySelector('.row-check');
+                    if (cb) cb.checked = checked;
+                }
+            }
+        });
+    }
+
+    toggleSelectUser(userId) {
+        const groupRegs = this.registros.filter(r => String(r.user_id) === String(userId) && !r._hidden);
+        const allSelected = groupRegs.length > 0 && groupRegs.every(r => r._selected);
+        const newState = !allSelected;
+        
+        groupRegs.forEach(r => r._selected = newState);
+        
+        groupRegs.forEach(r => {
+            const tr = document.querySelector(`tr[data-index="${r._originalIndex}"]`);
+            if (tr) {
+                tr.classList.toggle('selected', newState);
+                const cb = tr.querySelector('.row-check');
+                if (cb) cb.checked = newState;
+            }
+        });
+        this.updateSelectionState();
     }
 
     toggleSelect(index) {
@@ -257,10 +308,22 @@ class PanelOperativo {
     }
 
     updateSelectionState() {
-        const selected = this.registros.filter(r => r._selected);
+        const visibleRegs = this.registros.filter(r => !r._hidden);
+        const selected = this.registros.filter(r => r._selected && !r._hidden);
         const count = selected.length;
         const btnAgrupar = document.getElementById('btn-agrupar');
         
+        if (visibleRegs.length > 0 && count === visibleRegs.length) {
+            this.selectAllCheckbox.checked = true;
+            this.selectAllCheckbox.indeterminate = false;
+        } else if (count > 0) {
+            this.selectAllCheckbox.checked = false;
+            this.selectAllCheckbox.indeterminate = true;
+        } else {
+            this.selectAllCheckbox.checked = false;
+            this.selectAllCheckbox.indeterminate = false;
+        }
+
         if (count > 0) {
             this.selectionCountText.textContent = `${count} seleccionado${count !== 1 ? 's' : ''}`;
             this.floatingActionBar.classList.add('visible');
@@ -315,6 +378,26 @@ class PanelOperativo {
             this.floatingActionBar.classList.remove('visible');
             this.floatingActionBar.setAttribute('aria-hidden', 'true');
         }
+
+        // Sync group checkboxes
+        const groups = [...new Set(visibleRegs.map(r => r.user_id))];
+        groups.forEach(userId => {
+            const groupRegs = visibleRegs.filter(r => r.user_id === userId);
+            const groupSelected = groupRegs.filter(r => r._selected).length;
+            const groupCheckbox = document.querySelector(`.group-check[data-user="${userId}"]`);
+            if (groupCheckbox) {
+                if (groupSelected === 0) {
+                    groupCheckbox.checked = false;
+                    groupCheckbox.indeterminate = false;
+                } else if (groupSelected === groupRegs.length) {
+                    groupCheckbox.checked = true;
+                    groupCheckbox.indeterminate = false;
+                } else {
+                    groupCheckbox.checked = false;
+                    groupCheckbox.indeterminate = true;
+                }
+            }
+        });
     }
 
     filtrarTabla() {
@@ -447,6 +530,7 @@ class PanelOperativo {
         
         this.editId.value = id;
         this.editCant.value = reg.cantidad || 1;
+        this.editLinea.value = reg.linea || '';
         this.editResp.value = reg.responsable || '';
         this.editDesc.value = reg.descripcion || '';
         
@@ -461,11 +545,12 @@ class PanelOperativo {
         const id = parseInt(this.editId.value);
         const payload = {
             cantidad: parseInt(this.editCant.value),
+            linea: this.editLinea.value.trim(),
             responsable: this.editResp.value.trim(),
             descripcion: this.editDesc.value.trim()
         };
         
-        if (!payload.cantidad || !payload.responsable || !payload.descripcion) {
+        if (!payload.cantidad || !payload.responsable || !payload.descripcion || !payload.linea) {
             this.mostrarToast("Todos los campos son obligatorios.");
             return;
         }

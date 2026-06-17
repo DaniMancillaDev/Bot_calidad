@@ -79,32 +79,20 @@ class RegistrosReporteView(APIView):
             p = PerfilUsuario.objects.select_related('usuario').get(telegram_user_id=telegram_id)
             nombre_completo = f"{p.usuario.first_name} {p.usuario.last_name}".strip() or p.usuario.username
 
+            from django.utils import timezone
+            from datetime import timedelta
+            limite = timezone.now() - timedelta(hours=14)
+
             if p.rol == 'admin':
-                qs = RegistroDefecto.objects.filter(turno=p.turno, departamento=p.departamento)
+                qs = RegistroDefecto.objects.filter(turno=p.turno, departamento=p.departamento, fecha_registro__gte=limite)
             else:
-                qs = RegistroDefecto.objects.filter(user_id=telegram_id)
+                qs = RegistroDefecto.objects.filter(user_id=telegram_id, fecha_registro__gte=limite)
 
             qs = qs.order_by('-fecha_registro')
 
-            def formatear_rango(fotos_list):
-                if not fotos_list: return ""
-                nums = sorted(list(set(fotos_list)))
-                rangos = []
-                if not nums: return ""
-                
-                inicio = fin = nums[0]
-                for n in nums[1:]:
-                    if n == fin + 1:
-                        fin = n
-                    else:
-                        rangos.append(f"({inicio:03d}-{fin:03d})" if inicio != fin else f"({inicio:03d})")
-                        inicio = fin = n
-                rangos.append(f"({inicio:03d}-{fin:03d})" if inicio != fin else f"({inicio:03d})")
-                return "".join(rangos)
-
-            registros = []
+            # 1. Extraer listas de fotos por registro
+            registros_con_fotos = []
             for r in qs:
-                # r.fotos es un TextField que guarda "1, 2, 3"
                 try:
                     raw_fotos = r.fotos
                     if isinstance(raw_fotos, str):
@@ -115,10 +103,43 @@ class RegistrosReporteView(APIView):
                         f_list = []
                 except Exception:
                     f_list = []
+                registros_con_fotos.append((r, f_list))
+
+            # 2. Construir orden global (ascendente por fecha) para asignar IDs secuenciales
+            fotos_globales = []
+            for r, f_list in registros_con_fotos:
+                for num in f_list:
+                    fotos_globales.append((r.fecha_registro, r.id, num))
+            
+            from datetime import datetime
+            fotos_globales.sort(key=lambda x: (x[0] if x[0] else datetime.min, x[2]))
+            
+            mapping = {}
+            for i, item in enumerate(fotos_globales, 1):
+                mapping[(item[1], item[2])] = i
+
+            def formatear_rango_mapeado(r_id, fotos_list):
+                if not fotos_list: return ""
+                mapped_nums = sorted([mapping[(r_id, n)] for n in fotos_list if (r_id, n) in mapping])
+                if not mapped_nums: return ""
+                rangos = []
+                inicio = fin = mapped_nums[0]
+                for n in mapped_nums[1:]:
+                    if n == fin + 1:
+                        fin = n
+                    else:
+                        rangos.append(f"({inicio:02d}-{fin:02d})" if inicio != fin else f"({inicio:02d})")
+                        inicio = fin = n
+                rangos.append(f"({inicio:02d}-{fin:02d})" if inicio != fin else f"({inicio:02d})")
+                return "".join(rangos)
+
+            # 3. Construir respuesta
+            registros = []
+            for r, f_list in registros_con_fotos:
 
                 registros.append({
                     'id': r.id,
-                    'fotos': formatear_rango(f_list), 
+                    'fotos': formatear_rango_mapeado(r.id, f_list), 
                     'modelo': (r.modelo or "").upper(),
                     'linea': (r.linea or "").upper(),
                     'cantidad': r.cantidad,
@@ -167,27 +188,17 @@ class ReporteTurnoView(APIView):
             if p.rol != 'admin':
                 return Response({'error': 'Acceso restringido a administradores.'}, status=status.HTTP_403_FORBIDDEN)
 
-            qs = RegistroDefecto.objects.filter(turno=turno, departamento=p.departamento)
+            from django.utils import timezone
+            from datetime import timedelta
+            limite = timezone.now() - timedelta(hours=14)
+
+            qs = RegistroDefecto.objects.filter(turno=turno, departamento=p.departamento, fecha_registro__gte=limite)
             if operador_id and operador_id != 'todos':
                 qs = qs.filter(user_id=operador_id)
             qs = qs.order_by('fecha_registro')
 
-            def formatear_rango(fotos_list):
-                if not fotos_list: return ""
-                nums = sorted(list(set(fotos_list)))
-                if not nums: return ""
-                rangos = []
-                inicio = fin = nums[0]
-                for n in nums[1:]:
-                    if n == fin + 1:
-                        fin = n
-                    else:
-                        rangos.append(f"({inicio:03d}-{fin:03d})" if inicio != fin else f"({inicio:03d})")
-                        inicio = fin = n
-                rangos.append(f"({inicio:03d}-{fin:03d})" if inicio != fin else f"({inicio:03d})")
-                return "".join(rangos)
-
-            registros = []
+            # 1. Extraer listas de fotos por registro
+            registros_con_fotos = []
             for r in qs:
                 try:
                     raw_fotos = r.fotos
@@ -199,10 +210,43 @@ class ReporteTurnoView(APIView):
                         f_list = []
                 except Exception:
                     f_list = []
+                registros_con_fotos.append((r, f_list))
+
+            # 2. Construir orden global (ascendente por fecha)
+            fotos_globales = []
+            for r, f_list in registros_con_fotos:
+                for num in f_list:
+                    fotos_globales.append((r.fecha_registro, r.id, num))
+            
+            from datetime import datetime
+            fotos_globales.sort(key=lambda x: (x[0] if x[0] else datetime.min, x[2]))
+            
+            mapping = {}
+            for i, item in enumerate(fotos_globales, 1):
+                mapping[(item[1], item[2])] = i
+
+            def formatear_rango_mapeado(r_id, fotos_list):
+                if not fotos_list: return ""
+                mapped_nums = sorted([mapping[(r_id, n)] for n in fotos_list if (r_id, n) in mapping])
+                if not mapped_nums: return ""
+                rangos = []
+                inicio = fin = mapped_nums[0]
+                for n in mapped_nums[1:]:
+                    if n == fin + 1:
+                        fin = n
+                    else:
+                        rangos.append(f"({inicio:02d}-{fin:02d})" if inicio != fin else f"({inicio:02d})")
+                        inicio = fin = n
+                rangos.append(f"({inicio:02d}-{fin:02d})" if inicio != fin else f"({inicio:02d})")
+                return "".join(rangos)
+
+            # 3. Construir respuesta
+            registros = []
+            for r, f_list in registros_con_fotos:
 
                 registros.append({
                     'id': r.id,
-                    'fotos': formatear_rango(f_list),
+                    'fotos': formatear_rango_mapeado(r.id, f_list),
                     'modelo': (r.modelo or "").upper(),
                     'linea': (r.linea or "").upper(),
                     'cantidad': r.cantidad,
@@ -322,44 +366,54 @@ class SesionCancelarView(APIView):
 
     def post(self, request):
         telegram_id = request.data.get('telegram_id')
-        fotos = request.data.get('fotos', [])
 
         if not telegram_id:
             return Response({'error': 'telegram_id is required'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            from calidad.models import ContadorGrupo, PerfilUsuario
+            from calidad.models import ContadorUsuario, PerfilUsuario
             from django.db import transaction
+            from calidad.services.redis_conversation_state import RedisConversationState
 
             p = PerfilUsuario.objects.get(telegram_user_id=telegram_id)
+
+            # Leer fotos de la sesión activa en Redis ANTES de finalizar
+            state_repo = RedisConversationState()
+            estado_redis = state_repo.obtener(telegram_id)
+            fotos = estado_redis.get('fotos', []) if estado_redis else []
+
+            # Fallback: aceptar fotos del payload si Redis no tiene datos
+            if not fotos:
+                fotos = request.data.get('fotos', [])
 
             # Rollback contador al mínimo de la sesión cancelada
             contador_revertido = None
             if fotos:
                 valor_anterior = max(1, min(fotos))
                 with transaction.atomic():
-                    contador = ContadorGrupo.objects.select_for_update().get(
-                        turno=p.turno, departamento=p.departamento
+                    contador = ContadorUsuario.objects.select_for_update().get(
+                        telegram_user_id=telegram_id
                     )
                     contador.contador_actual = valor_anterior
                     contador.save(update_fields=['contador_actual'])
                 contador_revertido = valor_anterior
 
-            from calidad.application.workflows.defecto_workflow import DefectoWorkflow
-            DefectoWorkflow()._state_repo.finalizar(telegram_id)
+            # Finalizar DESPUÉS de leer fotos
+            state_repo.finalizar(telegram_id)
 
             nombre_completo = f"{p.usuario.first_name} {p.usuario.last_name}".strip() or p.usuario.username
             return Response({
                 'status': 'cancelled',
                 'contador_revertido': contador_revertido,
+                'fotos': fotos,
                 'nombre': nombre_completo,
             })
 
         except PerfilUsuario.DoesNotExist:
             return Response({'error': 'Usuario no encontrado'}, status=status.HTTP_404_NOT_FOUND)
-        except ContadorGrupo.DoesNotExist:
+        except ContadorUsuario.DoesNotExist:
             # No hay contador que revertir, igual respondemos OK
-            return Response({'status': 'cancelled', 'contador_revertido': None})
+            return Response({'status': 'cancelled', 'contador_revertido': None, 'fotos': fotos})
         except Exception as e:
             logger.error("Error en SesionCancelarView: %s", e)
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -369,7 +423,7 @@ class SesionLimpiarView(APIView):
     """
     POST /workflows/sesion/limpiar/
     Payload: { telegram_id }
-    Lógica: borra registros BD del usuario + reinicia contador a 1.
+    Lógica: borra registros BD del usuario.
     """
     authentication_classes = [StaticApiKeyAuthentication]
     permission_classes = [IsAuthenticated]
@@ -380,7 +434,7 @@ class SesionLimpiarView(APIView):
             return Response({'error': 'telegram_id is required'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            from calidad.models import RegistroDefecto, ContadorGrupo, PerfilUsuario
+            from calidad.models import RegistroDefecto, ContadorUsuario, PerfilUsuario
             from django.db import transaction
 
             p = PerfilUsuario.objects.select_related('usuario').get(telegram_user_id=telegram_id)
@@ -392,6 +446,8 @@ class SesionLimpiarView(APIView):
                     turno=p.turno,
                     departamento=p.departamento
                 ).delete()
+                # El usuario confirmó que sí desea que su comando limpiar reinicie la cuenta a 1
+                ContadorUsuario.objects.filter(telegram_user_id=telegram_id).update(contador_actual=1)
 
             from calidad.application.workflows.defecto_workflow import DefectoWorkflow
             DefectoWorkflow()._state_repo.finalizar(telegram_id)
@@ -415,7 +471,7 @@ class SesionLimpiarFotosView(APIView):
     """
     POST /workflows/sesion/limpiar-fotos/
     Payload: { telegram_id }
-    Lógica: reinicia contador a 1. El borrado físico lo hace el bot.
+    Lógica: El borrado físico lo hace el bot. No reinicia contador.
     """
     authentication_classes = [StaticApiKeyAuthentication]
     permission_classes = [IsAuthenticated]
@@ -426,10 +482,12 @@ class SesionLimpiarFotosView(APIView):
             return Response({'error': 'telegram_id is required'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            from calidad.models import ContadorGrupo, PerfilUsuario
+            from calidad.models import ContadorUsuario, PerfilUsuario
 
             p = PerfilUsuario.objects.select_related('usuario').get(telegram_user_id=telegram_id)
-            ContadorGrupo.objects.filter(turno=p.turno, departamento=p.departamento).update(contador_actual=1)
+            
+            # El usuario confirmó que sí desea que el contador se reinicie a 1
+            ContadorUsuario.objects.filter(telegram_user_id=telegram_id).update(contador_actual=1)
 
             from calidad.application.workflows.defecto_workflow import DefectoWorkflow
             DefectoWorkflow()._state_repo.finalizar(telegram_id)
@@ -501,12 +559,44 @@ class DefectoResponderView(APIView):
             
         workflow = DefectoWorkflow()
         result = workflow.responder(telegram_id, texto)
-        return Response({
+        
+        response_data = {
             'exito': result.exito,
             'mensaje': result.mensaje,
             'estado': result.nuevo_estado.value if result.nuevo_estado else None,
             'finalizado': result.finalizado
-        })
+        }
+        
+        # Inyectar datos de contexto si es necesario para sugerencias UI (sin romper abstracción)
+        if result.nuevo_estado and result.nuevo_estado.value == "ESPERANDO_RESPONSABLE":
+            from calidad.models import Responsable
+            if 'context_data' not in response_data:
+                response_data['context_data'] = {}
+            response_data['context_data']['responsables_validos'] = Responsable.values
+        elif result.nuevo_estado and result.nuevo_estado.value == "ESPERANDO_MODELO":
+            from calidad.models import RegistroDefecto
+            # Extraemos los últimos 20 para garantizar encontrar 3 únicos recientes
+            historial = list(RegistroDefecto.objects.filter(
+                user_id=telegram_id
+            ).exclude(modelo='').order_by('-id').values_list('modelo', flat=True)[:20])
+            
+            unicos = []
+            for m in historial:
+                if m not in unicos:
+                    unicos.append(m)
+                if len(unicos) == 3:
+                    break
+                    
+            if 'context_data' not in response_data:
+                response_data['context_data'] = {}
+            response_data['context_data']['historial_modelos'] = unicos
+        elif result.nuevo_estado and result.nuevo_estado.value == "ESPERANDO_LINEA":
+            from calidad.models import Linea
+            if 'context_data' not in response_data:
+                response_data['context_data'] = {}
+            response_data['context_data']['lineas_validas'] = Linea.values
+            
+        return Response(response_data)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -574,6 +664,41 @@ class ExportEvidenciaInfoView(APIView):
             logger.error(f"Error ExportEvidenciaInfoView: {str(e)}")
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+class _SelfDeletingFile:
+    """File wrapper that deletes the underlying path when closed.
+
+    Django's FileResponse calls .close() on the file object after the
+    response has been fully streamed.  By hooking into close() we
+    guarantee the temp ZIP is removed without cutting the download and
+    without relying on OS /tmp cleanup or external cron jobs.
+    """
+
+    def __init__(self, path: str):
+        self._path = path
+        self._file = open(path, 'rb')
+
+    # Proxy every attribute to the wrapped file so FileResponse
+    # sees a normal file-like object (read, seek, tell, etc.).
+    def __getattr__(self, name):
+        return getattr(self._file, name)
+
+    def close(self):
+        try:
+            self._file.close()
+        finally:
+            try:
+                os.unlink(self._path)
+            except OSError:
+                pass  # already gone — harmless
+
+    # Context-manager support (not required by FileResponse, but good hygiene)
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
+
+
 class ExportEvidenciaView(APIView):
     authentication_classes = [StaticApiKeyAuthentication]
     permission_classes = [IsAuthenticated]
@@ -600,17 +725,16 @@ class ExportEvidenciaView(APIView):
                 inicio=inicio,
                 fin=fin
             )
-            
-            response = FileResponse(open(zip_path, 'rb'), as_attachment=True, filename='evidencia.zip')
+
+            # _SelfDeletingFile wraps the raw file handle and calls
+            # os.unlink(zip_path) when FileResponse closes it after
+            # the download finishes — no temp file leak.
+            response = FileResponse(
+                _SelfDeletingFile(zip_path),
+                as_attachment=True,
+                filename='evidencia.zip',
+            )
             response['X-Image-Count'] = count
-            
-            # Para borrar el archivo temporal después de enviarlo, 
-            # en Django se puede usar una solución con un wrapper o simplemente 
-            # dejar que el sistema operativo limpie /tmp. Como usamos tempfile, 
-            # el SO lo limpiará en el próximo reinicio, pero para no llenar el disco,
-            # lo ideal sería que una tarea periódica lo borre o que el FileResponse lo elimine al cerrar.
-            # Una forma común en un view async:
-            # FileResponse ya cierra el descriptor, pero os.remove requiere cuidado.
             return response
 
         except PermissionDenied as e:
@@ -620,5 +744,4 @@ class ExportEvidenciaView(APIView):
         except Exception as e:
             logger.error(f"Error ExportEvidenciaView: {str(e)}")
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 

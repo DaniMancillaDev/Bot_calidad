@@ -27,6 +27,24 @@ class Departamento(models.TextChoices):
     ENG  = 'ENG',  'Ingeniería'
 
 
+class Linea(models.TextChoices):
+    T01 = 'T01', 'Línea T01'
+    T02 = 'T02', 'Línea T02'
+    T03 = 'T03', 'Línea T03'
+    T05 = 'T05', 'Línea T05'
+    T06 = 'T06', 'Línea T06'
+    T07 = 'T07', 'Línea T07'
+    T08 = 'T08', 'Línea T08'
+    C01 = 'C01', 'CELDA'
+    INCOMING = 'INCOMING', 'Incoming Inspection'
+
+
+class Responsable(models.TextChoices):
+    TSCEM = 'TSCEM', 'TSCEM'
+    XM = 'XM', 'XM'
+    WH = 'WH', 'Warehouse'
+
+
 class EstadoRevision(models.TextChoices):
     PENDIENTE  = 'pendiente',  'Pendiente'
     REVISADO   = 'revisado',   'Revisado'
@@ -100,20 +118,18 @@ class RegistroDefecto(models.Model):
 # CONTADORES DE FOTO POR GRUPO (turno + depto)
 # ============================================================
 
-class ContadorGrupo(models.Model):
-    """Secuencia de numeración de fotos por turno y departamento."""
-    turno          = models.CharField(max_length=1, choices=Turno.choices)
-    departamento   = models.CharField(max_length=10, choices=Departamento.choices)
+class ContadorUsuario(models.Model):
+    """Secuencia de numeración de fotos individual por usuario."""
+    telegram_user_id = models.BigIntegerField(unique=True, db_index=True)
     contador_actual = models.IntegerField(default=1)
 
     class Meta:
-        db_table            = 'contadores_grupo'
-        unique_together     = [('turno', 'departamento')]
-        verbose_name        = 'Contador de Grupo'
-        verbose_name_plural = 'Contadores de Grupo'
+        db_table            = 'contadores_usuario'
+        verbose_name        = 'Contador de Usuario'
+        verbose_name_plural = 'Contadores de Usuario'
 
     def __str__(self):
-        return f"Turno {self.turno}/{self.departamento} → {self.contador_actual}"
+        return f"Usuario {self.telegram_user_id} → {self.contador_actual}"
 
 
 # ============================================================

@@ -32,8 +32,9 @@
   <table aria-label="Registros de calidad">
     <thead>
       <tr>
-        <th style="width:50px;">
-          <input type="checkbox" id="selectAll" aria-label="Seleccionar todos los registros visibles">
+        <th style="width:50px; vertical-align: middle;">
+          <span class="drag-handle" style="visibility: hidden;">⠿</span>
+          <input type="checkbox" id="selectAll" aria-label="Seleccionar todos los registros visibles" style="margin: 0;">
         </th>
         <th data-sort="fecha" tabindex="0" role="button">Fecha ↕</th>
         <th data-sort="modelo" tabindex="0" role="button">Modelo ↕</th>
@@ -68,6 +69,11 @@
     <div class="modal-form-group">
       <label for="edit-cant">Cantidad:</label>
       <input type="number" id="edit-cant" min="1">
+    </div>
+    
+    <div class="modal-form-group">
+      <label for="edit-linea">Línea:</label>
+      <input type="text" id="edit-linea">
     </div>
     
     <div class="modal-form-group">
@@ -110,6 +116,6 @@
 </script>
 
 <!-- Script de Inicialización -->
-<script src="{% static 'js/panel_operativo.js' %}" defer></script>
+<script src="{% static 'js/panel_operativo.js' %}?v={% now 'U' %}" defer></script>
 {% endblock %}
 
