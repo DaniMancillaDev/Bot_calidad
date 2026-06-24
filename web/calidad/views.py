@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db.models import Count, Sum, Q
+from django.db.models import Count, Q
 from django.conf import settings
 from django.http import Http404, HttpResponse, JsonResponse
 from django.views.decorators.http import require_POST
@@ -476,8 +476,6 @@ def revisar_orientacion(request):
     Muestra todas las fotos del turno con su ángulo auto-detectado,
     y permite al usuario corregirlas con botones de rotación.
     """
-    from .services.reporte_excel import detect_orientations_batch
-
     registros_data = []
     fecha_desde = ''
     fecha_hasta = ''

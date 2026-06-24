@@ -1,12 +1,10 @@
 import os
 import zipfile
 import tempfile
-import asyncio
 from pathlib import Path
 from datetime import datetime
 
 from django.core.exceptions import PermissionDenied
-from django.db.models import QuerySet
 
 from calidad.models import PerfilUsuario, RegistroDefecto
 
@@ -133,13 +131,11 @@ class ExportService:
         """
         p = self._get_perfil(requester_id)
 
-        user_fotos = {}
-        
         from django.utils import timezone
         from datetime import timedelta
-        # Obtener solo la evidencia del turno/sesión actual (últimas 14 horas)
+        # Obtener solo la evidencia del turno/sesión actual o recientes (últimas 72 horas)
         # Esto evita descargar historial viejo y permite descargar fotos recién "revisadas"
-        limite = timezone.now() - timedelta(hours=14)
+        limite = timezone.now() - timedelta(hours=72)
 
         if not turno and not operador_id:
             # Caso /descargar simple del operador

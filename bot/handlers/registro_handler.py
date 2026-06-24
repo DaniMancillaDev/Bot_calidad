@@ -13,12 +13,10 @@ ISP : usa solo metodos de api_client.
 import asyncio
 import logging
 import os
-from datetime import datetime
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import ContextTypes
 from bot.handlers.lock_utils import prevent_double_tap
-from telegram.constants import ReactionEmoji
 
 logger = logging.getLogger(__name__)
 

@@ -22,8 +22,6 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from bot.handlers.lock_utils import prevent_double_tap
 
-from bot.helpers.zip_helper import crear_y_enviar_zip
-
 logger = logging.getLogger(__name__)
 
 import os

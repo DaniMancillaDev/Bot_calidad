@@ -23,8 +23,8 @@ PROXIES_PATH = os.getenv("PROXIES_PATH", "media_files/proxies")
 
 
 def _borrar_archivos_usuario(user_id: int) -> int:
-    """Borra fotos, thumbs y proxies de un usuario. Retorna total de archivos borrados."""
-    total = 0
+    """Borra fotos, thumbs y proxies de un usuario. Retorna total de fotos originales borradas."""
+    total_originales = 0
     for base in [FOTOS_PATH, THUMBS_PATH, PROXIES_PATH]:
         folder = os.path.join(base, str(user_id))
         if not os.path.exists(folder):
@@ -34,10 +34,12 @@ def _borrar_archivos_usuario(user_id: int) -> int:
             if os.path.isfile(ruta):
                 try:
                     os.remove(ruta)
-                    total += 1
+                    # Solo sumar al total si es la foto original
+                    if base == FOTOS_PATH:
+                        total_originales += 1
                 except OSError as e:
                     logger.warning("No se pudo borrar %s: %s", ruta, e)
-    return total
+    return total_originales
 
 
 def create_limpiar(api_client):

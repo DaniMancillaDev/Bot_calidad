@@ -16,7 +16,9 @@
     "separador mal pegado": "SPACER WITH LITTLE GLUE",
     "falta de pegamento en separador": "SPACER WITH LITTLE GLUE",
     "separador con poco adhesivo": "SPACER WITH LITTLE GLUE",
-    "separador despegado": "SPACER WITH LITTLE GLUE"
+    "separador despegado": "SPACER WITH LITTLE GLUE",
+    "pin dañado": "BACK COVER WITH DAMAGED PIN",
+    "pin danado": "BACK COVER WITH DAMAGED PIN"
   },
   "components": {
     "etiqueta": "LABEL",
@@ -74,9 +76,11 @@
     "bkz": "BEZEL",
     "marco": "BEZEL",
     "cushion": "CUSHION",
+    "cushion die": "CUSHION DIE",
     "cover lateral": "REAR COVER",
     "mylar": "MYLAR",
-    "bolsa": "PROTECT BAG"
+    "bolsa": "PROTECT BAG",
+    "by carton": "CUSHION DIE"
   },
   "material_areas": {
     "REFLECTOR FILM": "CLEAN ROOM",
@@ -95,7 +99,9 @@
     "DECO": "INPUT",
     "mylar": "INPUT",
     "CUSHION": "INPUT",
-    "PROTECT BAG": "INPUT"
+    "PROTECT BAG": "INPUT",
+    "CUSHION DIE": "INPUT",
+    "BACK COVER WITH DAMAGED PIN": "INPUT"
   },
   "symptoms": {
     "dañad": "DAMAGED",

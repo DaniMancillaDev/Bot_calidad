@@ -6,7 +6,6 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework import status
-from django.shortcuts import get_object_or_404
 from calidad.models import PerfilUsuario
 
 logger = logging.getLogger(__name__)
@@ -81,7 +80,7 @@ class RegistrosReporteView(APIView):
 
             from django.utils import timezone
             from datetime import timedelta
-            limite = timezone.now() - timedelta(hours=14)
+            limite = timezone.now() - timedelta(hours=72)
 
             if p.rol == 'admin':
                 qs = RegistroDefecto.objects.filter(turno=p.turno, departamento=p.departamento, fecha_registro__gte=limite)
@@ -190,7 +189,7 @@ class ReporteTurnoView(APIView):
 
             from django.utils import timezone
             from datetime import timedelta
-            limite = timezone.now() - timedelta(hours=14)
+            limite = timezone.now() - timedelta(hours=72)
 
             qs = RegistroDefecto.objects.filter(turno=turno, departamento=p.departamento, fecha_registro__gte=limite)
             if operador_id and operador_id != 'todos':

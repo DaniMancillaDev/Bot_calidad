@@ -11,7 +11,6 @@ Estado se guarda en Redis. Compatible con múltiples workers y Gunicorn.
 import logging
 import os
 import zipfile
-import tempfile
 import re
 import time
 from pathlib import Path
