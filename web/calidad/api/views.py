@@ -315,7 +315,7 @@ class UsuarioEstadisticasView(APIView):
         if not telegram_id:
             return Response({'error': 'telegram_id is required'}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            from calidad.models import PerfilUsuario, RegistroDefecto, ContadorGrupo
+            from calidad.models import PerfilUsuario, RegistroDefecto, ContadorUsuario
             from django.db.models import Sum, Count
             
             p = PerfilUsuario.objects.select_related('usuario').get(telegram_user_id=telegram_id)
@@ -327,8 +327,8 @@ class UsuarioEstadisticasView(APIView):
             
             # Contador actual
             try:
-                contador = ContadorGrupo.objects.get(turno=p.turno, departamento=p.departamento).contador_actual
-            except ContadorGrupo.DoesNotExist:
+                contador = ContadorUsuario.objects.get(telegram_user_id=telegram_id).contador_actual
+            except ContadorUsuario.DoesNotExist:
                 contador = 1
                 
             nombre_completo = f"{p.usuario.first_name} {p.usuario.last_name}".strip()

@@ -39,6 +39,9 @@ infra_up() {
         sleep 1
     done
     info "Postgres listo ✓"
+    until docker exec bot_calidad_redis redis-cli ping &>/dev/null; do
+        sleep 1
+    done
     info "Redis listo ✓"
 }
 
