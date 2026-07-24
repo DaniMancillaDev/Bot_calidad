@@ -16,9 +16,9 @@ SECRET_KEY = os.getenv(
 
 DEBUG = os.getenv('DJANGO_DEBUG', 'True').lower() in ('true', '1', 'yes')
 
-ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,0.0.0.0,web').split(',')
-if '.ngrok-free.dev' not in ALLOWED_HOSTS:
-    ALLOWED_HOSTS.append('.ngrok-free.dev')
+ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,0.0.0.0,web,*').split(',')
+if '.trycloudflare.com' not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append('.trycloudflare.com')
 
 USE_X_FORWARDED_HOST = True
 
@@ -33,6 +33,7 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',
     'django.contrib.postgres',  # ArrayField, SearchVector, etc.
     'calidad',  # Nuestra app principal
+    'workspace', # Workspace de Importación (Fase 2)
 ]
 
 # ====================================
@@ -157,7 +158,9 @@ CELERY_TASK_TRACK_STARTED = True
 # Limpiar resultados de Redis después de 1 hora (evitar memory leak)
 CELERY_RESULT_EXPIRES = 3600
 
-# Ngrok support
+# Cloudflare support
 CSRF_TRUSTED_ORIGINS = [
-    'https://*.ngrok-free.dev',
+    'https://*.trycloudflare.com',
+    'https://*.danimancilladev.dev',
+    'https://iqa.danimancilladev.dev',
 ]

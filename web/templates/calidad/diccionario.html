@@ -93,7 +93,7 @@
 {% block topbar_actions %}
   {% if user.is_superuser %}
   <button id="btn-save" class="btn btn-primary" onclick="guardarDiccionario()">
-    <span class="icon">💾</span> Guardar Cambios
+    <span class="material-symbols-outlined" style="vertical-align:text-bottom;">save</span> Guardar Cambios
   </button>
   {% endif %}
 {% endblock %}
@@ -331,7 +331,7 @@
     .then(r => r.json())
     .then(data => {
       btnSave.disabled = false;
-      btnSave.innerHTML = '<span class="icon">💾</span> Guardar Cambios';
+      btnSave.innerHTML = '<span class="material-symbols-outlined" style="vertical-align:text-bottom;">save</span> Guardar Cambios';
       
       if (data.success) {
         showMessage('✅ Diccionario guardado en el servidor correctamente.', 'success');
@@ -341,7 +341,7 @@
     })
     .catch(e => {
       btnSave.disabled = false;
-      btnSave.innerHTML = '<span class="icon">💾</span> Guardar Cambios';
+      btnSave.innerHTML = '<span class="material-symbols-outlined" style="vertical-align:text-bottom;">save</span> Guardar Cambios';
       showMessage('❌ Error de red.', 'error');
     });
   }

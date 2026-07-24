@@ -315,20 +315,29 @@ class UsuarioEstadisticasView(APIView):
         if not telegram_id:
             return Response({'error': 'telegram_id is required'}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            from calidad.models import PerfilUsuario, RegistroDefecto, ContadorUsuario
+            from calidad.models import PerfilUsuario, RegistroDefecto, GlobalCounter
             from django.db.models import Sum, Count
+            from django.utils import timezone
+            from datetime import timedelta
             
             p = PerfilUsuario.objects.select_related('usuario').get(telegram_user_id=telegram_id)
             
+            hoy = timezone.localtime().replace(hour=0, minute=0, second=0, microsecond=0)
+            manana = hoy + timedelta(days=1)
+            
             # Estadísticas de registros
-            agg = RegistroDefecto.objects.filter(user_id=telegram_id).aggregate(
+            agg = RegistroDefecto.objects.filter(
+                user_id=telegram_id,
+                fecha_registro__gte=hoy,
+                fecha_registro__lt=manana
+            ).aggregate(
                 total=Count('id'), cantidad_total=Sum('cantidad')
             )
             
             # Contador actual
             try:
-                contador = ContadorUsuario.objects.get(telegram_user_id=telegram_id).contador_actual
-            except ContadorUsuario.DoesNotExist:
+                contador = GlobalCounter.objects.get(nombre='fotos').valor_actual
+            except GlobalCounter.DoesNotExist:
                 contador = 1
                 
             nombre_completo = f"{p.usuario.first_name} {p.usuario.last_name}".strip()
@@ -356,67 +365,26 @@ class UsuarioEstadisticasView(APIView):
 class SesionCancelarView(APIView):
     """
     POST /workflows/sesion/cancelar/
-    Payload: { telegram_id, fotos: [int,...] }
-    Lógica: rollback contador (a min(fotos)), limpia estado Redis.
-    El borrado físico de fotos lo hace el bot (tiene acceso al volumen).
+    Payload: { telegram_id }
+    Lógica: Solo cierra FSM en Redis. No toca registros, fotos, ni contador.
     """
     authentication_classes = [StaticApiKeyAuthentication]
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         telegram_id = request.data.get('telegram_id')
-
         if not telegram_id:
             return Response({'error': 'telegram_id is required'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            from calidad.models import ContadorUsuario, PerfilUsuario
-            from django.db import transaction
-            from calidad.services.redis_conversation_state import RedisConversationState
+            from calidad.application.workflows.defecto_workflow import DefectoWorkflow
+            DefectoWorkflow()._state_repo.finalizar(telegram_id)
 
-            p = PerfilUsuario.objects.get(telegram_user_id=telegram_id)
-
-            # Leer fotos de la sesión activa en Redis ANTES de finalizar
-            state_repo = RedisConversationState()
-            estado_redis = state_repo.obtener(telegram_id)
-            fotos = estado_redis.get('fotos', []) if estado_redis else []
-
-            # Fallback: aceptar fotos del payload si Redis no tiene datos
-            if not fotos:
-                fotos = request.data.get('fotos', [])
-
-            # Rollback contador al mínimo de la sesión cancelada
-            contador_revertido = None
-            if fotos:
-                valor_anterior = max(1, min(fotos))
-                with transaction.atomic():
-                    contador = ContadorUsuario.objects.select_for_update().get(
-                        telegram_user_id=telegram_id
-                    )
-                    contador.contador_actual = valor_anterior
-                    contador.save(update_fields=['contador_actual'])
-                contador_revertido = valor_anterior
-
-            # Finalizar DESPUÉS de leer fotos
-            state_repo.finalizar(telegram_id)
-
-            nombre_completo = f"{p.usuario.first_name} {p.usuario.last_name}".strip() or p.usuario.username
-            return Response({
-                'status': 'cancelled',
-                'contador_revertido': contador_revertido,
-                'fotos': fotos,
-                'nombre': nombre_completo,
-            })
-
-        except PerfilUsuario.DoesNotExist:
-            return Response({'error': 'Usuario no encontrado'}, status=status.HTTP_404_NOT_FOUND)
-        except ContadorUsuario.DoesNotExist:
-            # No hay contador que revertir, igual respondemos OK
-            return Response({'status': 'cancelled', 'contador_revertido': None, 'fotos': fotos})
+            logger.info("FSM Cancelado para usuario %s", telegram_id)
+            return Response({'status': 'cancelled'})
         except Exception as e:
             logger.error("Error en SesionCancelarView: %s", e)
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
 class SesionLimpiarView(APIView):
     """
@@ -438,18 +406,28 @@ class SesionLimpiarView(APIView):
 
             p = PerfilUsuario.objects.select_related('usuario').get(telegram_user_id=telegram_id)
 
-            with transaction.atomic():
-                # Borrar registros propios del turno actual para este usuario
-                RegistroDefecto.objects.filter(
-                    user_id=telegram_id,
-                    turno=p.turno,
-                    departamento=p.departamento
-                ).delete()
-                # El usuario confirmó que sí desea que su comando limpiar reinicie la cuenta a 1
-                ContadorUsuario.objects.filter(telegram_user_id=telegram_id).update(contador_actual=1)
+            # FASE 0/1: SIMULACIÓN/NEUTRALIZACIÓN
+            # NO ejecutamos .delete() sobre RegistroDefecto
+            registros_afectados = RegistroDefecto.objects.filter(
+                user_id=telegram_id,
+                turno=p.turno,
+                departamento=p.departamento
+            ).count()
+            
+            logger.info("AUDITORÍA /limpiar | Usuario: %s | Registros evitados de borrado: %s", telegram_id, registros_afectados)
+            
+            # NO reiniciamos contador de usuario por seguridad de trazabilidad.
 
             from calidad.application.workflows.defecto_workflow import DefectoWorkflow
             DefectoWorkflow()._state_repo.finalizar(telegram_id)
+
+            # NO ejecutamos .delete() sobre EvidenciaFotografica
+            from calidad.models import EvidenciaFotografica
+            fotos_afectadas = EvidenciaFotografica.objects.filter(
+                ruta_archivo__startswith=f"fotos/{telegram_id}/"
+            ).count()
+            
+            logger.info("AUDITORÍA /limpiar | Usuario: %s | Fotos evitadas de borrado: %s", telegram_id, fotos_afectadas)
 
             nombre_completo = f"{p.usuario.first_name} {p.usuario.last_name}".strip() or p.usuario.username
             return Response({
@@ -481,20 +459,32 @@ class SesionLimpiarFotosView(APIView):
             return Response({'error': 'telegram_id is required'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            from calidad.models import ContadorUsuario, PerfilUsuario
-
+            import os
+            from django.conf import settings
+            from calidad.models import ContadorUsuario, PerfilUsuario, EvidenciaFotografica
+            
             p = PerfilUsuario.objects.select_related('usuario').get(telegram_user_id=telegram_id)
             
-            # El usuario confirmó que sí desea que el contador se reinicie a 1
-            ContadorUsuario.objects.filter(telegram_user_id=telegram_id).update(contador_actual=1)
-
-            from calidad.application.workflows.defecto_workflow import DefectoWorkflow
-            DefectoWorkflow()._state_repo.finalizar(telegram_id)
+            # FASE 0/1: NO borrar nada, solo calcular métricas reales comparando FS y BD
+            en_uso = EvidenciaFotografica.objects.filter(
+                ruta_archivo__startswith=f"fotos/{telegram_id}/"
+            ).count()
+            
+            huerfanas = 0
+            fotos_dir = settings.MEDIA_ROOT / "fotos" / str(telegram_id)
+            if fotos_dir.exists():
+                archivos_fisicos = [f.name for f in fotos_dir.iterdir() if f.is_file() and not f.name.startswith("tmp_")]
+                # Si total en disco > en BD, asumimos que la diferencia son huérfanas
+                huerfanas = max(0, len(archivos_fisicos) - en_uso)
+            
+            logger.info("AUDITORÍA /limpiar_fotos | Usuario: %s | En uso (BD): %s | Huérfanas detectadas: %s", telegram_id, en_uso, huerfanas)
 
             nombre_completo = f"{p.usuario.first_name} {p.usuario.last_name}".strip() or p.usuario.username
             return Response({
-                'status': 'photos_cleaned',
+                'status': 'analysis',
                 'nombre': nombre_completo,
+                'fotos_en_uso': en_uso,
+                'fotos_huerfanas': huerfanas
             })
 
         except PerfilUsuario.DoesNotExist:
@@ -502,6 +492,32 @@ class SesionLimpiarFotosView(APIView):
         except Exception as e:
             logger.error("Error en SesionLimpiarFotosView: %s", e)
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class SesionCancelarView(APIView):
+    """
+    POST /workflows/sesion/cancelar/
+    Payload: { telegram_id }
+    Lógica: Solo cierra FSM en Redis. No toca registros, fotos, ni contador.
+    """
+    authentication_classes = [StaticApiKeyAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        telegram_id = request.data.get('telegram_id')
+        if not telegram_id:
+            return Response({'error': 'telegram_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            from calidad.application.workflows.defecto_workflow import DefectoWorkflow
+            DefectoWorkflow()._state_repo.finalizar(telegram_id)
+
+            logger.info("FSM Cancelado para usuario %s", telegram_id)
+            return Response({'status': 'cancelled'})
+        except Exception as e:
+            logger.error("Error en SesionCancelarView: %s", e)
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # WORKFLOW: DEFECTO FSM

@@ -21,36 +21,32 @@ class LimpiezaViewsTest(TestCase):
         
         self.contador = ContadorUsuario.objects.create(
             telegram_user_id=self.telegram_id,
-            contador_actual=10
+            contador_actual=5
         )
 
     @patch('calidad.application.workflows.defecto_workflow.DefectoWorkflow')
     def test_limpiar_fotos_view_reinicia_contador(self, mock_workflow):
-        """Prueba que /limpiar-fotos SÍ reinicia el ContadorUsuario a 1."""
+        """Prueba que /limpiar-fotos NO reinicia el ContadorUsuario a 1."""
         url = reverse('workflow_sesion_limpiar_fotos')
+        response = self.client.post(url, {'telegram_id': 12345}, HTTP_AUTHORIZATION='Api-Key test-api-key')
         
-        response = self.client.post(url, {'telegram_id': self.telegram_id}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'analysis')
         
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data['status'], 'photos_cleaned')
-        
-        # Verificar que el contador se reinició a 1
-        self.contador.refresh_from_db()
-        self.assertEqual(self.contador.contador_actual, 1, "El contador debió reiniciarse a 1.")
+        c = ContadorUsuario.objects.get(telegram_user_id=12345)
+        self.assertEqual(c.contador_actual, 5, "El contador NO debe reiniciarse al simular limpiar-fotos")
 
     @patch('calidad.application.workflows.defecto_workflow.DefectoWorkflow')
     def test_limpiar_view_reinicia_contador(self, mock_workflow):
-        """Prueba que /limpiar SÍ reinicia el ContadorUsuario a 1."""
+        """Prueba que /limpiar NO reinicia el ContadorUsuario a 1."""
         url = reverse('workflow_sesion_limpiar')
+        response = self.client.post(url, {'telegram_id': 12345}, HTTP_AUTHORIZATION='Api-Key test-api-key')
         
-        response = self.client.post(url, {'telegram_id': self.telegram_id}, format='json')
-        
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['status'], 'cleaned')
         
-        # Verificar que el contador se reinició a 1
-        self.contador.refresh_from_db()
-        self.assertEqual(self.contador.contador_actual, 1, "El contador debió reiniciarse a 1.")
+        c = ContadorUsuario.objects.get(telegram_user_id=12345)
+        self.assertEqual(c.contador_actual, 5, "El contador NO debe reiniciarse al cancelar sesión con limpiar")
 
 class ContadorUsuarioIsolationTest(TestCase):
     def setUp(self):

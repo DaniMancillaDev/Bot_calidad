@@ -21,9 +21,10 @@
 
 <!-- Barra de Herramientas -->
 <div class="controls-bar" role="toolbar" aria-label="Controles de la tabla">
-  <div style="flex: 1; display: flex; align-items: center; gap: 8px;">
+  <div style="flex: 1; display: flex; align-items: center; gap: 8px; position: relative;">
     <label for="search-input" class="sr-only">Buscar registros:</label>
-    <input type="text" id="search-input" class="search-box" placeholder="🔍 Buscar modelo, descripción, línea, usuario (Presiona / para enfocar)" aria-label="Buscar en la tabla">
+    <span class="material-symbols-outlined" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none;">search</span>
+    <input type="text" id="search-input" class="search-box" style="padding-left: 40px; width: 100%;" placeholder="Buscar modelo, descripción, línea, usuario (Presiona / para enfocar)" aria-label="Buscar en la tabla">
   </div>
 </div>
 
@@ -102,8 +103,8 @@
 <!-- Floating Action Bar -->
 <div id="floating-action-bar" aria-hidden="true">
   <span class="selection-count" id="selection-count-text">0 seleccionados</span>
-  <button id="btn-agrupar" class="btn btn-secondary">🔗 Agrupar</button>
-  <button id="btn-excel" class="btn btn-primary">📊 Proceder a Excel</button>
+  <button id="btn-agrupar" class="btn btn-secondary"><span class="material-symbols-outlined" style="vertical-align:text-bottom; font-size: 1.2rem;">link</span> Agrupar</button>
+  <button id="btn-excel" class="btn btn-primary"><span class="material-symbols-outlined" style="vertical-align:text-bottom; font-size: 1.2rem;">table_view</span> Proceder a Excel</button>
 </div>
 
 <!-- Datos iniciales para el JS -->

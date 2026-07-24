@@ -265,6 +265,10 @@
     <option value="30" {% if f_dias == "30" %}selected{% endif %}>Último mes</option>
   </select>
 
+  <!-- Filtros de Rango de Fechas (Compatibilidad con Historial) -->
+  <input type="date" name="fecha_desde" value="{{ request.GET.fecha_desde }}" title="Desde fecha">
+  <input type="date" name="fecha_hasta" value="{{ request.GET.fecha_hasta }}" title="Hasta fecha">
+
   <input type="text" name="q" placeholder="Buscar modelo, defecto, operario..."
          value="{{ f_q }}" class="filter-search">
 
@@ -272,7 +276,7 @@
     Filtrar
   </button>
 
-  {% if f_estado or f_turno or f_dias or f_q %}
+  {% if f_estado or f_turno or f_dias or f_q or request.GET.fecha_desde or request.GET.fecha_hasta %}
   <a href="{% url 'galeria_fotos' %}" class="btn btn-ghost" style="padding:8px 16px;">
     Limpiar
   </a>

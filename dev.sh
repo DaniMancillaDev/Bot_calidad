@@ -15,7 +15,10 @@ set -euo pipefail
 # ── Cargar variables de entorno local ─────────────────────────────────────────
 ENV_FILE=".env.local"
 if [[ ! -f "$ENV_FILE" ]]; then
-    echo "ERROR: $ENV_FILE no existe. Copia de .env y ajusta hostnames a localhost."
+    ENV_FILE=".env"
+fi
+if [[ ! -f "$ENV_FILE" ]]; then
+    echo "ERROR: Ni .env ni .env.local existen."
     exit 1
 fi
 set -a
@@ -49,7 +52,10 @@ infra_down() {
     warn "Bajando infra Docker..."
     docker-compose stop postgres redis
     warn "Aniquilando procesos locales (bot, web, celery, hupper)..."
-    pkill -9 -f "hupper|manage.py|celery|main\.py|-m main" || true
+    pkill -9 -f "main.py" || true
+    pkill -9 -f "celery" || true
+    pkill -9 -f "manage.py runserver" || true
+    pkill -9 -f "hupper" || true
     
     # Aniquilar cualquier otro dev.sh en background (excepto este mismo)
     # para evitar que su trap de EXIT detenga los contenedores asincrónicamente
@@ -68,10 +74,6 @@ migrate() {
 }
 
 run_web() {
-    if command -v ngrok &> /dev/null; then
-        info "Iniciando tunnel 'otro' de ngrok..."
-        ngrok start otro --log stdout &
-    fi
     info "Iniciando Django en localhost:8000..."
     uv run python web/manage.py runserver 0.0.0.0:8000
 }
@@ -92,11 +94,6 @@ run_all() {
     migrate
 
     trap "warn 'Deteniendo procesos...'; kill 0; infra_down" EXIT INT TERM
-
-    if command -v ngrok &> /dev/null; then
-        info "Iniciando tunnel 'otro' de ngrok..."
-        ngrok start otro --log stdout &
-    fi
 
     info "Iniciando web + bot (hupper) + celery en paralelo..."
     uv run python web/manage.py runserver 0.0.0.0:8000 &

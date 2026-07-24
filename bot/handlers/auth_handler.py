@@ -41,6 +41,13 @@ def create_verificar_acceso(api_client):
         if not update.effective_user:
             return
 
+        if (
+            update.message
+            and update.message.text
+            and update.message.text.startswith("/mi_id")
+        ):
+            return
+
         user_id = update.effective_user.id if update.effective_user else None
 
         # ── Lógica de Caché ──
@@ -60,19 +67,11 @@ def create_verificar_acceso(api_client):
         except Exception as e:
             # En caso de error de red, asumimos sin acceso y mostramos mensaje amigable
             tiene_acceso = False
-            if update.message and not update.message.text.startswith("/mi_id"):
+            if update.message and not (update.message.text and update.message.text.startswith("/mi_id")):
                 await update.message.reply_text("<b>Conectando con el servidor.</b> Por favor intenta de nuevo.", parse_mode="HTML")
                 raise ApplicationHandlerStop()
 
         if not tiene_acceso:
-            # /mi_id siempre permitido para que puedan solicitar acceso
-            if (
-                update.message
-                and update.message.text
-                and update.message.text.startswith("/mi_id")
-            ):
-                return
-
             if update.message:
                 await update.message.reply_text(
                     "<b>Acceso denegado.</b>\n\n"

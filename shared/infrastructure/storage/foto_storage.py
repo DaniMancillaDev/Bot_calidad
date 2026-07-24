@@ -71,8 +71,8 @@ class LocalFotoStorage:
     """
 
     def __init__(self, base_path: str | None = None, thumbs_path: str | None = None):
-        self._base = Path(base_path or os.getenv("FOTOS_PATH", "media_files/fotos"))
-        self._thumbs = Path(thumbs_path or os.getenv("THUMBS_PATH", "media_files/thumbs"))
+        self._base = Path(base_path or os.getenv("FOTOS_PATH", "media_files/fotos")).resolve()
+        self._thumbs = Path(thumbs_path or os.getenv("THUMBS_PATH", "media_files/thumbs")).resolve()
 
     def get_user_folder(self, user_id: int) -> Path:
         folder = self._base / str(user_id)

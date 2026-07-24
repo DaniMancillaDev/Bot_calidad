@@ -1,12 +1,13 @@
 {% extends "calidad/base.html" %}
-{% block title %}Revisar Orientación — Panel de Calidad{% endblock %}
-{% block page_title %}Revisión de Fotos para Excel{% endblock %}
+{% block title %}Centro de Revisión — Panel de Calidad{% endblock %}
+{% block page_title %}Centro de Revisión{% endblock %}
 
 {% block topbar_actions %}
   <div style="display:flex; gap:10px; align-items:center;">
     <span id="status-msg" style="font-size:.85rem; color:var(--text-muted);"></span>
-    <button id="btn-generar" class="btn btn-primary" onclick="generarExcel()" disabled>
-      ⏳ Analizando...
+    <button id="btn-generar" class="btn btn-primary" onclick="generarExcel()" style="display:flex; align-items:center; background:#3b82f6; color:white; border:none; padding:8px 16px; border-radius:6px; cursor:pointer;">
+      <span class="material-symbols-outlined" style="font-size: 1.1rem; margin-right: 6px;">download</span> 
+      <span id="btn-generar-text">Generar Excel</span>
     </button>
   </div>
 {% endblock %}
@@ -14,395 +15,651 @@
 {% block extra_head %}
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <style>
-  .instruccion {
-    background: rgba(99,102,241,.1); border: 1px solid rgba(99,102,241,.3);
-    border-radius: 10px; padding: 14px 20px; margin-bottom: 24px;
-    font-size: .88rem; color: var(--text-muted); line-height: 1.6;
-  }
-  .instruccion strong { color: var(--text); }
+/* CSS Reset and layout */
+body { overflow: hidden; background: #0f1117; color: #e2e8f0; }
+#content-wrapper { padding: 0 !important; margin: 0 !important; height: calc(100vh - 70px); }
 
-  .foto-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 16px;
-    margin-bottom: 32px;
-  }
-  .foto-card {
-    background: var(--surface); border: 2px solid var(--border);
-    border-radius: 12px; overflow: hidden;
-    transition: border-color .2s;
-  }
-  .foto-card.corregida { border-color: var(--accent); }
-  .foto-card.ok        { border-color: var(--success); }
+.app-container { display: flex; height: 100%; width: 100%; font-family: 'Inter', system-ui, sans-serif; }
 
-  .foto-img-wrapper {
-    display: flex; justify-content: center; align-items: center;
-    background: #000; height: 200px; overflow: hidden;
-  }
-  .foto-img-wrapper img {
-    max-width: 100%; max-height: 200px; object-fit: contain;
-    transition: transform .3s ease;
-  }
+/* Left Navigator */
+.navigator { width: 300px; min-width: 300px; background: #161a22; border-right: 1px solid #2d3748; display: flex; flex-direction: column; z-index: 10; }
+.navigator-header { padding: 14px; border-bottom: 1px solid #2d3748; }
+.navigator-header input { width: 100%; margin-top: 10px; padding: 9px; border-radius: 6px; border: 1px solid #334155; background: #0f1117; color: white; outline: none; box-sizing: border-box; }
+.navigator-header input:focus { border-color: #3b82f6; }
 
-  .foto-controls {
-    padding: 10px 12px; display: flex; justify-content: space-between; align-items: center;
-    border-top: 1px solid var(--border);
-  }
-  .foto-num { font-weight: 600; font-size: .9rem; }
-  .angulo-badge {
-    font-size: .75rem; padding: 2px 8px; border-radius: 99px;
-    background: var(--surface2); color: var(--text-muted);
-  }
-  .rot-btns { display: flex; gap: 4px; }
-  .rot-btn {
-    background: var(--surface2); border: 1px solid var(--border);
-    color: var(--text); border-radius: 6px; padding: 4px 8px;
-    cursor: pointer; font-size: .9rem; transition: all .15s;
-  }
-  .rot-btn:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+.record-list { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+.record-card { padding: 10px; border-radius: 8px; background: #1e293b; cursor: pointer; border: 2px solid transparent; transition: all 0.2s; position: relative; }
+.record-card:hover { background: #2d3748; }
+.record-card.active { border-color: #3b82f6; background: #2a374f; }
+.record-card h4 { margin: 0 0 3px 0; font-size: 0.9rem; color: #f8fafc; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.record-card p { margin: 0 0 3px 0; font-size: 0.78rem; color: #94a3b8; }
+.record-card .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; background: #334155; color: #cbd5e1; }
+.record-card .badge.error { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
 
-  /* Drag & Drop */
-  .drag-handle {
-    position: absolute; top: 6px; left: 6px;
-    background: rgba(0,0,0,.45); color: #fff;
-    border-radius: 5px; padding: 2px 5px;
-    font-size: .75rem; cursor: grab; user-select: none;
-    opacity: 0; transition: opacity .15s;
-    z-index: 10; /* Asegura que la imagen no lo tape */
-  }
-  .foto-img-wrapper { position: relative; }
-  .foto-card:hover .drag-handle { opacity: 1; }
-  .sortable-ghost {
-    opacity: .35;
-    border: 2px dashed var(--accent) !important;
-    background: rgba(99,102,241,.08) !important;
-  }
-  .sortable-drag { cursor: grabbing !important; box-shadow: 0 8px 32px rgba(0,0,0,.35); }
+/* Viewer */
+.viewer { flex: 1; display: flex; flex-direction: column; position: relative; overflow: hidden; background: #090a0f; }
+.viewer-toolbar { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); z-index: 20; display: flex; gap: 12px; background: rgba(15, 17, 23, 0.7); backdrop-filter: blur(8px); padding: 8px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); }
+.viewer-toolbar button { background: transparent; border: none; color: #cbd5e1; border-radius: 8px; padding: 8px 12px; cursor: pointer; font-size: 0.9rem; transition: background 0.2s; display: flex; align-items: center; gap: 6px; }
+.viewer-toolbar button:hover { background: rgba(255,255,255,0.1); color: white; }
 
-  .section-header {
-    font-size: .8rem; font-weight: 600; color: var(--text-muted);
-    text-transform: uppercase; letter-spacing: .07em;
-    margin: 20px 0 12px; display: flex; align-items: center; gap: 8px;
-  }
-  .section-header::after {
-    content: ''; flex: 1; height: 1px; background: var(--border);
-  }
+.main-photo-wrapper { flex: 1; display: flex; justify-content: center; align-items: center; overflow: hidden; position: relative; cursor: grab; }
+.main-photo-wrapper:active { cursor: grabbing; }
+.main-photo { max-width: 100%; max-height: 100%; object-fit: contain; transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); user-select: none; }
+.main-photo.dragging { transition: none; }
 
-  #loading-overlay {
-    display: none; position: fixed; inset: 0;
-    background: rgba(15,17,23,.85); z-index: 1000;
-    justify-content: center; align-items: center; flex-direction: column; gap: 16px;
-  }
-  .spinner {
-    width: 48px; height: 48px; border: 4px solid var(--border);
-    border-top-color: var(--accent); border-radius: 50%;
-    animation: spin .8s linear infinite;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .scan-pulse {
-    animation: pulse 1.5s infinite;
-  }
-  @keyframes pulse {
-    0% { opacity: 0.5; }
-    50% { opacity: 1; }
-    100% { opacity: 0.5; }
-  }
+/* Carousel */
+.carousel { background: #0f1117; border-top: 1px solid #1e293b; display: flex; gap: 20px; padding: 24px; overflow-x: auto; align-items: center; justify-content: flex-start; min-height: 120px; }
+.carousel img { flex-shrink: 0; height: 76px; width: 76px; object-fit: cover; border-radius: 10px; cursor: grab; border: 3px solid transparent; opacity: 0.5; transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+.carousel img:active { cursor: grabbing; }
+.carousel img:hover { opacity: 0.9; transform: translateY(-3px); }
+.carousel img.active { border-color: #3b82f6; opacity: 1; transform: scale(1.15) translateY(-3px); box-shadow: 0 10px 20px rgba(0,0,0,0.6), 0 0 0 2px rgba(59,130,246,0.3); }
+
+/* Loading Overlay */
+#loading-overlay { display: none; position: absolute; inset: 0; background: rgba(15,17,23,.85); z-index: 1000; justify-content: center; align-items: center; flex-direction: column; gap: 16px; backdrop-filter: blur(4px); }
+.spinner { width: 40px; height: 40px; border: 3px solid #2d3748; border-top-color: #3b82f6; border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Inspector (right panel) ── */
+.inspector {
+  width: 300px; min-width: 300px;
+  background: #161a22; border-left: 1px solid #2d3748;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.inspector-header {
+  padding: 14px 16px; border-bottom: 1px solid #2d3748;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.inspector-header h4 { margin: 0; font-size: 0.95rem; color: #f8fafc; }
+.state-badge {
+  padding: 3px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
+}
+.state-badge.pendiente  { background: rgba(234,179,8,.15);  color:#fde047; }
+.state-badge.revisado   { background: rgba(59,130,246,.15); color:#93c5fd; }
+.state-badge.aprobado   { background: rgba(34,197,94,.15);  color:#86efac; }
+.state-badge.rechazado  { background: rgba(239,68,68,.15);  color:#fca5a5; }
+.state-badge.duplicado  { background: rgba(168,85,247,.15); color:#d8b4fe; }
+.state-badge.borroso    { background: rgba(107,114,128,.15);color:#9ca3af; }
+
+.inspector-body { flex: 1; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 14px; }
+.inspector-empty { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; color: #475569; gap: 10px; padding: 24px; text-align: center; }
+
+.field-group { display: flex; flex-direction: column; gap: 4px; }
+.field-label { font-size: 0.7rem; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; }
+.field-value { font-size: 0.85rem; color: #e2e8f0; }
+.field-input {
+  background: #0f1117; border: 1px solid #334155; border-radius: 6px;
+  color: #e2e8f0; padding: 7px 10px; font-size: 0.85rem; width: 100%; box-sizing: border-box;
+  outline: none; transition: border-color .15s;
+}
+.field-input:focus { border-color: #3b82f6; }
+
+.inspector-divider { height: 1px; background: #2d3748; }
+
+.btn-action {
+  padding: 8px 14px; border-radius: 6px; border: none; cursor: pointer;
+  font-size: 0.82rem; font-weight: 600; transition: all .15s;
+  width: 100%;
+}
+.btn-approve { background: rgba(34,197,94,.15); color: #86efac; }
+.btn-approve:hover { background: rgba(34,197,94,.3); }
+.btn-reject  { background: rgba(239,68,68,.15);  color: #fca5a5; }
+.btn-reject:hover  { background: rgba(239,68,68,.3); }
+.btn-save    { background: rgba(59,130,246,.15); color: #93c5fd; }
+.btn-save:hover    { background: rgba(59,130,246,.3); }
+
+.save-indicator { font-size: 0.75rem; color: #64748b; text-align: center; height: 16px; }
+.save-indicator.ok   { color: #86efac; }
+.save-indicator.err  { color: #fca5a5; }
+
+.foto-info { background: #0f1117; border-radius: 8px; padding: 10px; font-size: 0.78rem; color: #64748b; }
+.foto-info span { color: #94a3b8; }
 </style>
 {% endblock %}
 
 {% block content %}
-
 <!-- OVERLAY DE CARGA -->
 <div id="loading-overlay">
   <div class="spinner"></div>
-  <p style="color: var(--text-muted); font-size:.9rem;">Generando Excel con las fotos...</p>
+  <p id="loading-text" style="color: #94a3b8; font-size:.9rem;">Generando Reporte...</p>
 </div>
 
-<!-- INSTRUCCIÓN -->
-<div class="instruccion">
-  <strong>¿Cómo funciona?</strong><br>
-  1. El sistema detectó automáticamente la orientación de cada foto usando inteligencia artificial.<br>
-  2. <strong>Revisa cada foto</strong>: si la ves girada, usa los botones 🔄 para corregirla. Las fotos corregidas se marcan en <strong style="color:var(--accent)">morado</strong>.<br>
-  3. Cuando todo se vea bien, haz clic en <strong>"Generar y Descargar Excel"</strong> arriba a la derecha.
-</div>
-
-<!-- RESUMEN DE REGISTROS -->
-<div class="section-header">📋 Registros incluidos ({{ registros|length }})</div>
-<div class="card" style="margin-bottom:24px; padding:0; overflow:hidden;">
-  <div class="table-wrapper">
-    <table>
-      <thead>
-        <tr>
-          <th>Fotos</th><th>Modelo</th><th>Línea</th><th>Descripción</th><th>Responsable</th><th>Cant.</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for r in registros %}
-        <tr>
-          <td><code style="font-size:.8rem; color:var(--accent);">{{ r.fotos_str }}</code></td>
-          <td>{{ r.modelo|truncatechars:22 }}</td>
-          <td><span class="badge badge-purple">{{ r.linea }}</span></td>
-          <td>{{ r.descripcion|truncatechars:35 }}</td>
-          <td>{{ r.responsable }}</td>
-          <td>{{ r.cantidad }}</td>
-        </tr>
-        {% empty %}
-        <tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:24px;">Sin registros en este período.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
-
-<!-- GALERÍA DE REVISIÓN -->
-<div class="section-header">🖼️ Fotos a incluir ({{ fotos_preview|length }})</div>
-
-{% if fotos_preview %}
-<div style="font-size:.8rem; color:var(--text-muted); margin-bottom:10px;">
-  💡 <strong>Arrastra</strong> las fotos para cambiar el orden en que aparecerán en el Excel.
-</div>
-<div class="foto-grid" id="foto-grid">
-  {% for foto in fotos_preview %}
-  <div class="foto-card {% if foto.angulo != 0 %}corregida{% else %}ok{% endif %}"
-       id="card-{{ foto.clave }}"
-       data-clave="{{ foto.clave }}"
-       data-num="{{ foto.numero }}"
-       data-angulo="{{ foto.angulo }}">
-    <div class="foto-img-wrapper">
-      <!-- Handle de arrastre -->
-      <div class="drag-handle" title="Arrastra para reordenar">⠿ mover</div>
-      <img id="img-{{ foto.clave }}"
-           src="{{ foto.url }}"
-           alt="Foto {{ foto.numero }}"
-           style="transform: rotate({{ foto.angulo }}deg);"
-           loading="lazy">
+<div class="app-container">
+  <!-- Left Navigator -->
+  <div class="navigator">
+    <div class="navigator-header" style="position: relative;">
+      <h3 style="margin: 0; font-size: 1rem; font-weight: 600; color: white;">Registros</h3>
+      <div style="font-size: 0.78rem; color: #64748b; margin-top: 3px;">{{ registros|length }} registros cargados</div>
+      <span class="material-symbols-outlined" style="position: absolute; left: 18px; bottom: 25px; color: var(--text-muted); pointer-events: none;">search</span>
+      <input type="text" id="search-input" style="padding-left: 35px; margin-top: 15px; width: 100%;" placeholder="Buscar modelo, defecto...">
     </div>
-    <div class="foto-controls">
-      <div>
-        <div class="foto-num">#{{ foto.numero|stringformat:"03d" }}</div>
-        <div class="angulo-badge scan-pulse" id="badge-{{ foto.clave }}">escaneando...</div>
-      </div>
-      <div class="rot-btns">
-        <button class="rot-btn" title="Rotar -90°" onclick="rotar('{{ foto.clave }}', -90)">↺</button>
-        <button class="rot-btn" title="Rotar +90°" onclick="rotar('{{ foto.clave }}', 90)">↻</button>
-        <button class="rot-btn" title="Resetear" onclick="resetear('{{ foto.clave }}')">⊙</button>
-        <button class="rot-btn" id="btn-excluir-{{ foto.clave }}" title="Excluir/Incluir foto" onclick="toggleExcluir('{{ foto.clave }}')" style="color:var(--danger); border-color:var(--danger);">❌</button>
-      </div>
+    <div class="record-list" id="record-list">
+      <!-- Inyectado por JS -->
     </div>
   </div>
-  {% endfor %}
+
+  <!-- Central Viewer -->
+  <div class="viewer">
+    <div class="viewer-toolbar">
+      <button onclick="zoomOut()" title="Alejar">➖</button>
+      <button onclick="resetZoom()" title="Ajustar a Pantalla">⛶ Fit</button>
+      <button onclick="zoomIn()" title="Acercar">➕</button>
+      <div style="width: 1px; background: rgba(255,255,255,0.2); margin: 0 4px;"></div>
+      <button onclick="rotateImage(90)" title="Rotar 90° (Tecla R)">↻ Rotar</button>
+      <button id="btn-excluir" onclick="toggleExcluirFoto()" title="Excluir foto actual" style="color: #ef4444; border-color: #ef4444;">Excluir</button>
+    </div>
+    <div class="main-photo-wrapper" id="viewer-wrapper">
+      <img src="" class="main-photo" id="main-photo" alt="Sin Imagen Seleccionada">
+    </div>
+    <div class="carousel" id="carousel">
+      <!-- Inyectado por JS -->
+    </div>
+  </div>
+
+  <!-- Right Inspector -->
+  <div class="inspector" id="inspector-panel">
+    <!-- Header con estado -->
+    <div class="inspector-header">
+      <h4>Inspector</h4>
+      <span class="state-badge pendiente" id="state-badge">—</span>
+    </div>
+
+    <!-- Empty state -->
+    <div class="inspector-empty" id="inspector-empty">
+      <div style="color:var(--text-muted);"><span class="material-symbols-outlined" style="font-size:3rem;">swipe_left</span></div>
+      <p style="font-size:0.82rem; line-height:1.5;">Selecciona un registro para ver y editar sus metadatos.</p>
+    </div>
+
+    <!-- Form body (oculto hasta selección) -->
+    <div class="inspector-body" id="inspector-body" style="display:none;">
+
+      <!-- Info foto activa -->
+      <div class="foto-info" id="foto-info">Foto: <span id="fi-nombre">—</span> &nbsp;|&nbsp; Ángulo: <span id="fi-angulo">0°</span></div>
+
+      <div class="inspector-divider"></div>
+
+      <!-- Campos editables -->
+      <div class="field-group">
+        <div class="field-label">Modelo</div>
+        <input class="field-input" id="inp-modelo" type="text" placeholder="Modelo">
+      </div>
+      <div class="field-group">
+        <div class="field-label">N° Parte</div>
+        <input class="field-input" id="inp-numparte" type="text" placeholder="Número de parte">
+      </div>
+      <div class="field-group">
+        <div class="field-label">Línea</div>
+        <input class="field-input" id="inp-linea" type="text" placeholder="Línea">
+      </div>
+      <div class="field-group">
+        <div class="field-label">Cantidad</div>
+        <input class="field-input" id="inp-cantidad" type="number" min="1" placeholder="Cantidad">
+      </div>
+      <div class="field-group">
+        <div class="field-label">Responsable</div>
+        <input class="field-input" id="inp-responsable" type="text" placeholder="Responsable">
+      </div>
+      <div class="field-group">
+        <div class="field-label">Defecto / Descripción</div>
+        <textarea class="field-input" id="inp-descripcion" rows="3" placeholder="Descripción del defecto" style="resize:vertical;"></textarea>
+      </div>
+      <div class="field-group">
+        <div class="field-label">SN on set <span style="color:#64748b;font-weight:400;">(una por línea)</span></div>
+        <textarea class="field-input" id="inp-sn" rows="3" placeholder="SN123456&#10;SN789012&#10;..." style="resize:vertical; font-family:monospace; font-size:0.8rem;"></textarea>
+      </div>
+
+      <button class="btn-action btn-save" onclick="guardarMetadatos()"><span class="material-symbols-outlined" style="vertical-align:text-bottom; font-size:1.1rem;">save</span> Guardar Cambios</button>
+      <div class="save-indicator" id="save-indicator"></div>
+
+      <div class="inspector-divider"></div>
+
+
+
+    </div><!-- /inspector-body -->
+  </div><!-- /inspector -->
 </div>
-{% else %}
-<div class="card" style="padding:40px; text-align:center; color:var(--text-muted);">
-  <span style="font-size:2.5rem; display:block; margin-bottom:12px;">📭</span>
-  No hay fotos disponibles para este período. Verifica los filtros de fecha o que el bot haya guardado imágenes.
-</div>
-{% endif %}
+
+<!-- Safe JSON Data -->
+<script id="registros-data" type="application/json">{{ registros_json|safe }}</script>
+<script id="fotos-preview-data" type="application/json">{{ fotos_preview_json|safe }}</script>
 
 <script>
-  // Registros (para enviarlos al generar el Excel)
-  const registros = JSON.parse('{{ registros_json|escapejs }}');
-  const fotosClaves = {{ fotos_preview|length }} > 0 ? {{ fotos_preview|safe }}.map(f => f.clave) : [];
-  
-  // Estado mutable: identificador compuesto (str) -> { angulo: int, excluida: bool, numero: int }
-  const state = {};
-  {% if fotos_preview %}
-  const fotosData = {{ fotos_preview|safe }};
-  fotosData.forEach(f => { state[f.clave] = { angulo: 0, excluida: false, numero: f.numero }; });
-  {% endif %}
+  // ── 1. DATA HYDRATION ────────────────────────────────────────────────────
+  const registrosRaw = JSON.parse(document.getElementById('registros-data').textContent);
+  const fotosPreviewData = JSON.parse(document.getElementById('fotos-preview-data').textContent);
 
-  document.addEventListener('DOMContentLoaded', async () => {
-    if (fotosClaves.length === 0) return;
+  const fotosMap = {};
+  fotosPreviewData.forEach(f => { fotosMap[f.clave] = f; });
 
-    // Inicializar Drag & Drop
-    const grid = document.getElementById('foto-grid');
-    if (grid) {
-      new Sortable(grid, {
-        animation: 150,
-        handle: '.drag-handle', // Solo se arrastra desde la etiqueta
-        ghostClass: 'sortable-ghost',
-        dragClass: 'sortable-drag',
-      });
-    }
+  const appData = registrosRaw.map(reg => {
+    const fotosAsociadas = [];
+    (reg.fotos_nums || []).forEach(num => {
+      const clave = `${reg.user_id}_${num}`;
+      if (fotosMap[clave]) fotosAsociadas.push(fotosMap[clave]);
+    });
     
-    try {
-      const res = await fetch("{% url 'api_detectar_orientacion' %}", {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': getCookie('csrftoken'),
-        },
-        body: JSON.stringify({ fotos: fotosClaves }),
-      });
-      
-      if (res.ok) {
-        const angulos = await res.json();
-        Object.keys(angulos).forEach(k => {
-          const ang = parseInt(angulos[k]);
-          if (state[k]) state[k].angulo = ang;
-          actualizarCard(k);
-        });
-      }
-    } catch(e) {
-      console.error("Error analizando fotos", e);
-      // En caso de error, dejamos todo en 0 y quitamos pulse
-      fotosClaves.forEach(clave => actualizarCard(clave));
-    } finally {
-      const btn = document.getElementById('btn-generar');
-      btn.innerHTML = "⬇️ Generar y Descargar Excel";
-      btn.disabled = false;
-    }
+    // Find the first valid photo to be the cover
+    const validPhotos = fotosAsociadas.filter(f => !f.excluida);
+    return {
+      ...reg,
+      fotos_obj: fotosAsociadas,
+      portada_url: validPhotos.length > 0 ? validPhotos[0].url : (fotosAsociadas.length > 0 ? fotosAsociadas[0].url : null),
+      has_error: validPhotos.length === 0 || !reg.modelo,
+    };
   });
 
-  function rotar(num, delta) {
-    if (state[num].excluida) return;
-    const actual = state[num].angulo || 0;
-    state[num].angulo = ((actual + delta) % 360 + 360) % 360;
-    actualizarCard(num);
+
+
+  // ── 2. STATE ─────────────────────────────────────────────────────────────
+  let activeRecord = null;
+  let activePhoto  = null;
+  let zoomLevel = 1, panX = 0, panY = 0;
+  let isDragging = false, startX = 0, startY = 0;
+  let carouselSortable = null;  // track instance to destroy on re-init
+
+  const recordListEl  = document.getElementById('record-list');
+  const carouselEl    = document.getElementById('carousel');
+  const mainPhotoEl   = document.getElementById('main-photo');
+  const wrapperEl     = document.getElementById('viewer-wrapper');
+  const searchInput   = document.getElementById('search-input');
+
+  // Inspector elements
+  const inspEmpty  = document.getElementById('inspector-empty');
+  const inspBody   = document.getElementById('inspector-body');
+  const stateBadge = document.getElementById('state-badge');
+  const saveInd    = document.getElementById('save-indicator');
+
+  // ── 3. NAVIGATOR ─────────────────────────────────────────────────────────
+  function renderNavigator(query = '') {
+    recordListEl.innerHTML = '';
+    const q = query.toLowerCase();
+    appData.forEach(reg => {
+      if (q && !(reg.modelo||'').toLowerCase().includes(q) && !(reg.descripcion||'').toLowerCase().includes(q)) return;
+      const div = document.createElement('div');
+      div.className = `record-card ${activeRecord && activeRecord.id === reg.id ? 'active' : ''}`;
+      div.dataset.id = reg.id;
+      div.onclick = () => selectRecord(reg);
+      const fallbackSvg = `data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27%23334155%27%3E%3Cpath%20d%3D%27M21%2019V5c0-1.1-.9-2-2-2H5c-1.1%200-2%20.9-2%202v14c0%201.1.9%202%202%202h14c1.1%200%202-.9%202-2zM8.5%2013.5l2.5%203.01L14.5%2012l4.5%206H5l3.5-4.5z%27%2F%3E%3C%2Fsvg%3E`;
+      const imgUrl = reg.portada_url || fallbackSvg;
+      div.innerHTML = `
+        <div style="display:flex; gap:10px; align-items:center;">
+          <div class="drag-handle" style="cursor:grab; color:#64748b; font-size:1.2rem; padding:0 4px;" title="Arrastrar para ordenar">☰</div>
+          <img src="${imgUrl}" onerror="this.onerror=null; this.src='${fallbackSvg}';" style="width:48px; height:48px; object-fit:cover; border-radius:6px; background:#0f1117; border: 1px solid #1e293b;">
+          <div style="flex:1; min-width:0;">
+            <h4>${reg.modelo || 'Sin Modelo'}</h4>
+            <p style="color:#cbd5e1; font-weight:500;">${reg.linea || 'Sin Línea'}</p>
+            <p style="color:#ef4444; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${reg.descripcion || 'Sin Defecto'}</p>
+            <div style="margin-top:5px;">
+              <span class="badge" style="margin-right:4px;">${reg.cantidad} pzs</span>
+              <span class="badge ${reg.fotos_obj.length === 0 ? 'error' : ''}">
+                <span class="material-symbols-outlined" style="font-size:0.9rem; vertical-align:middle;">photo_camera</span> ${reg.fotos_obj.length}
+              </span>
+            </div>
+          </div>
+        </div>`;
+      recordListEl.appendChild(div);
+    });
   }
 
-  function resetear(num) {
-    if (state[num].excluida) return;
-    state[num].angulo = 0;
-    actualizarCard(num);
-  }
+  function selectRecord(reg) {
+    activeRecord = reg;
+    renderNavigator(searchInput.value);
 
-  function toggleExcluir(num) {
-    state[num].excluida = !state[num].excluida;
-    actualizarCard(num);
-  }
-
-  function actualizarCard(num) {
-    const s = state[num];
-    const img   = document.getElementById(`img-${num}`);
-    const badge = document.getElementById(`badge-${num}`);
-    const card  = document.getElementById(`card-${num}`);
-    const btnEx = document.getElementById(`btn-excluir-${num}`);
-
-    img.style.transform = `rotate(${s.angulo}deg)`;
-    badge.classList.remove('scan-pulse');
-    
-    if (s.excluida) {
-        badge.textContent = 'excluida';
-        card.style.opacity = '0.5';
-        card.classList.remove('ok', 'corregida');
-        card.style.borderColor = 'var(--danger)';
-        btnEx.textContent = '✅';
-        btnEx.title = 'Incluir foto';
+    // Carrusel
+    carouselEl.innerHTML = '';
+    if (reg.fotos_obj.length > 1) {
+      carouselEl.style.display = 'flex';
+      const fallbackSvg = `data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27%23334155%27%3E%3Cpath%20d%3D%27M21%2019V5c0-1.1-.9-2-2-2H5c-1.1%200-2%20.9-2%202v14c0%201.1.9%202%202%202h14c1.1%200%202-.9%202-2zM8.5%2013.5l2.5%203.01L14.5%2012l4.5%206H5l3.5-4.5z%27%2F%3E%3C%2Fsvg%3E`;
+      for (const f of reg.fotos_obj) {
+        const thumb = document.createElement('img');
+        thumb.src = f.url;
+        thumb.dataset.clave = f.clave;
+        thumb.onerror = function() { this.onerror=null; this.src=fallbackSvg; };
+        thumb.onclick = () => selectPhoto(f);
+        if (f.excluida) {
+          thumb.style.filter = 'grayscale(100%) opacity(50%)';
+          thumb.title = 'Excluida del reporte';
+        }
+        carouselEl.appendChild(thumb);
+      }
+      
+      // Activar Drag & Drop en el carrusel — destruir instancia previa para no acumular handlers
+      if (typeof Sortable !== 'undefined') {
+        if (carouselSortable) { carouselSortable.destroy(); carouselSortable = null; }
+        carouselSortable = new Sortable(carouselEl, {
+          animation: 150,
+          onEnd: function (evt) {
+            const currentClaves = Array.from(carouselEl.children).map(c => c.dataset.clave);
+            // Ordenar fotos_obj
+            activeRecord.fotos_obj.sort((a, b) => {
+              let idxA = currentClaves.indexOf(a.clave);
+              let idxB = currentClaves.indexOf(b.clave);
+              if (idxA === -1) idxA = Infinity;
+              if (idxB === -1) idxB = Infinity;
+              return idxA - idxB;
+            });
+            // Actualizar fotos_nums
+            activeRecord.fotos_nums = activeRecord.fotos_obj.map(f => parseInt(f.clave.split('_')[1]));
+            // Reflejar en registrosRaw
+            const regRaw = registrosRaw.find(r => r.id === activeRecord.id);
+            if (regRaw) regRaw.fotos_nums = activeRecord.fotos_nums;
+          }
+        });
+      }
     } else {
-        badge.textContent = s.angulo !== 0 ? `auto: ${s.angulo}°` : 'sin rotación';
-        card.style.opacity = '1';
-        card.classList.remove('ok', 'corregida');
-        card.classList.add(s.angulo !== 0 ? 'corregida' : 'ok');
-        card.style.borderColor = ''; // usa css default
-        btnEx.textContent = '❌';
-        btnEx.title = 'Excluir foto';
+      carouselEl.style.display = 'none';
+    }
+
+    // Inspector
+    fillInspector(reg);
+
+    if (reg.fotos_obj.length > 0) {
+      selectPhoto(reg.fotos_obj[0]);
+    } else {
+      const fallbackSvg = `data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27%23334155%27%3E%3Cpath%20d%3D%27M21%2019V5c0-1.1-.9-2-2-2H5c-1.1%200-2%20.9-2%202v14c0%201.1.9%202%202%202h14c1.1%200%202-.9%202-2zM8.5%2013.5l2.5%203.01L14.5%2012l4.5%206H5l3.5-4.5z%27%2F%3E%3C%2Fsvg%3E`;
+      mainPhotoEl.src = fallbackSvg;
+      mainPhotoEl.style.display = 'block';
+      activePhoto = null;
+      document.getElementById('fi-nombre').textContent = 'Sin foto';
+      document.getElementById('fi-angulo').textContent = '-';
     }
   }
 
-  async function generarExcel() {
-    const btn = document.getElementById('btn-generar');
-    const overlay = document.getElementById('loading-overlay');
-    const msg = document.getElementById('status-msg');
+  // ── 4. INSPECTOR ─────────────────────────────────────────────────────────
+  function fillInspector(reg) {
+    inspEmpty.style.display = 'none';
+    inspBody.style.display  = 'flex';
 
-    btn.disabled = true;
-    overlay.style.display = 'flex';
-    msg.textContent = 'Generando...';
+    const estado = reg.estado_revision || 'pendiente';
+    stateBadge.className = `state-badge ${estado}`;
+    stateBadge.textContent = estado;
 
-    // Convertir state a dict serializable y filtrar registros
-    const rotaciones = {};
-    const fotosAExcluir = new Set();
+    document.getElementById('inp-modelo').value      = reg.modelo || '';
+    document.getElementById('inp-numparte').value    = reg.numero_parte || '';
+    document.getElementById('inp-linea').value       = reg.linea || '';
+    document.getElementById('inp-cantidad').value    = reg.cantidad || '';
+    document.getElementById('inp-responsable').value = reg.responsable || '';
+    document.getElementById('inp-descripcion').value = reg.descripcion || '';
+    document.getElementById('inp-sn').value          = reg.sn_on_set || '';
+    saveInd.textContent = '';
+    saveInd.className   = 'save-indicator';
+  }
+
+  function updateFotoInfo(foto) {
+    document.getElementById('fi-nombre').textContent  = foto.clave;
+    document.getElementById('fi-angulo').textContent  = `${foto.angulo || 0}°`;
+  }
+
+  // ── 5. PHOTO VIEWER ──────────────────────────────────────────────────────
+  function selectPhoto(foto) {
+    activePhoto = foto;
+    resetZoom();
+    mainPhotoEl.style.display = 'block';
+    mainPhotoEl.src = foto.url;
     
-    Object.keys(state).forEach(k => {
-      if (state[k].excluida) {
-          fotosAExcluir.add(k);
-      } else if (state[k].angulo !== 0) {
-          rotaciones[k] = state[k].angulo;
+    // Add fallback inline since we can't reliably assign it via HTML attributes on a dynamic element
+    const fallbackSvg = `data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27%23334155%27%3E%3Cpath%20d%3D%27M21%2019V5c0-1.1-.9-2-2-2H5c-1.1%200-2%20.9-2%202v14c0%201.1.9%202%202%202h14c1.1%200%202-.9%202-2zM8.5%2013.5l2.5%203.01L14.5%2012l4.5%206H5l3.5-4.5z%27%2F%3E%3C%2Fsvg%3E`;
+    mainPhotoEl.onerror = function() {
+        this.onerror = null;
+        this.src = fallbackSvg;
+    };
+    
+    applyTransform();
+    updateFotoInfo(foto);
+
+    carouselEl.querySelectorAll('img').forEach(img => {
+      const isActive = img.dataset.clave === foto.clave;
+      img.classList.toggle('active', isActive);
+      if (isActive) {
+        img.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
       }
     });
 
-    // Capturar el orden visual actual del DOM tras arrastrar usando clave
-    const domOrder = [...document.querySelectorAll('.foto-card')].map(el => el.dataset.clave);
-    // Crear un mapa de orden para ordenar rápido (clave -> index)
-    const orderMap = {};
-    domOrder.forEach((clave, idx) => { orderMap[clave] = idx; });
+    const btnExcluir = document.getElementById('btn-excluir');
+    if (btnExcluir) {
+      if (foto.excluida) {
+        btnExcluir.textContent = 'Restaurar';
+        btnExcluir.style.color = '#22c55e'; // Tailwind green-500
+        btnExcluir.style.borderColor = '#22c55e';
+      } else {
+        btnExcluir.textContent = 'Excluir';
+        btnExcluir.style.color = '#ef4444'; // Tailwind red-500
+        btnExcluir.style.borderColor = '#ef4444';
+      }
+    }
+  }
 
-    // Clonamos los registros para no mutar el original en caso de error
-    const registrosFiltrados = JSON.parse(JSON.stringify(registros)).map(reg => {
-        // Filtrar las excluidas
-        reg.fotos_nums = reg.fotos_nums.filter(num => !fotosAExcluir.has(reg.user_id + "_" + num));
-        // Ordenar según la disposición visual del usuario
-        reg.fotos_nums.sort((a, b) => (orderMap[reg.user_id + "_" + a] ?? 9999) - (orderMap[reg.user_id + "_" + b] ?? 9999));
-        return reg;
-    }).filter(reg => reg.fotos_nums.length > 0); // Omitir registros que se quedaron sin fotos
+  function applyTransform() {
+    if (!activePhoto) return;
+    const ang = activePhoto.angulo || 0;
+    mainPhotoEl.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomLevel}) rotate(${ang}deg)`;
+    document.getElementById('fi-angulo').textContent = `${ang}°`;
+  }
+
+  function zoomIn()    { zoomLevel = Math.min(zoomLevel * 1.3, 5);   applyTransform(); }
+  function zoomOut()   { zoomLevel = Math.max(zoomLevel / 1.3, 0.3); applyTransform(); }
+  function resetZoom() { zoomLevel = 1; panX = 0; panY = 0; applyTransform(); }
+
+  // ── 6. ROTATION + PERSISTENCIA ───────────────────────────────────────────
+  function rotateImage(delta) {
+    if (!activePhoto) return;
+    activePhoto.angulo = (((activePhoto.angulo || 0) + delta) % 360 + 360) % 360;
+    applyTransform();
+    persistRotacion(activePhoto);
+  }
+
+  async function toggleExcluirFoto() {
+    if (!activePhoto || !activePhoto.evidencia_id) return;
+    
+    const isExcluding = !activePhoto.excluida;
+    const method = isExcluding ? 'DELETE' : 'POST';
+    const endpoint = isExcluding 
+      ? `/api/v2/evidencias/${activePhoto.evidencia_id}/` 
+      : `/api/v2/evidencias/${activePhoto.evidencia_id}/restaurar/`;
+
+    try {
+      const res = await fetch(endpoint, {
+        method: method,
+        headers: { 'X-CSRFToken': getCookie('csrftoken') }
+      });
+      const data = await res.json();
+      
+      if (data.status === 'success') {
+        // Actualizar el estado local
+        activePhoto.excluida = isExcluding;
+        
+        // Actualizar el estilo del thumbnail
+        const imgEl = carouselEl.querySelector(`img[data-clave="${activePhoto.clave}"]`);
+        if (imgEl) {
+          if (isExcluding) {
+            imgEl.style.filter = 'grayscale(100%) opacity(50%)';
+            imgEl.title = 'Excluida del reporte';
+          } else {
+            imgEl.style.filter = '';
+            imgEl.title = '';
+          }
+        }
+
+        // Refrescar el estado del botón y la alerta de "Sin fotos validas"
+        selectPhoto(activePhoto);
+        
+        // Recalcular has_error
+        const validPhotos = activeRecord.fotos_obj.filter(f => !f.excluida);
+        activeRecord.has_error = validPhotos.length === 0 || !activeRecord.modelo;
+        renderNavigator(searchInput.value);
+        
+      } else {
+        alert('Error al modificar el estado de la foto: ' + data.message);
+      }
+    } catch (e) {
+      console.error('Error:', e);
+      alert('Error de red al intentar modificar el estado de la foto.');
+    }
+  }
+
+  async function persistRotacion(foto) {
+    if (!foto.evidencia_id) return; // legacy sin EvidenciaFotografica — solo en sesión
+    try {
+      await fetch(`/api/v2/evidencias/${foto.evidencia_id}/rotar/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+        body: JSON.stringify({ angulo_rotacion: foto.angulo }),
+      });
+    } catch (e) {
+      console.warn('persistRotacion error:', e);
+    }
+  }
+
+  // ── 7. METADATA PATCH ────────────────────────────────────────────────────
+  async function guardarMetadatos() {
+    if (!activeRecord) return;
+    saveInd.textContent = 'Guardando...';
+    saveInd.className = 'save-indicator';
+
+    const payload = {
+      modelo:                document.getElementById('inp-modelo').value.trim(),
+      numero_parte:          document.getElementById('inp-numparte').value.trim(),
+      linea:                 document.getElementById('inp-linea').value.trim(),
+      cantidad:              parseInt(document.getElementById('inp-cantidad').value) || null,
+      responsable:           document.getElementById('inp-responsable').value.trim(),
+      descripcion:           document.getElementById('inp-descripcion').value.trim(),
+    };
+
+    try {
+      const res = await fetch(`/api/v2/registros/${activeRecord.id}/`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (data.status === 'success') {
+        // Actualizar appData en memoria
+        Object.assign(activeRecord, payload);
+        // Actualizar nombre en lista
+        renderNavigator(searchInput.value);
+        saveInd.textContent = '✅ Guardado';
+        saveInd.className = 'save-indicator ok';
+      } else {
+        saveInd.textContent = `Error: ${data.message}`;
+        saveInd.className = 'save-indicator err';
+      }
+    } catch (e) {
+      saveInd.textContent = `Error de red`;
+      saveInd.className = 'save-indicator err';
+    }
+  }
+
+  // ── 8. MOUSE / KEYBOARD ──────────────────────────────────────────────────
+  wrapperEl.addEventListener('dblclick', () => {
+    if (!activePhoto) return;
+    if (zoomLevel > 1) resetZoom(); else { zoomLevel = 2.5; applyTransform(); }
+  });
+
+  wrapperEl.addEventListener('wheel', e => {
+    if (!activePhoto) return;
+    e.preventDefault();
+    if (e.deltaY < 0) zoomIn(); else zoomOut();
+  });
+
+  wrapperEl.addEventListener('mousedown', e => {
+    if (!activePhoto || zoomLevel <= 1) return;
+    isDragging = true; startX = e.clientX - panX; startY = e.clientY - panY;
+    mainPhotoEl.classList.add('dragging');
+  });
+  window.addEventListener('mousemove', e => {
+    if (!isDragging) return;
+    panX = e.clientX - startX; panY = e.clientY - startY; applyTransform();
+  });
+  window.addEventListener('mouseup', () => { isDragging = false; mainPhotoEl.classList.remove('dragging'); });
+
+  window.addEventListener('keydown', e => {
+    if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') return;
+    if (e.key === 'r' || e.key === 'R') rotateImage(90);
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      if (!activeRecord || activeRecord.fotos_obj.length <= 1) return;
+      const idx = activeRecord.fotos_obj.findIndex(f => f.clave === activePhoto?.clave);
+      let next = e.key === 'ArrowRight' ? idx + 1 : idx - 1;
+      if (next >= activeRecord.fotos_obj.length) next = 0;
+      if (next < 0) next = activeRecord.fotos_obj.length - 1;
+      selectPhoto(activeRecord.fotos_obj[next]);
+    }
+  });
+
+  // ── 9. GENERAR EXCEL ─────────────────────────────────────────────────────
+  async function generarExcel() {
+    const btn = document.getElementById('btn-generar');
+    if (btn.disabled) return; // Prevent double clicks
+    
+    const overlay = document.getElementById('loading-overlay');
+    const msg = document.getElementById('status-msg');
+    const btnText = document.getElementById('btn-generar-text');
+    
+    btn.disabled = true; 
+    btn.style.opacity = '0.7';
+    if (btnText) btnText.textContent = 'Generando...';
+    overlay.style.display = 'flex'; 
+    msg.textContent = '';
+
+    const rotaciones = {};
+    appData.forEach(reg => {
+      reg.fotos_obj.forEach(foto => {
+        if (foto.angulo) rotaciones[foto.clave] = foto.angulo;
+      });
+    });
+
+    // Generar un payload limpio filtrando las fotos excluidas
+    const registrosLimpios = appData.map(reg => {
+      const validFotos = reg.fotos_obj.filter(f => !f.excluida).map(f => f.numero);
+      return {
+        ...reg,
+        fotos_nums: validFotos
+      };
+    });
 
     try {
       const res = await fetch("{% url 'generar_excel' %}", {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': getCookie('csrftoken'),
-        },
-        body: JSON.stringify({ rotaciones, registros: registrosFiltrados }),
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+        body: JSON.stringify({ rotaciones, registros: registrosLimpios }),
       });
-
-      if (!res.ok) {
-        const err = await res.text();
-        msg.textContent = `Error: ${err}`;
-        msg.style.color = 'var(--danger)';
-        overlay.style.display = 'none';
-        btn.disabled = false;
-        return;
+        if (!res.ok) {
+          msg.textContent = `Error: ${await res.text()}`; msg.style.color = '#ef4444';
+          resetBtn();
+          return;
+        }
+        const { task_id } = await res.json();
+        const overlayText = document.getElementById('loading-text');
+        const iv = setInterval(async () => {
+          try {
+            const s = await (await fetch(`/api/excel_status/${task_id}/`)).json();
+            if (s.status === 'done') {
+              clearInterval(iv); resetBtn();
+              msg.textContent = 'Excel Generado'; msg.style.color = '#22c55e';
+              window.location.href = `/api/download_excel/${task_id}/`;
+            } else if (s.status === 'error') {
+              throw new Error(s.error || 'Error en la tarea');
+            } else {
+              // Cualquier otro estado (pending, started, processing)
+              overlayText.textContent = s.progress || 'Generando...';
+            }
+          } catch (err) {
+            clearInterval(iv); resetBtn();
+            msg.textContent = `Error: ${err.message}`;
+          }
+        }, 1000);
+      } catch (e) {
+        msg.textContent = `Error de red: ${e}`; resetBtn();
       }
 
-      const data = await res.json();
-      const taskId = data.task_id;
-      
-      const overlayText = overlay.querySelector('p');
-
-      // Empezar el polling
-      const intervalId = setInterval(async () => {
-          try {
-              const statusRes = await fetch(`/api/excel_status/${taskId}/`);
-              const statusData = await statusRes.json();
-              
-              if (!statusRes.ok) {
-                  throw new Error(statusData.error || 'Error desconocido en el servidor');
-              }
-              
-              if (statusData.status === 'processing') {
-                  overlayText.textContent = statusData.progress;
-              } else if (statusData.status === 'done') {
-                  clearInterval(intervalId);
-                  overlay.style.display = 'none';
-                  btn.disabled = false;
-                  
-                  msg.textContent = '✅ Reporte descargado';
-                  msg.style.color = 'var(--success)';
-                  
-                  // Iniciar la descarga
-                  window.location.href = `/api/download_excel/${taskId}/`;
-              } else if (statusData.status === 'error') {
-                  throw new Error(statusData.error);
-              }
-          } catch (err) {
-              console.error("Error en polling:", err);
-              clearInterval(intervalId);
-              overlay.style.display = 'none';
-              btn.disabled = false;
-              msg.textContent = `Error: ${err.message}`;
-              msg.style.color = 'var(--danger)';
-          }
-      }, 1000);
-
-    } catch(e) {
-      msg.textContent = `Error de red: ${e}`;
-      msg.style.color = 'var(--danger)';
-      overlay.style.display = 'none';
-      btn.disabled = false;
-    }
+      function resetBtn() {
+        overlay.style.display = 'none'; 
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        if (btnText) btnText.textContent = 'Generar Excel';
+      }
   }
 
+  // ── 10. UTILS ────────────────────────────────────────────────────────────
   function getCookie(name) {
     let val = null;
     document.cookie.split(';').forEach(c => {
@@ -411,6 +668,46 @@
     });
     return val;
   }
-</script>
 
+  // ── 11. INIT ─────────────────────────────────────────────────────────────
+  searchInput.addEventListener('input', e => renderNavigator(e.target.value));
+
+  // SN on set: sincronizar a registrosRaw en tiempo real (no requiere "Guardar")
+  document.getElementById('inp-sn').addEventListener('input', function () {
+    if (!activeRecord) return;
+    const val = this.value;
+    activeRecord.sn_on_set = val;
+    const regRaw = registrosRaw.find(r => r.id === activeRecord.id);
+    if (regRaw) regRaw.sn_on_set = val;
+  });
+
+  if (appData.length > 0) {
+    renderNavigator();
+    selectRecord(appData[0]);
+  } else {
+    recordListEl.innerHTML = '<div style="padding:24px; text-align:center; color:#64748b;">No hay registros para revisar.</div>';
+  }
+
+  // Activar Drag & Drop
+  if (typeof Sortable !== 'undefined') {
+    new Sortable(recordListEl, {
+      animation: 150,
+      handle: '.drag-handle',
+      onEnd: function (evt) {
+        const currentIds = Array.from(recordListEl.children).map(c => c.dataset.id);
+        
+        const sortByDom = (a, b) => {
+          let idxA = currentIds.indexOf(String(a.id));
+          let idxB = currentIds.indexOf(String(b.id));
+          if (idxA === -1) idxA = Infinity;
+          if (idxB === -1) idxB = Infinity;
+          return idxA - idxB;
+        };
+
+        appData.sort(sortByDom);
+        registrosRaw.sort(sortByDom);
+      }
+    });
+  }
+</script>
 {% endblock %}

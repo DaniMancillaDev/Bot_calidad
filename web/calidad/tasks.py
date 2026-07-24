@@ -147,6 +147,11 @@ def generar_thumbnails_lote_task(self, user_id: int, fotos_paths: list[str]) -> 
                 continue
 
             thumb_path = thumb_dir / foto_path_obj.name
+            if thumb_path.exists():
+                logger.info("Lote Thumbnail: ya existe, saltando (idempotencia): %s", thumb_path.name)
+                procesadas += 1
+                continue
+
             proxy_path = proxy_dir / foto_path_obj.name
             tmp_proxy_path = proxy_dir / f"{foto_path_obj.name}.tmp"
             
@@ -260,6 +265,11 @@ def _consolidar_registros(regs, translator=None):
                 grupo['descripciones_originales'].append(desc_reg)
             if linea_reg and linea_reg not in grupo['lineas_involucradas']:
                 grupo['lineas_involucradas'].append(linea_reg)
+            # Acumular series
+            sn_reg = (reg.get('sn_on_set') or '').strip()
+            if sn_reg:
+                existing = (grupo.get('sn_on_set') or '').strip()
+                grupo['sn_on_set'] = (existing + '\n' + sn_reg).strip() if existing else sn_reg
 
         else:
             # Primer registro del grupo — inicializar
@@ -299,7 +309,7 @@ def _consolidar_registros(regs, translator=None):
 
 
 @shared_task(bind=True, name='calidad.tasks.generar_excel_task')
-def generar_excel_task(self, registros_ids, rotaciones, fotos_dir_str, fecha_str):
+def generar_excel_task(self, registros_ids, rotaciones, fotos_dir_str, fecha_str, fotos_order=None, sn_map=None):
     """
     Tarea Celery: genera reportes Excel en background.
 
@@ -343,6 +353,13 @@ def generar_excel_task(self, registros_ids, rotaciones, fotos_dir_str, fecha_str
                     for inicio, fin in rangos:
                         nums.extend(range(int(inicio), int(fin) + 1))
             f_list = sorted(list(set(nums)))
+            
+            # Aplicar el orden del frontend si se proporcionó
+            if fotos_order and str(r.id) in fotos_order:
+                order_list = fotos_order[str(r.id)]
+                # Mantener solo los solicitados (esto permite exclusión de fotos)
+                f_list = [n for n in order_list if n in f_list]
+                
         except Exception:
             f_list = []
         if r.fecha_registro:
@@ -363,6 +380,7 @@ def generar_excel_task(self, registros_ids, rotaciones, fotos_dir_str, fecha_str
             'departamento': r.departamento,
             'turno': r.turno,
             'fecha_obj': fecha_obj,
+            'sn_on_set': (sn_map or {}).get(str(r.id), ''),
         })
 
     # Agrupar registros por responsable
@@ -439,6 +457,7 @@ def generar_excel_task(self, registros_ids, rotaciones, fotos_dir_str, fecha_str
 
     # ── Actualización Automática de Estado ────────────────────────────────────
     # El usuario aprobó que al exportar correctamente, los registros pasen a "revisado"
+    from django.utils import timezone
     from calidad.models import RegistroDefecto, EstadoRevision
     
     registro_ids = [r.get('id') for r in registros_data if r.get('id')]
@@ -446,7 +465,7 @@ def generar_excel_task(self, registros_ids, rotaciones, fotos_dir_str, fecha_str
         # bulk update
         RegistroDefecto.objects.filter(id__in=registro_ids).update(
             estado_revision=EstadoRevision.REVISADO,
-            fecha_revision=datetime.now()
+            fecha_revision=timezone.now()
         )
 
     if len(archivos_generados) == 1:

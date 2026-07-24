@@ -3,11 +3,12 @@
 Sistema integral para la gestión de reportes de calidad mediante un bot de Telegram y un panel administrativo web.
 
 ## 🚀 Características
-- **Bot de Telegram:** Registro de reportes con fotos, validación de usuarios y flujo conversacional.
-- **Panel Web (Django):** Visualización de reportes, gestión de usuarios, galería de fotos y descarga de reportes Excel.
-- **Inteligencia Artificial:** Detección automática de la orientación de imágenes mediante ONNX.
-- **OCR:** Extracción de texto de imágenes usando Tesseract.
-- **Reportes:** Generación automática de archivos Excel con fotos incrustadas.
+- **Bot de Telegram (Fase 1):** Registro de reportes con fotos, validación de usuarios y flujo conversacional.
+- **Panel Web (Django):** Visualización de reportes, gestión de usuarios, galería de fotos unificada y descarga de reportes Excel.
+- **Importación Masiva (Fase 2):** Carga de datos directamente desde plantillas Excel con control de calidad (Evidence V2).
+- **Panel Operativo:** Interfaz rápida para revisión manual, corrección de textos extraídos y rotación de imágenes.
+- **Contador Global:** Sistema sincronizado y seguro (con bloqueos DB) para asignación de folios fotográficos.
+- **Inteligencia Artificial:** Detección automática de la orientación de imágenes mediante ONNX y extracción OCR con Tesseract.
 
 ## 🛠️ Tecnologías
 - **Core:** Python 3.12+

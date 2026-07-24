@@ -109,6 +109,8 @@ def create_guardar_foto(api_client):
 
         # ===== FUNCIÓN INTERNA DE DESCARGA TEMPORAL =====
         async def _descargar_foto_temporal(msg) -> int:
+            import time
+            t0 = time.monotonic()
             try:
                 photo = msg.photo[-1]
                 file = await photo.get_file(read_timeout=30)
@@ -120,9 +122,12 @@ def create_guardar_foto(api_client):
                 ruta = os.path.join(user_folder, nombre_archivo)
 
                 await file.download_to_drive(ruta)
+                elapsed = (time.monotonic() - t0) * 1000
+                logger.info("Descarga foto individual | user_id=%s msg_id=%s elapsed=%.1fms", user_id, msg.message_id, elapsed)
                 return msg.message_id
             except Exception as e:
-                logger.error("Error descargando foto %s: %s", msg.message_id, e)
+                elapsed = (time.monotonic() - t0) * 1000
+                logger.error("Error descargando foto %s | elapsed=%.1fms error=%s", msg.message_id, elapsed, e)
                 return -1
 
         # ===== DEBOUNCE A NIVEL DE USUARIO (NO POR MEDIA GROUP) =====
@@ -179,11 +184,17 @@ def create_guardar_foto(api_client):
         """
         Se ejecuta tras _DEBOUNCE_SECONDS sin fotos nuevas del usuario.
         """
+        import time
+        import asyncio
+        t_batch = time.monotonic()
+        logger.info("DEBUG: Entrando a _process_user_batch, a punto de hacer sleep 2s")
         try:
             await asyncio.sleep(_DEBOUNCE_SECONDS)
 
+            logger.info("DEBUG: Sleep terminado, sacando photo_batch")
             batch = context.user_data.pop("photo_batch", None)
             if not batch:
+                logger.info("DEBUG: photo_batch ya fue poppeado o es None")
                 return
 
             mensajes = batch["messages"]
@@ -191,11 +202,30 @@ def create_guardar_foto(api_client):
 
             logger.info("Descargando lote de %d foto(s) temporalmente para user %s", len(mensajes), user_id)
 
+            sem = asyncio.Semaphore(5)
+
+            async def _download_with_sem(m):
+                async with sem:
+                    return await descargar_fn(m)
+
+            resultados = await asyncio.gather(
+                *[_download_with_sem(msg) for msg in mensajes],
+                return_exceptions=True
+            )
+        except asyncio.CancelledError:
+            logger.warning("DEBUG: _process_user_batch CANCELADO")
+            raise
+        except Exception as e:
+            logger.error("DEBUG: EXCEPCION CRITICA EN _process_user_batch: %s", e, exc_info=True)
+            return
+
+        try:
             fotos_ids = []
-            for msg in mensajes:
-                msg_id = await descargar_fn(msg)
-                if msg_id != -1:
-                    fotos_ids.append(msg_id)
+            for res in resultados:
+                if isinstance(res, Exception):
+                    logger.error("Fallo de red en descarga paralela: %s", res)
+                elif res != -1:
+                    fotos_ids.append(res)
 
             if not fotos_ids:
                 await context.bot.send_message(
@@ -204,6 +234,9 @@ def create_guardar_foto(api_client):
                     parse_mode="HTML",
                 )
                 return
+
+            elapsed_descarga_lote = (time.monotonic() - t_batch - _DEBOUNCE_SECONDS) * 1000
+            logger.info("Descarga total lote | user_id=%s cantidad=%d elapsed=%.1fms", user_id, len(mensajes), elapsed_descarga_lote)
 
             # Delegar FSM al backend
             try:

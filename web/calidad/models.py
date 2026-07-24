@@ -58,8 +58,19 @@ class EstadoRevision(models.TextChoices):
 # REGISTROS DE DEFECTOS
 # ============================================================
 
+class ProteccionBorradoQuerySet(models.QuerySet):
+    def delete(self, force_delete=False):
+        if not force_delete:
+            raise PermissionError("Borrado masivo bloqueado por seguridad. Usa force_delete=True si es intencional.")
+        return super().delete()
+
+class ProteccionBorradoManager(models.Manager):
+    def get_queryset(self):
+        return ProteccionBorradoQuerySet(self.model, using=self._db)
+
 class RegistroDefecto(models.Model):
     """Tabla principal del bot: cada defecto fotografiado."""
+    objects = ProteccionBorradoManager()
     # ── Campos originales (NO modificar — backward compat) ─────────────────
     fotos          = models.TextField()              # Legacy: "1, 2, 3"
     modelo         = models.TextField()
@@ -68,7 +79,7 @@ class RegistroDefecto(models.Model):
     cantidad       = models.IntegerField(null=True, blank=True)
     responsable    = models.TextField()
     descripcion    = models.TextField()
-    fecha_registro = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    fecha_registro = models.DateTimeField(auto_now_add=True, null=True, blank=True, db_index=True)
     user_id        = models.BigIntegerField(db_index=True)
     turno          = models.CharField(max_length=1, null=True, blank=True)
     departamento   = models.CharField(max_length=10, null=True, blank=True)
@@ -112,6 +123,85 @@ class RegistroDefecto(models.Model):
 
     def __str__(self):
         return f"{self.fotos} | {self.modelo} | {self.responsable}"
+
+    @property
+    def fotos_rango(self):
+        import re
+        nums = []
+        if self.fotos_nums:
+            nums = sorted(list(set(self.fotos_nums)))
+        elif self.fotos:
+            try:
+                nums = sorted(list(set(int(x) for x in re.findall(r'\d+', str(self.fotos)))))
+            except Exception:
+                pass
+        
+        if not nums:
+            return str(self.fotos)
+
+        rangos = []
+        inicio = nums[0]
+        anterior = nums[0]
+
+        for n in nums[1:]:
+            if n == anterior + 1:
+                anterior = n
+            else:
+                if inicio == anterior:
+                    rangos.append(f"{inicio:02d}")
+                else:
+                    rangos.append(f"{inicio:02d}-{anterior:02d}")
+                inicio = n
+                anterior = n
+        
+        if inicio == anterior:
+            rangos.append(f"{inicio:02d}")
+        else:
+            rangos.append(f"{inicio:02d}-{anterior:02d}")
+
+        return ", ".join(rangos)
+
+    def clean_transition(self, nuevo_estado):
+        """Valida si la transición de estado es permitida."""
+        estados_permitidos = {
+            EstadoRevision.PENDIENTE: [EstadoRevision.REVISADO, EstadoRevision.APROBADO, EstadoRevision.RECHAZADO],
+            EstadoRevision.REVISADO: [EstadoRevision.APROBADO, EstadoRevision.RECHAZADO],
+            EstadoRevision.APROBADO: [EstadoRevision.PENDIENTE, EstadoRevision.RECHAZADO],
+            EstadoRevision.RECHAZADO: [EstadoRevision.PENDIENTE, EstadoRevision.REVISADO],
+        }
+        if self.estado_revision == nuevo_estado:
+            return True
+        if nuevo_estado not in estados_permitidos.get(self.estado_revision, []):
+            raise ValueError(f"Transición inválida de {self.estado_revision} a {nuevo_estado}")
+        return True
+
+    def transitar_estado(self, nuevo_estado, supervisor=None, comentarios=''):
+        self.clean_transition(nuevo_estado)
+        self.estado_revision = nuevo_estado
+        if supervisor:
+            self.supervisor = supervisor
+        if comentarios:
+            self.comentarios_supervisor = comentarios
+        from django.utils import timezone
+        self.fecha_revision = timezone.now()
+        self.save(update_fields=['estado_revision', 'supervisor', 'comentarios_supervisor', 'fecha_revision'])
+
+    def save(self, *args, **kwargs):
+        from .application.workflows.defecto_workflow import DefectoWorkflow
+        super().save(*args, **kwargs)
+
+    def aprobar(self, supervisor=None, comentarios=''):
+        self.transitar_estado(EstadoRevision.APROBADO, supervisor, comentarios)
+
+    def rechazar(self, supervisor=None, comentarios=''):
+        if not comentarios:
+            raise ValueError("Se requiere un motivo/comentario para rechazar.")
+        self.transitar_estado(EstadoRevision.RECHAZADO, supervisor, comentarios)
+
+    def delete(self, *args, force_delete=False, **kwargs):
+        if not force_delete:
+            raise PermissionError("Borrado bloqueado por seguridad. Utiliza force_delete=True desde admin o panel web.")
+        return super().delete(*args, **kwargs)
 
 
 # ============================================================
@@ -166,3 +256,48 @@ class PerfilUsuario(models.Model):
 
     def __str__(self):
         return f"{self.usuario.get_full_name() or self.usuario.username} — {self.turno}/{self.departamento}"
+
+
+# ============================================================
+# EVIDENCIAS FOTOGRAFICAS (V2)
+# ============================================================
+
+class EvidenciaFotografica(models.Model):
+    """Fase 1: Modelo independiente para las fotos."""
+    objects = ProteccionBorradoManager()
+    registro = models.ForeignKey(RegistroDefecto, on_delete=models.CASCADE, related_name='evidencias_v2')
+    ruta_archivo = models.CharField(max_length=500, help_text="Ruta relativa o absoluta al archivo")
+    orden = models.IntegerField(default=0)
+    es_portada = models.BooleanField(default=False)
+    angulo_rotacion = models.IntegerField(default=0)
+    
+    # Future Proofing
+    estado_ia = models.CharField(max_length=20, default='PENDIENTE') 
+    metadatos = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        db_table = 'evidencias_fotograficas'
+        ordering = ['registro', 'orden']
+        verbose_name = 'Evidencia Fotográfica'
+        verbose_name_plural = 'Evidencias Fotográficas'
+
+    def __str__(self):
+        return f"Evidencia {self.id} (Registro {self.registro_id})"
+
+    def delete(self, *args, force_delete=False, **kwargs):
+        if not force_delete:
+            raise PermissionError("Borrado bloqueado por seguridad. Utiliza force_delete=True desde admin o panel web.")
+        return super().delete(*args, **kwargs)
+
+class GlobalCounter(models.Model):
+    """Secuencia de numeración global de fotos en toda la planta."""
+    nombre = models.CharField(max_length=50, unique=True, default='fotos')
+    valor_actual = models.BigIntegerField(default=1)
+
+    class Meta:
+        db_table = 'global_counter'
+        verbose_name = 'Contador Global'
+        verbose_name_plural = 'Contadores Globales'
+
+    def __str__(self):
+        return f"GlobalCounter({self.nombre}) → {self.valor_actual}"

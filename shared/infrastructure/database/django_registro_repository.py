@@ -37,7 +37,7 @@ class DjangoRegistroRepository:
                 _np_upper = None
 
             t0 = time.monotonic()
-            RegistroDefecto.objects.create(
+            registro = RegistroDefecto.objects.create(
                 fotos=fotos_str,             # legacy — mantener mientras se migra
                 fotos_nums=fotos_list,        # Fase 1 — nuevo campo normalizado
                 modelo=modelo.upper() if modelo else "",
@@ -50,6 +50,11 @@ class DjangoRegistroRepository:
                 departamento=departamento,
                 numero_parte=_np_upper,
             )
+            
+            # Dual-Write: crear EvidenciaFotografica (V2)
+            from calidad.services.legacy_sync import sync_fotos_to_evidencias
+            sync_fotos_to_evidencias(registro)
+            
             elapsed = (time.monotonic() - t0) * 1000
             import logging
             logging.getLogger(__name__).info(

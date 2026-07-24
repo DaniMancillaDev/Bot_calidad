@@ -66,6 +66,8 @@ class DefectoWorkflow:
         
         if archivos_existentes:
             contadores_lote = self._contador_repo.obtener_y_avanzar_lote(user_id, len(archivos_existentes))
+
+            t_move = time.monotonic()
             
             for msg_id, contador in zip(archivos_existentes, contadores_lote):
                 tmp_path = user_folder / f"tmp_{msg_id}.jpg"
@@ -79,6 +81,9 @@ class DefectoWorkflow:
                     rutas_para_thumbnail.append(str(nueva_ruta))
                 except Exception as e:
                     logger.error("rename failed %s → %s: %s", tmp_path, nueva_ruta, e)
+            
+            elapsed_move = (time.monotonic() - t_move) * 1000
+            logger.info("Movimiento de archivos | user_id=%s cantidad=%d elapsed=%.1fms", user_id, len(archivos_existentes), elapsed_move)
 
         # Lanzar procesamiento de thumbnails por lote (más eficiente)
         if rutas_para_thumbnail:
@@ -215,12 +220,17 @@ class DefectoWorkflow:
         """Guarda físicamente en DjangoRegistroRepository."""
         t0 = time.monotonic()
         try:
+            t_usr = time.monotonic()
             usuario = self._usuario_repo.obtener(user_id)
+            elapsed_usr = (time.monotonic() - t_usr) * 1000
+            
             if not usuario:
                 logger.error("_guardar_registro: user_id=%s no encontrado en repositorio", user_id)
                 return False
 
             datos = conv.get('datos', {})
+            
+            t_db = time.monotonic()
             exito = self._registro_repo.guardar(
                 user_id=user_id,
                 turno=usuario['turno'],
@@ -233,10 +243,11 @@ class DefectoWorkflow:
                 descripcion=datos.get('descripcion', ''),
                 fotos=conv.get('fotos', [])
             )
-            elapsed = (time.monotonic() - t0) * 1000
+            elapsed_db = (time.monotonic() - t_db) * 1000
+            elapsed_total = (time.monotonic() - t0) * 1000
             logger.info(
-                "_guardar_registro | user_id=%s exito=%s fotos=%s elapsed=%.1fms",
-                user_id, exito, conv.get('fotos', []), elapsed
+                "_guardar_registro | user_id=%s exito=%s fotos=%s usr_time=%.1fms db_time=%.1fms total=%.1fms",
+                user_id, exito, conv.get('fotos', []), elapsed_usr, elapsed_db, elapsed_total
             )
             return exito
         except Exception as exc:
@@ -255,7 +266,6 @@ class DefectoWorkflow:
         part_str = f"<b>Num Parte:</b> {num_parte}\n" if num_parte and num_parte != "_OMITIR_" else ""
         
         return (
-            f"<b>Fotos:</b> {fotos_str}\n"
             f"<b>Modelo:</b> {datos.get('modelo')}\n"
             f"{part_str}"
             f"<b>Línea:</b> {datos.get('linea')}\n"

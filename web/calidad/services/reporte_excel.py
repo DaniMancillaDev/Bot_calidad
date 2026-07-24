@@ -14,6 +14,7 @@ import logging
 import os
 import uuid
 import warnings
+from copy import copy
 from pathlib import Path
 from PIL import Image, ImageFile, ImageOps
 import openpyxl
@@ -21,6 +22,7 @@ from openpyxl.drawing.image import Image as OpenpyxlImage
 from openpyxl.drawing.spreadsheet_drawing import OneCellAnchor, AnchorMarker
 from openpyxl.drawing.xdr import XDRPositiveSize2D
 from openpyxl.utils.units import pixels_to_EMU
+from openpyxl.styles import Alignment
 
 # Detección de orientación: importada desde shared/ (fuente de verdad única)
 from shared.infrastructure.orientation.orientation_engine import (
@@ -211,6 +213,21 @@ def generate_excel(
         today_str = datetime.now().strftime("%Y-%m-%d")
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+            # Capturar estilos de la fila plantilla (primera fila de datos)
+            # para replicarlos en filas nuevas y preservar formato de la plantilla.
+            _TEMPLATE_ROW = START_ROW + 1  # 1-based
+            _MAX_COL = ws.max_column or 20
+            template_styles = {}
+            for _c in range(1, _MAX_COL + 1):
+                _cell = ws.cell(row=_TEMPLATE_ROW, column=_c)
+                template_styles[_c] = {
+                    'font':         copy(_cell.font),
+                    'fill':         copy(_cell.fill),
+                    'border':       copy(_cell.border),
+                    'alignment':    copy(_cell.alignment),
+                    'number_format': _cell.number_format,
+                }
+
             for idx, registro in enumerate(registros):
                 row        = START_ROW + idx
                 row_1based = row + 1
@@ -219,6 +236,16 @@ def generate_excel(
                 # Agregar encabezado dinámicamente si es la primera fila de datos
                 if idx == 0:
                     ws.cell(row=START_ROW, column=7).value = "Part Number"
+
+                # Copiar estilos de la fila plantilla a filas nuevas (idx > 0)
+                if idx > 0:
+                    for _c, _style in template_styles.items():
+                        _cell = ws.cell(row=row_1based, column=_c)
+                        _cell.font         = copy(_style['font'])
+                        _cell.fill         = copy(_style['fill'])
+                        _cell.border       = copy(_style['border'])
+                        _cell.alignment    = copy(_style['alignment'])
+                        _cell.number_format = _style['number_format']
 
                 # Escribir datos de texto
                 fecha_obj = registro.get('fecha_obj')
@@ -231,6 +258,20 @@ def generate_excel(
                 ws.cell(row=row_1based, column=3).value  = registro.get('modelo', '')
                 ws.cell(row=row_1based, column=6).value  = registro.get('linea', '')
                 ws.cell(row=row_1based, column=7).value  = registro.get('numero_parte') or ""
+                # Columna H: SN on set (series, una por línea en Excel)
+                sn_raw = (registro.get('sn_on_set') or '').strip()
+                if sn_raw:
+                    cell_sn = ws.cell(row=row_1based, column=8)
+                    cell_sn.value = sn_raw
+                    # Preservar alineación de plantilla, solo forzar wrap_text
+                    existing_align = copy(cell_sn.alignment)
+                    cell_sn.alignment = Alignment(
+                        horizontal=existing_align.horizontal,
+                        vertical=existing_align.vertical or 'top',
+                        wrap_text=True,
+                        indent=existing_align.indent,
+                        shrink_to_fit=existing_align.shrink_to_fit,
+                    )
                 ws.cell(row=row_1based, column=9).value  = registro.get('descripcion', '')
                 ws.cell(row=row_1based, column=12).value = registro.get('cantidad', 1)
                 ws.cell(row=row_1based, column=14).value = registro.get('responsable', '')

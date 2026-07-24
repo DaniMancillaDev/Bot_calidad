@@ -7,7 +7,11 @@ import sys
 def main():
     """Run administrative tasks."""
     from dotenv import load_dotenv
-    load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env.local'))
+    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
+    load_dotenv(env_path)
+    env_local_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env.local')
+    if os.path.exists(env_local_path):
+        load_dotenv(env_local_path, override=True)
     
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
     

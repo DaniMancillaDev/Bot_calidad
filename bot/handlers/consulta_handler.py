@@ -124,8 +124,7 @@ def create_estado(api_client):
                 f"<b>{titulo}</b>\n"
                 f"<i>Turno {stats['turno']} — {stats['departamento']}</i>\n\n"
                 f"<b>Usuario:</b> {stats['nombre']}\n"
-                f"<b>Siguiente foto:</b> {stats['siguiente_foto']:03d}\n"
-                f"<b>{lbl_registros}:</b> {stats['total_registros']}\n"
+                f"<b>{lbl_registros} hoy:</b> {stats['total_registros']}\n"
             )
 
             await update.message.reply_text(msg, parse_mode="HTML")
