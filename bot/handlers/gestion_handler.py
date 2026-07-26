@@ -2,7 +2,6 @@
 bot/handlers/gestion_handler.py
 
 Responsabilidad única: operaciones destructivas de limpieza.
-  - /limpiar       → elimina los registros de BD del usuario (no afecta contador)
   - /limpiar_fotos → elimina las imágenes en disco del usuario (no afecta contador)
 
 Bot hace: borrado físico de fotos del volumen (solo limpiar_fotos).
@@ -16,7 +15,6 @@ from telegram.ext import ContextTypes
 
 logger = logging.getLogger(__name__)
 
-import os
 FOTOS_PATH   = os.getenv("FOTOS_PATH",   "media_files/fotos")
 THUMBS_PATH  = os.getenv("THUMBS_PATH",  "media_files/thumbs")
 PROXIES_PATH = os.getenv("PROXIES_PATH", "media_files/proxies")
@@ -52,29 +50,6 @@ def _borrar_archivos_usuario(user_id: int, solo_temporales: bool = True, simulac
     return metricas
 
 
-# def create_limpiar(api_client):
-#     \"\"\"
-#     Factory para /limpiar.
-# 
-#     Args:
-#         api_client:        BotApiClient
-#     \"\"\"
-#     async def limpiar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-#         if not update.message:
-#             return
-#         try:
-#             user_id = update.effective_user.id if update.effective_user else None
-# 
-#             # Ahora /limpiar actúa como /cancelar
-#             metricas_archivos = _borrar_archivos_usuario(user_id, solo_temporales=True, simulacion=False)
-#             
-#             # Usar el nuevo endpoint cancelar en lugar de limpiar
-#             # (Asumiendo que el backend ya fue actualizado)
-#             resp = await api_client.cancelar_sesion(user_id)
-# 
-#             if resp.get('status') == 'cancelled':
-#                 await update.message.reply_text(
-#                     "<b>Sesión cancelada.</b>\n\n"
 #                     "Los registros históricos y evidencias no fueron modificados.\n"
 #                     "Para mantenimiento de archivos utiliza el panel web.",
 #                     parse_mode="HTML"
