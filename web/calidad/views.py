@@ -43,38 +43,35 @@ def get_registros_permitidos(user):
     return RegistroDefecto.objects.none()
 
 
-def obtener_numeros_fotos_permitidas(registros):
-    """
-    Parsea el campo 'fotos' de los registros (soporta legacy '(001-005)' y nuevo '1, 2, 3') 
-    y extrae un set con los números enteros individuales permitidos.
-    """
-    numeros_permitidos = set()
-    for r in registros:
-        if not r.fotos:
-            continue
-        
-        # 1. Intentar formato nuevo: "1, 2, 3"
-        if ',' in r.fotos or r.fotos.isdigit():
-            try:
-                nums = [int(x.strip()) for x in r.fotos.split(',') if x.strip()]
-                numeros_permitidos.update(nums)
-                continue
-            except ValueError:
-                pass
 
-        # 2. Formato legacy: (001-005)
-        # Buscar rangos: (001-005)
-        rangos = re.findall(r'\((\d+)-(\d+)\)', r.fotos)
-        for inicio, fin in rangos:
-            numeros_permitidos.update(range(int(inicio), int(fin) + 1))
-            
-        # Buscar individuales legacy: (001)
-        individuales = re.findall(r'\((\d+)\)', r.fotos.replace('-', 'X'))
-        for num in individuales:
-            numeros_permitidos.add(int(num))
-            
-    return numeros_permitidos
+# ============================================================
+# FUNCIONES AUXILIARES INTERNAS Y UTILS
+# ============================================================
 
+def _get_min_foto(r):
+    """Extrae la primera foto de la lista (legacy helper)"""
+    if getattr(r, 'fotos_nums', None):
+        return min(r.fotos_nums)
+    import re
+    nums = re.findall(r'\d+', str(getattr(r, 'fotos', '')))
+    return int(nums[0]) if nums else 99999
+
+def _sort_by_foto(r):
+    """Helper para ordernar registros"""
+    return (getattr(r, 'user_id', 0), _get_min_foto(r))
+
+class _AutoDeleteFile:
+    """Wrapper para borrar archivo temporal al terminar de streamear."""
+    def __init__(self, path):
+        self._path = path
+        self._file = open(path, 'rb')
+    def __getattr__(self, name):
+        return getattr(self._file, name)
+    def close(self):
+        self._file.close()
+        import os
+        try: os.unlink(self._path)
+        except OSError: pass
 
 # ============================================================
 # DASHBOARD PRINCIPAL
@@ -509,12 +506,16 @@ def _parse_fotos_nums(registros):
     Extrae los números de foto individuales de los registros.
     Soporta formato nuevo '1, 2, 3' y legacy '(001-005)'.
     Resistente a registros como dict (JSON) o como objeto (ORM).
+    
+    Nota de migración (photo_parser.py):
+    - Antes: rangos sin paréntesis no eran expandidos (ej. '1-5' daba [1,5]).
+    - Después: cualquier rango válido se interpreta como secuencia completa.
+    - Motivo: alineación entre entrada del operador y representación interna.
     """
-    import re
+    from shared.utils.photo_parser import parse_photo_numbers
     resultado = []
     
     # Pre-cargar count de evidencias_v2 para evitar N+1 queries si es ORM
-    evs_counts = {}
     if registros and not isinstance(registros[0], dict):
         try:
             from django.db.models import Count
@@ -530,10 +531,7 @@ def _parse_fotos_nums(registros):
         
         nums = []
         if fotos_str:
-            nums = [int(n) for n in re.findall(r'\d+', str(fotos_str))]
-            rangos = re.findall(r'\((\d+)-(\d+)\)', str(fotos_str))
-            for inicio, fin in rangos:
-                nums.extend(range(int(inicio), int(fin) + 1))
+            nums = parse_photo_numbers(str(fotos_str))
         
         # Integrar conteo de Fase 2 (Evidencias en Base de Datos)
         v2_count = r.get('v2_count', 0) if is_dict else getattr(r, 'v2_count', 0)
@@ -1053,17 +1051,7 @@ def descargar_txt(request):
     # Ordenar primero por usuario, luego por número de foto
     # ponytail: sorted() en Python porque min(fotos_nums) no es trivial en ORM con ArrayField.
     # ceiling: N*log(N) en memoria.
-    def _min_foto(r):
-        if r.fotos_nums:
-            return min(r.fotos_nums)
-        import re
-        nums = re.findall(r'\d+', str(r.fotos or ''))
-        return int(nums[0]) if nums else 99999
-        
-    def _key_sort(r):
-        return (r.user_id, _min_foto(r))
-
-    registros_sorted = sorted(registros_qs, key=_key_sort)
+    registros_sorted = sorted(registros_qs, key=_sort_by_foto)
 
     lines = [
         f"REPORTE DE DEFECTOS - TURNO {turno} - {depto}",
@@ -1113,17 +1101,7 @@ def descargar_zip(request):
         registros_qs = registros_qs.filter(fecha_registro__date__lte=fecha_hasta)
         
     # Mismo orden y agrupación que el TXT
-    def _min_foto(r):
-        if r.fotos_nums:
-            return min(r.fotos_nums)
-        import re
-        nums = re.findall(r'\d+', str(r.fotos or ''))
-        return int(nums[0]) if nums else 99999
-        
-    def _key_sort(r):
-        return (r.user_id, _min_foto(r))
-        
-    registros_sorted = sorted(registros_qs, key=_key_sort)
+    registros_sorted = sorted(registros_qs, key=_sort_by_foto)
     
     # Obtener nombres de usuarios
     from django.contrib.auth.models import User
@@ -1173,15 +1151,8 @@ def descargar_zip(request):
                 if reg.fotos_nums:
                     nums = reg.fotos_nums
                 else:
-                    try:
-                        import re
-                        raw_fotos = str(reg.fotos)
-                        nums = [int(n) for n in re.findall(r'\d+', raw_fotos)]
-                        rangos = re.findall(r'(\d+)\s*-\s*(\d+)', raw_fotos)
-                        for inicio_r, fin_r in rangos:
-                            nums.extend(range(int(inicio_r), int(fin_r) + 1))
-                    except Exception:
-                        pass
+                    from shared.utils.photo_parser import parse_photo_numbers
+                    nums = parse_photo_numbers(reg.fotos)
 
                 for num in sorted(list(set(nums))):
                     img = get_best_image_path(fotos_dir, str(user_id), num)
@@ -1199,18 +1170,6 @@ def descargar_zip(request):
         perfil = getattr(request.user, 'perfil', None)
         turno = perfil.turno if perfil else 'X'
         filename = f"fotos_{turno}_{datetime.now().strftime('%Y%m%d_%H%M')}.zip"
-
-        # Wrapper para borrar el temporal al terminar de streamear (ponytail: lazy self-cleanup)
-        class _AutoDeleteFile:
-            def __init__(self, path):
-                self._path = path
-                self._file = open(path, 'rb')
-            def __getattr__(self, name):
-                return getattr(self._file, name)
-            def close(self):
-                self._file.close()
-                try: os.unlink(self._path)
-                except OSError: pass
 
         response = FileResponse(_AutoDeleteFile(temp_path), content_type="application/zip")
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
