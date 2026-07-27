@@ -1,0 +1,163 @@
+version: "3.9"
+
+services:
+  # ──────────────────────────────────────────
+  # BOT: Proceso de Telegram (polling)
+  # ──────────────────────────────────────────
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.bot
+    container_name: bot_calidad_bot
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - API_BASE_URL=http://web:8000
+    volumes:
+      - media_data:/app/media_files # Fotos compartidas con web
+    depends_on:
+      web:
+        condition: service_healthy
+    networks:
+      - internal
+
+  # ──────────────────────────────────────────
+  # WEB: Django + Gunicorn
+  # ──────────────────────────────────────────
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bot_calidad_web
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - DJANGO_DEBUG=False
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - PYTHONPATH=/app/web
+    volumes:
+      - media_data:/app/media_files
+      - static_data:/app/static_collected
+    networks:
+      - internal
+    expose:
+      - "8000"
+    depends_on:
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/login/')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # ──────────────────────────────────────────
+  # CELERY WORKER: Genera Excel en background
+  # ──────────────────────────────────────────
+  celery:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bot_calidad_celery
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - PYTHONPATH=/app/web
+    volumes:
+      - media_data:/app/media_files
+    networks:
+      - internal
+    depends_on:
+      redis:
+        condition: service_started
+      web:
+        condition: service_healthy
+    command: ["uv", "run", "celery", "-A", "calidad.celery_app", "worker", "--loglevel=info", "--concurrency=2"]
+
+  # ──────────────────────────────────────────
+  # POSTGRES: Base de datos principal
+  # ──────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: bot_calidad_postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"  # Expuesto al host para desarrollo local
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ──────────────────────────────────────────
+  # REDIS: Broker de tareas y backend de resultados
+  # ──────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: bot_calidad_redis
+    restart: unless-stopped
+    networks:
+      - internal
+    ports:
+      - "6379:6379"  # Expuesto al host para desarrollo local
+    # Sin autenticación — solo dev local. Prod: proteger con requirepass.
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes  # Persistencia AOF
+
+  # ──────────────────────────────────────────
+  # NGINX: Reverse proxy + media seguro
+  # ──────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: bot_calidad_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "8000:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - media_data:/app/media_files:ro  # Solo lectura para nginx
+      - static_data:/usr/share/nginx/html/static:ro
+    depends_on:
+      - web
+    networks:
+      - internal
+
+# ──────────────────────────────────────────
+# VOLÚMENES: Datos que sobreviven reinicios
+# ──────────────────────────────────────────
+volumes:
+  postgres_data:
+    driver: local
+  media_data:
+    driver: local
+  static_data:
+    driver: local
+  redis_data:
+    driver: local
+
+# ──────────────────────────────────────────
+# RED INTERNA
+# ──────────────────────────────────────────
+networks:
+  internal:
+    driver: bridge

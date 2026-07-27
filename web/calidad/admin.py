@@ -1,7 +1,7 @@
 """
 Admin personalizado — Panel de administración del sistema de calidad.
 """
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
 from .models import RegistroDefecto, PerfilUsuario
@@ -21,12 +21,30 @@ class RegistroDefectoAdmin(admin.ModelAdmin):
     readonly_fields = ['id', 'fotos', 'modelo', 'linea', 'cantidad',
                        'responsable', 'descripcion', 'turno', 'departamento',
                        'fecha_registro', 'user_id']
+    
+    actions = ['hard_delete_selected']
+
+    @admin.action(
+        description="Eliminar registros definitivamente",
+        permissions=['delete']
+    )
+    def hard_delete_selected(self, request, queryset):
+        count = queryset.count()
+        queryset.delete(force_delete=True)
+        self.message_user(request, f"Éxito: {count} registros eliminados físicamente de la base de datos.", level=messages.SUCCESS)
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        # 1. Eliminar la acción por defecto de Django que no tiene force_delete
+        if 'delete_selected' in actions:
+            del actions['delete_selected']
+        return actions
 
     def has_add_permission(self, request):
         return False  # Los registros solo los crea el bot
 
     def has_delete_permission(self, request, obj=None):
-        return request.user.is_superuser  # Solo el admin puede borrar
+        return True  # Permitir borrar desde la interfaz web a los usuarios admin
 
 
 

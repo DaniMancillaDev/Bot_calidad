@@ -17,19 +17,19 @@ import sys
 
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv('.env.local')
 
 from shared.config.logging_config import setup_logging
 setup_logging()
 
 logger = logging.getLogger(__name__)
 
-from database import db
 from shared.config.dependencies import build_container
 from bot.app import build_application
 
-# Directorio base de fotos (se crea si no existe)
-FOTOS_PATH = "fotos"
+# Directorio base de fotos: Docker monta media_files en /app/media_files,
+# local usa media_files/ relativo al proyecto.
+FOTOS_PATH = os.getenv('FOTOS_PATH', 'media_files/fotos')
 os.makedirs(FOTOS_PATH, exist_ok=True)
 
 
@@ -39,7 +39,7 @@ def main() -> None:
         logger.error("TELEGRAM_TOKEN no está configurado en las variables de entorno.")
         sys.exit(1)
 
-    container = build_container(db)
+    container = build_container()
     application = build_application(token, container)
 
     logger.info("Bot de Calidad iniciado (Clean Architecture)")

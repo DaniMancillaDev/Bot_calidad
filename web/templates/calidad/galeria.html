@@ -1,114 +1,323 @@
 {% extends "calidad/base.html" %}
+{% block title %}Histórico Visual — Panel de Calidad{% endblock %}
 
-{% block title %}Galería de Fotos — Panel de Calidad{% endblock %}
-{% block page_title %}Galería de Fotos{% endblock %}
+{% block topbar_actions %}
+<div style="display:flex;gap:12px;align-items:center;">
+  <span style="font-size:0.85rem;color:var(--text-muted);">
+    <span id="total-count" style="color:var(--text);font-weight:600;">{{ total }}</span> registros encontrados
+  </span>
+</div>
+{% endblock %}
+
+{% block page_title %}Histórico Visual (Galería){% endblock %}
 
 {% block extra_head %}
+<script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
 <style>
-  .gallery-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 16px;
-  }
-  .photo-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    overflow: hidden;
-    transition: transform 0.2s, border-color 0.2s;
-    text-decoration: none;
-    color: var(--text);
-    display: flex;
-    flex-direction: column;
-  }
-  .photo-card:hover {
-    transform: translateY(-4px);
-    border-color: var(--accent);
-  }
-  .photo-img {
-    width: 100%;
-    aspect-ratio: 4/3;
-    object-fit: cover;
-    background: #111;
-  }
-  .photo-info {
-    padding: 12px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .photo-num {
-    font-weight: 600;
-    font-size: 1.1rem;
-  }
-  .photo-ext {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    background: var(--surface2);
-    padding: 2px 6px;
-    border-radius: 4px;
-  }
+/* ── Barra de filtros (Industrial y Limpia) ───────────────────────────── */
+.filters-bar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 20px;
+  margin-bottom: 24px;
+}
+.filters-bar select,
+.filters-bar input[type="text"] {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  font-family: 'Inter', sans-serif;
+  min-width: 140px;
+  transition: border-color .15s;
+}
+.filters-bar select:focus,
+.filters-bar input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.filter-search {
+  flex: 1;
+  min-width: 200px;
+}
+
+/* ── Feed Grid (Cards) ────────────────────────────────────────────────── */
+#feed-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+/* ── Registro Card ────────────────────────────────────────────────────── */
+.reg-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: border-color .2s, box-shadow .2s;
+  position: relative;
+}
+.reg-card:hover {
+  border-color: rgba(99,102,241,.4);
+  box-shadow: 0 4px 20px rgba(0,0,0,.2);
+}
+
+/* ── Card Header ──────────────────────────────────────────────────────── */
+.rc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+.rc-time {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+/* Badges Operativos */
+.st-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.st-pendiente  { background: rgba(148, 163, 184, 0.1); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.2); }
+.st-revisado   { background: rgba(52, 211, 153, 0.1);  color: #34d399; border: 1px solid rgba(52, 211, 153, 0.2); }
+.st-aprobado   { background: rgba(52, 211, 153, 0.1);  color: #34d399; border: 1px solid rgba(52, 211, 153, 0.2); }
+.st-rechazado  { background: rgba(248, 113, 113, 0.1); color: #f87171; border: 1px solid rgba(248, 113, 113, 0.2); }
+.st-duplicado  { background: rgba(167, 139, 250, 0.1); color: #a78bfa; border: 1px solid rgba(167, 139, 250, 0.2); }
+.st-borroso    { background: rgba(251, 191, 36, 0.1);  color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.2); }
+
+/* ── Thumbnails Strip ─────────────────────────────────────────────────── */
+.rc-thumbs {
+  display: flex;
+  gap: 8px;
+  padding: 16px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.thumb-wrap {
+  position: relative;
+  flex: 0 0 auto;
+  cursor: pointer;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #000;
+}
+.thumb-img {
+  width: 90px;
+  height: 90px;
+  object-fit: cover;
+  display: block;
+  opacity: 0.85;
+  transition: opacity .2s, transform .2s;
+}
+.thumb-wrap:hover .thumb-img {
+  opacity: 1;
+  transform: scale(1.05);
+}
+.thumb-label {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  background: rgba(0,0,0,0.7);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.rc-no-fotos {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  padding: 12px 0;
+}
+
+/* ── Info Grid ───────────────────────────────────────────────────────── */
+.rc-info {
+  padding: 0 16px 16px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.rc-field-label {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+}
+.rc-field-value {
+  font-size: 0.85rem;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rc-field-full {
+  grid-column: 1 / -1;
+  white-space: normal;
+  line-height: 1.4;
+  color: #cbd5e1;
+}
+
+/* ── Load more & Empty ────────────────────────────────────────────────── */
+.load-more-indicator {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 30px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+.feed-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-muted);
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1px dashed var(--border);
+}
+
+/* ── Modal Zoom ───────────────────────────────────────────────────────── */
+#foto-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(15, 17, 23, 0.95);
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 16px;
+}
+#foto-modal.open { display: flex; }
+#modal-img {
+  max-width: 90vw;
+  max-height: 85vh;
+  border-radius: 8px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  object-fit: contain;
+}
+#modal-caption {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+.modal-close-btn {
+  position: absolute;
+  top: 24px;
+  right: 32px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 1.2rem;
+  width: 40px; height: 40px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all .2s;
+}
+.modal-close-btn:hover {
+  background: var(--surface2);
+  color: #fff;
+}
 </style>
 {% endblock %}
 
 {% block content %}
 
-<div class="card" style="margin-bottom:24px; display:flex; justify-content:space-between; align-items:center;">
-  <div>
-    <span style="font-size:1.2rem; font-weight:600;">{{ total }}</span>
-    <span style="color:var(--text-muted); font-size:0.9rem;">fotos almacenadas</span>
+{# ── Filtros ──────────────────────────────────────────────────────────────── #}
+<form method="GET" class="filters-bar" id="filtros-form">
+  <select name="estado" onchange="this.form.submit()">
+    <option value="">Todos los estados</option>
+    {% for val, label in estados %}
+    <option value="{{ val }}" {% if f_estado == val %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+
+  <select name="turno" onchange="this.form.submit()">
+    <option value="">Todos los turnos</option>
+    <option value="A" {% if f_turno == "A" %}selected{% endif %}>Turno A</option>
+    <option value="B" {% if f_turno == "B" %}selected{% endif %}>Turno B</option>
+    <option value="C" {% if f_turno == "C" %}selected{% endif %}>Turno C</option>
+  </select>
+
+  <select name="dias" onchange="this.form.submit()">
+    <option value="">Todo el tiempo</option>
+    <option value="1"  {% if f_dias == "1"  %}selected{% endif %}>Hoy</option>
+    <option value="3"  {% if f_dias == "3"  %}selected{% endif %}>Últimos 3 días</option>
+    <option value="7"  {% if f_dias == "7"  %}selected{% endif %}>Últimos 7 días</option>
+    <option value="30" {% if f_dias == "30" %}selected{% endif %}>Último mes</option>
+  </select>
+
+  <!-- Filtros de Rango de Fechas (Compatibilidad con Historial) -->
+  <input type="date" name="fecha_desde" value="{{ request.GET.fecha_desde }}" title="Desde fecha">
+  <input type="date" name="fecha_hasta" value="{{ request.GET.fecha_hasta }}" title="Hasta fecha">
+
+  <input type="text" name="q" placeholder="Buscar modelo, defecto, operario..."
+         value="{{ f_q }}" class="filter-search">
+
+  <button type="submit" class="btn btn-primary" style="padding:8px 16px;">
+    Filtrar
+  </button>
+
+  {% if f_estado or f_turno or f_dias or f_q or request.GET.fecha_desde or request.GET.fecha_hasta %}
+  <a href="{% url 'galeria_fotos' %}" class="btn btn-ghost" style="padding:8px 16px;">
+    Limpiar
+  </a>
+  {% endif %}
+</form>
+
+{# ── Feed ─────────────────────────────────────────────────────────────────── #}
+<div id="feed-container">
+  {% include "calidad/partials/feed_page.html" %}
+
+  {% if not registros %}
+  <div class="feed-empty">
+    <div style="font-size:1.1rem; font-weight:500; color:var(--text); margin-bottom:8px;">No se encontraron registros</div>
+    Intenta ajustando los filtros de búsqueda.
   </div>
-  <div style="display:flex; gap:12px;">
-    <!-- Simple client side filter could be added here if needed -->
-    <input type="text" id="filterInput" placeholder="Buscar foto (ej. 005)..." style="width:200px;">
-  </div>
+  {% endif %}
 </div>
 
-<div class="gallery-grid" id="galleryGrid">
-  {% for f in fotos %}
-  <a href="{% url 'ver_foto' f.numero %}" class="photo-card" data-num="{{ f.numero|stringformat:'03d' }}">
-    <img src="{{ f.url }}" alt="Foto {{ f.numero }}" class="photo-img" loading="lazy">
-    <div class="photo-info">
-      <span class="photo-num">#{{ f.numero|stringformat:"03d" }}</span>
-      <span class="photo-ext">{{ f.nombre|slice:"-3:"|upper }}</span>
-    </div>
-  </a>
-  {% empty %}
-  <div style="grid-column: 1 / -1; padding: 40px; text-align: center; color: var(--text-muted);">
-    No se encontraron fotos en el directorio.
-  </div>
-  {% endfor %}
+{# ── Modal zoom ────────────────────────────────────────────────────────────── #}
+<div id="foto-modal" role="dialog" aria-modal="true" aria-label="Vista ampliada">
+  <button class="modal-close-btn" onclick="cerrarModal()" aria-label="Cerrar">✕</button>
+  <img id="modal-img" src="" alt="Foto ampliada">
+  <p id="modal-caption"></p>
 </div>
 
 <script>
-  // Filtrado simple en el frontend
-  document.getElementById('filterInput').addEventListener('input', function(e) {
-    const q = e.target.value.trim().toLowerCase();
-    const cards = document.querySelectorAll('.photo-card');
-    
-    cards.forEach(card => {
-      if (q === '') {
-        card.style.display = 'flex';
-      } else {
-        const num = card.getAttribute('data-num');
-        if (num.includes(q)) {
-          card.style.display = 'flex';
-        } else {
-          card.style.display = 'none';
-        }
-      }
-    });
-  });
-
-  // Si viene con '?q=' en la URL, aplicarlo
-  const urlParams = new URLSearchParams(window.location.search);
-  if (urlParams.has('q')) {
-    const q = urlParams.get('q');
-    const input = document.getElementById('filterInput');
-    input.value = q;
-    // Dispatch event to trigger filter
-    input.dispatchEvent(new Event('input'));
-  }
+function abrirModal(origUrl, modelo, num) {
+  document.getElementById('modal-img').src = origUrl;
+  document.getElementById('modal-caption').textContent = modelo + ' — Foto #' + String(num).padStart(3,'0');
+  document.getElementById('foto-modal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function cerrarModal() {
+  document.getElementById('foto-modal').classList.remove('open');
+  document.getElementById('modal-img').src = '';
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', e => { if(e.key==='Escape') cerrarModal(); });
+document.getElementById('foto-modal').addEventListener('click', function(e){
+  if(e.target===this) cerrarModal();
+});
 </script>
 
 {% endblock %}

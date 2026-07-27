@@ -1,0 +1,85 @@
+{# Partial: feed_page.html — Cards de un lote de registros (HTMX append) #}
+{# Renderiza las cards del page.object_list y el trigger de siguiente página. #}
+
+{% for item in registros %}
+<article class="reg-card">
+
+  {# ── Header ─────────────────────────────────────────────────────────── #}
+  <div class="rc-header">
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <span class="st-badge st-{{ item.reg.estado_revision }}">
+        {{ item.reg.get_estado_revision_display }}
+      </span>
+      {% if item.reg.is_duplicate %}
+        <span class="st-badge st-duplicado">Duplicado</span>
+      {% endif %}
+      {% if item.reg.is_blurry %}
+        <span class="st-badge st-borroso">Borroso</span>
+      {% endif %}
+    </div>
+    <time class="rc-time" datetime="{{ item.reg.fecha_registro|date:'c' }}" title="{{ item.reg.fecha_registro|date:'d/m/Y H:i' }}">
+      {{ item.reg.fecha_registro|date:"d/m H:i" }}
+    </time>
+  </div>
+
+  {# ── Thumbnails Strip ────────────────────────────────────────────────── #}
+  <div class="rc-thumbs">
+    {% for foto in item.fotos %}
+    <div class="thumb-wrap" onclick="abrirModal('{{ foto.orig_url }}', '{{ item.reg.modelo|escapejs }}', {{ foto.num }})">
+      <img src="{{ foto.thumb_url }}" alt="Foto #{{ foto.num|stringformat:'03d' }}" loading="lazy" decoding="async" class="thumb-img">
+      <span class="thumb-label">#{{ foto.num|stringformat:"03d" }}</span>
+    </div>
+    {% empty %}
+    <div class="rc-no-fotos">
+      <span>Sin fotos registradas</span>
+    </div>
+    {% endfor %}
+  </div>
+
+  {# ── Metadata ───────────────────────────────────────────────────────── #}
+  <div class="rc-info">
+    <div>
+      <div class="rc-field-label">Modelo</div>
+      <div class="rc-field-value" title="{{ item.reg.modelo }}">{{ item.reg.modelo }}</div>
+    </div>
+    <div>
+      <div class="rc-field-label">Línea</div>
+      <div class="rc-field-value">{{ item.reg.linea|default:"—" }}</div>
+    </div>
+    <div>
+      <div class="rc-field-label">Cantidad</div>
+      <div class="rc-field-value">{{ item.reg.cantidad }}</div>
+    </div>
+    <div>
+      <div class="rc-field-label">Operario</div>
+      <div class="rc-field-value" title="{{ item.nombre_usuario }}">{{ item.nombre_usuario }}</div>
+    </div>
+    <div class="rc-field-full">
+      <div class="rc-field-label">Defecto</div>
+      <div class="rc-field-value rc-field-full">{{ item.reg.descripcion }}</div>
+    </div>
+    <div>
+      <div class="rc-field-label">Turno / Depto</div>
+      <div class="rc-field-value">{{ item.reg.turno }} · {{ item.reg.departamento }}</div>
+    </div>
+    <div>
+      <div class="rc-field-label">Responsable</div>
+      <div class="rc-field-value" title="{{ item.reg.responsable }}">{{ item.reg.responsable }}</div>
+    </div>
+  </div>
+
+</article>
+{% endfor %}
+
+{# ── Trigger de siguiente página (HTMX) ───────────────────────────────── #}
+{% if page.has_next %}
+<div id="next-page-trigger"
+     hx-get="?{% if f_estado %}estado={{ f_estado }}&{% endif %}{% if f_turno %}turno={{ f_turno }}&{% endif %}{% if f_dias %}dias={{ f_dias }}&{% endif %}{% if f_q %}q={{ f_q }}&{% endif %}page={{ page.next_page_number }}"
+     hx-trigger="revealed"
+     hx-target="#feed-container"
+     hx-swap="beforeend">
+  <div class="load-more-indicator">
+    <span>Cargando más registros (Página {{ page.next_page_number }} de {{ paginator.num_pages }})...</span>
+  </div>
+</div>
+{% endif %}

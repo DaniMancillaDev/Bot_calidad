@@ -21,7 +21,7 @@
 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
   {% if perfil %}
   <div style="font-size:.9rem; color:var(--text-muted);">
-    👤 <strong>Turno {{ perfil.turno }}</strong> | {{ perfil.departamento }}
+    <span class="material-symbols-outlined" style="font-size:1.1rem; vertical-align:text-bottom;">person</span> <strong>Turno {{ perfil.turno }}</strong> | {{ perfil.departamento }}
     {% if request.user.is_superuser %}<span class="badge badge-purple">Admin</span>{% endif %}
   </div>
   {% endif %}

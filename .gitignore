@@ -17,9 +17,26 @@ bot.log
 # Database and state
 *.db
 *.db-journal
+*.db-shm
+*.db-wal
 *.sqlite3
+*.json
+!package.json
+!composer.json
+!tsconfig.json
+
+# Excel and temporary files
+*.xlsx
+*.xls
+*.csv
+*.jpg
+*.jpeg
+*.png
+!web/static/**
+!bot/assets/**
 
 # Project specific
+scratch.py
 scratch/
 fotos/
 media/
@@ -35,3 +52,4 @@ revert_photos.bat
 .agents/
 skills/
 skills-lock.json
+.env.local

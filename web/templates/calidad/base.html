@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="es">
 
@@ -5,8 +6,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}Panel de Calidad{% endblock %}</title>
+  <link rel="icon" type="image/svg+xml" href="{% static 'img/favicon.svg' %}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
+    rel="stylesheet" />
   <style>
     :root {
       --bg: #0f1117;
@@ -38,6 +43,25 @@
       display: flex;
     }
 
+    /* SCROLLBARS */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: var(--bg);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--text-muted);
+    }
+
     /* SIDEBAR */
     .sidebar {
       width: 240px;
@@ -50,6 +74,25 @@
       gap: 8px;
       flex-shrink: 0;
       overflow-y: auto;
+      transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      overflow-x: hidden;
+      white-space: nowrap;
+    }
+
+    .sidebar.collapsed {
+      width: 72px;
+      padding: 24px 8px;
+    }
+
+    .sidebar.collapsed .link-text,
+    .sidebar.collapsed .user-info {
+      opacity: 0;
+      display: none;
+    }
+
+    .sidebar.collapsed .nav-link {
+      justify-content: center;
+      padding: 10px;
     }
 
     .sidebar-logo {
@@ -91,6 +134,22 @@
       color: #fff;
     }
 
+    .nav-link.nav-special {
+      margin-top: 8px;
+      border: 1px dashed var(--accent);
+      color: var(--accent);
+    }
+
+    .nav-link.nav-special:hover {
+      background: rgba(99, 102, 241, 0.1);
+    }
+
+    .nav-link.nav-special.active {
+      border: 1px solid var(--accent);
+      background: var(--accent);
+      color: #fff;
+    }
+
     .nav-link .icon {
       font-size: 1.1rem;
       width: 22px;
@@ -124,12 +183,40 @@
     }
 
     .topbar {
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
+      background: rgba(26, 29, 46, 0.7);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(46, 50, 80, 0.5);
       padding: 16px 28px;
       display: flex;
       align-items: center;
       justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .menu-toggle {
+      background: transparent;
+      border: none;
+      color: var(--text);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 6px;
+      border-radius: 8px;
+      transition: background 0.2s;
+    }
+
+    .menu-toggle:hover {
+      background: var(--surface2);
     }
 
     .topbar h1 {
@@ -155,6 +242,12 @@
       border: 1px solid var(--border);
       border-radius: var(--radius);
       padding: 20px;
+      transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
     }
 
     .card-title {
@@ -301,21 +394,48 @@
     }
 
     input,
-    select {
-      background: var(--surface2);
+    select,
+    textarea {
+      background: rgba(15, 17, 23, 0.5);
       border: 1px solid var(--border);
-      border-radius: 8px;
       color: var(--text);
-      padding: 8px 12px;
-      font-size: 0.88rem;
-      font-family: 'Inter', sans-serif;
-      width: 100%;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 0.9rem;
+      transition: all 0.2s;
     }
 
     input:focus,
-    select:focus {
+    select:focus,
+    textarea:focus {
       outline: none;
       border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+      background: rgba(15, 17, 23, 0.8);
+    }
+
+    input[type="file"] {
+      padding: 6px 8px;
+    }
+
+    input[type="file"]::file-selector-button {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 6px;
+      padding: 6px 14px;
+      margin-right: 12px;
+      cursor: pointer;
+      font-family: inherit;
+      font-weight: 500;
+      transition: all 0.2s ease;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+
+    input[type="file"]::file-selector-button:hover {
+      background: rgba(255, 255, 255, 0.18);
+      border-color: rgba(255, 255, 255, 0.3);
     }
 
     /* ALERTS */
@@ -372,29 +492,54 @@
 <body>
 
   <!-- SIDEBAR -->
-  <nav class="sidebar">
+  <nav class="sidebar" id="sidebar">
+    <script>
+      // Evitar el "flash" aplicando la clase antes de que el navegador dibuje la pantalla
+      if (localStorage.getItem("sidebarCollapsed") === "true") {
+        document.getElementById("sidebar").classList.add("collapsed");
+      }
+    </script>
     <div class="sidebar-logo">
-      <span>🏭</span> Panel de Calidad
+      <span class="material-symbols-outlined" style="font-size: 1.5rem; color: var(--accent);">verified</span>
+      <span class="link-text">Bot Calidad</span>
     </div>
 
     <a href="{% url 'dashboard' %}" class="nav-link {% if seccion == 'dashboard' %}active{% endif %}">
-      <span class="icon">📊</span> Dashboard
+      <span class="material-symbols-outlined icon">dashboard</span>
+      <span class="link-text">Dashboard</span>
     </a>
+
     <a href="{% url 'panel_operativo' %}" class="nav-link {% if seccion == 'operacion' %}active{% endif %}">
-      <span class="icon">⚡</span> Panel Operativo
+      <span class="material-symbols-outlined icon">bolt</span>
+      <span class="link-text">Panel Operativo</span>
     </a>
+
     <a href="{% url 'reportes' %}" class="nav-link {% if seccion == 'reportes' %}active{% endif %}">
-      <span class="icon">📋</span> Historial
+      <span class="material-symbols-outlined icon">bar_chart</span>
+      <span class="link-text">Historial / Reportes</span>
     </a>
+
     <a href="{% url 'galeria_fotos' %}" class="nav-link {% if seccion == 'fotos' %}active{% endif %}">
-      <span class="icon">🖼️</span> Galería de Fotos
+      <span class="material-symbols-outlined icon">image</span>
+      <span class="link-text">Galería de Evidencias</span>
+    </a>
+
+    <a href="{% url 'gestionar_diccionario' %}" class="nav-link {% if seccion == 'diccionario' %}active{% endif %}">
+      <span class="material-symbols-outlined icon">dictionary</span>
+      <span class="link-text">Diccionario</span>
     </a>
 
     {% if user.is_staff %}
     <a href="{% url 'admin:index' %}" class="nav-link">
-      <span class="icon">⚙️</span> Administración
+      <span class="material-symbols-outlined icon">settings</span>
+      <span class="link-text">Administración</span>
     </a>
     {% endif %}
+
+    <a href="{% url 'importacion_iniciar' %}" class="nav-link nav-special {% if 'importacion' in request.path %}active{% endif %}">
+      <span class="material-symbols-outlined icon">cloud_upload</span>
+      <span class="link-text">Importación Masiva</span>
+    </a>
 
     <div class="sidebar-bottom">
       <div class="user-info">
@@ -404,8 +549,9 @@
       <form action="{% url 'logout' %}" method="post" style="display:inline;">
         {% csrf_token %}
         <button type="submit" class="nav-link"
-          style="width:100%; text-align:left; background:none; border:none; cursor:pointer; font-family:inherit; color:var(--text-muted);">
-          <span class="icon">🚪</span> Cerrar sesión
+          style="width:100%; text-align:left; background:none; border:none; cursor:pointer; font-family:inherit; color:var(--text-muted); margin-top: 8px;">
+          <span class="material-symbols-outlined icon" style="color:var(--danger)">logout</span>
+          <span class="link-text" style="color:var(--danger)">Cerrar sesión</span>
         </button>
       </form>
     </div>
@@ -414,23 +560,40 @@
   <!-- CONTENIDO PRINCIPAL -->
   <div class="main">
     <div class="topbar">
-      <h1>{% block page_title %}Panel de Calidad{% endblock %}</h1>
+      <div class="topbar-left">
+        <button id="sidebarToggle" class="menu-toggle">
+          <span class="material-symbols-outlined">menu</span>
+        </button>
+        <h1>{% block page_title %}Panel de Calidad{% endblock %}</h1>
+      </div>
       <div class="topbar-actions">{% block topbar_actions %}{% endblock %}</div>
     </div>
 
     <div class="content">
       {% if messages %}
-      <ul class="messages">
+      <div style="margin-bottom: 24px;">
         {% for message in messages %}
-        <li class="{{ message.tags }}">{{ message }}</li>
+        <div class="alert alert-{{ message.tags }}">
+          {{ message }}
+        </div>
         {% endfor %}
-      </ul>
+      </div>
       {% endif %}
-
       {% block content %}{% endblock %}
     </div>
   </div>
 
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      const sidebar = document.getElementById("sidebar");
+      const toggleBtn = document.getElementById("sidebarToggle");
+
+      toggleBtn.addEventListener("click", () => {
+        sidebar.classList.toggle("collapsed");
+        localStorage.setItem("sidebarCollapsed", sidebar.classList.contains("collapsed"));
+      });
+    });
+  </script>
 </body>
 
 </html>

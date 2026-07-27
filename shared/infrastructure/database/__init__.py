@@ -1,1 +1,1 @@
-# shared.infrastructure.database — Repositorios SQLite
+# shared.infrastructure.database — Repositorios Django ORM

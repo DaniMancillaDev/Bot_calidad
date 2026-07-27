@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workspace de Importación SQA</title>
+    <!-- CSS -->
+    <link href="/static/workspace/css/workspace.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- SortableJS -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+</head>
+<body x-data="workspaceApp('{{ session_uuid }}')">
+
+    <header class="workspace-header">
+        <div>
+            <h1 style="margin:0; font-size: 1.25rem;">Workspace de Importación</h1>
+            <p style="margin:0; font-size: 0.875rem; color: var(--text-muted);" x-text="`Filas: ${totalRows} | Validadas: ${validatedRows}`"></p>
+        </div>
+        
+        <div style="display:flex; gap: 1rem; align-items:center;">
+            <span class="status-badge" 
+                  :class="{'status-valid': sessionStatus === 'READY', 'status-invalid': sessionStatus === 'FAILED'}" 
+                  x-text="sessionStatus"></span>
+                  
+            <button class="btn-primary" 
+                    style="background-color: var(--warning);" 
+                    @click="validateAll()" 
+                    :disabled="sessionStatus === 'UPLOADING' || sessionStatus === 'PROCESSING'">
+                Validar Todo
+            </button>
+            
+            <button class="btn-primary" 
+                    @click="confirmImport()" 
+                    :disabled="sessionStatus !== 'READY'">
+                Confirmar e Insertar
+            </button>
+        </div>
+    </header>
+    
+    <div x-show="errorMessage" style="padding: 1rem; background-color: var(--danger); color: white; text-align: center;" x-text="errorMessage"></div>
+
+    <main class="workspace-main">
+        <!-- Sidebar Drafts -->
+        <aside class="drafts-sidebar" id="drafts-list">
+            <template x-for="draft in drafts" :key="draft.id">
+                <div class="draft-item" 
+                     :class="{'active': activeDraft && activeDraft.id === draft.id}"
+                     @click="selectDraft(draft.id)"
+                     :data-draft-id="draft.id">
+                    <div>
+                        <div style="font-weight: 500;">Fila <span x-text="draft.row_index"></span></div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted);" x-text="draft.mapped_data.modelo || 'Sin Modelo'"></div>
+                    </div>
+                    <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem;">
+                        <span class="status-badge" 
+                              :class="draft.is_valid ? 'status-valid' : 'status-invalid'" 
+                              x-text="draft.is_valid ? 'OK' : 'Error'"></span>
+                        <span style="font-size: 0.75rem; font-weight: 600;" x-text="`📷 ${draft.assigned_photos.length}`"></span>
+                    </div>
+                </div>
+            </template>
+            
+            <!-- Paginacion -->
+            <div style="padding: 1rem; display: flex; justify-content: space-between;" x-show="numPages > 1">
+                <button class="btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" @click="loadDrafts(currentPage - 1)" :disabled="!hasPrevious">Ant</button>
+                <span style="font-size: 0.875rem;" x-text="`Pág ${currentPage} de ${numPages}`"></span>
+                <button class="btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" @click="loadDrafts(currentPage + 1)" :disabled="!hasNext">Sig</button>
+            </div>
+        </aside>
+
+        <!-- Inspector -->
+        <section class="inspector-pane">
+            <template x-if="!activeDraft">
+                <div style="text-align: center; color: var(--text-muted); margin-top: 5rem;">
+                    Selecciona un registro de la lista para editar
+                </div>
+            </template>
+            
+            <template x-if="activeDraft">
+                <div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h2>Inspeccionando Fila <span x-text="activeDraft.row_index"></span></h2>
+                        <button class="btn-primary" @click="saveDraft()">Guardar Cambios</button>
+                    </div>
+                    
+                    <template x-if="activeDraft.validation_errors.length > 0">
+                        <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 1rem; margin-bottom: 1rem;">
+                            <ul style="margin:0; padding-left: 1.5rem; color: #991b1b; font-size: 0.875rem;">
+                                <template x-for="err in activeDraft.validation_errors">
+                                    <li x-text="err"></li>
+                                </template>
+                            </ul>
+                        </div>
+                    </template>
+                    
+                    <!-- Carrusel Evidencias -->
+                    <h3 style="font-size: 1rem; margin-top: 1.5rem; margin-bottom: 0.5rem;">Evidencias Asignadas</h3>
+                    <div class="carousel-container" id="inspector-carousel">
+                        <template x-for="(photo, index) in activeDraft.assigned_photos" :key="photo">
+                            <div class="carousel-img-wrapper" :data-photo="photo">
+                                <img :src="`/media/workspace/sessions/{{ session_uuid }}/thumbs/${photo}`" class="carousel-img">
+                                <button class="remove-photo-btn" @click="removePhoto(index)" title="Desasignar">X</button>
+                            </div>
+                        </template>
+                        <template x-if="activeDraft.assigned_photos.length === 0">
+                            <div style="color: var(--text-muted); font-size: 0.875rem; padding: 2rem; width: 100%; text-align: center; border: 2px dashed var(--border-color); border-radius: 8px;">
+                                Arrastra fotos aquí o asignalas desde el Excel. Requerido para confirmar.
+                            </div>
+                        </template>
+                    </div>
+                    
+                    <!-- Formulario Datos -->
+                    <h3 style="font-size: 1rem; margin-top: 2rem; margin-bottom: 1rem;">Datos Extraídos</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div class="form-group">
+                            <label>Modelo</label>
+                            <input type="text" class="form-control" x-model="activeDraft.mapped_data.modelo">
+                        </div>
+                        <div class="form-group">
+                            <label>Línea</label>
+                            <input type="text" class="form-control" x-model="activeDraft.mapped_data.linea">
+                        </div>
+                        <div class="form-group">
+                            <label>Cantidad</label>
+                            <input type="number" class="form-control" x-model="activeDraft.mapped_data.cantidad">
+                        </div>
+                        <div class="form-group">
+                            <label>Responsable</label>
+                            <input type="text" class="form-control" x-model="activeDraft.mapped_data.responsable">
+                        </div>
+                        <div class="form-group">
+                            <label>Número de Parte</label>
+                            <input type="text" class="form-control" x-model="activeDraft.mapped_data.numero_parte">
+                        </div>
+                        <div class="form-group">
+                            <label>Defecto / Falla</label>
+                            <input type="text" class="form-control" x-model="activeDraft.mapped_data.defecto">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Comentarios Adicionales</label>
+                        <textarea class="form-control" rows="3" x-model="activeDraft.mapped_data.comentarios"></textarea>
+                    </div>
+                </div>
+            </template>
+        </section>
+    </main>
+
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('workspaceApp', (sessionUuid) => ({
+                uuid: sessionUuid,
+                sessionStatus: 'Cargando...',
+                totalRows: 0,
+                validatedRows: 0,
+                errorMessage: null,
+                
+                drafts: [],
+                currentPage: 1,
+                numPages: 1,
+                hasNext: false,
+                hasPrevious: false,
+                
+                activeDraft: null,
+                
+                pollingInterval: null,
+
+                init() {
+                    this.pollStatus();
+                    this.loadDrafts(1);
+                    this.initSortable();
+                    
+                    this.pollingInterval = setInterval(() => {
+                        this.pollStatus();
+                    }, 3000);
+                },
+                
+                initSortable() {
+                    // Esperar a que el DOM esté listo
+                    setTimeout(() => {
+                        // El sidebar (lista) y el carousel del activeDraft actuarían como zonas Sortable
+                        // Esto requiere una lógica un poco más profunda porque activeDraft cambia,
+                        // pero una versión simplificada es atrapar drops en los elementos de la lista.
+                        const listEl = document.getElementById('drafts-list');
+                        if (listEl) {
+                            Sortable.create(listEl, {
+                                group: 'photos',
+                                sort: false,
+                                onAdd: (evt) => {
+                                    // Cuando se suelta una foto del carrusel en un draft del listado
+                                    const photoName = evt.item.dataset.photo;
+                                    const targetDraftId = evt.to.closest('.draft-item')?.dataset?.draftId;
+                                    
+                                    if (targetDraftId && photoName && this.activeDraft) {
+                                        // Mover en memoria y mandar PATCH
+
+                                        // Omitido temporalmente por brevedad: aquí harias un PATCH al backend
+                                        // para quitar la foto del origin (activeDraft) y ponerla en el targetDraftId.
+                                    }
+                                    // Regresar el elemento DOM ya que Alpine/Fetch manejan el estado real
+                                    evt.item.parentNode.removeChild(evt.item);
+                                }
+                            });
+                        }
+                    }, 1000);
+                },
+
+                async pollStatus() {
+                    try {
+                        const res = await fetch(`/workspace/status/${this.uuid}/`);
+                        const data = await res.json();
+                        this.sessionStatus = data.status;
+                        this.totalRows = data.total_rows;
+                        this.validatedRows = data.validated_rows;
+                        if(data.error_message) this.errorMessage = data.error_message;
+                        
+                        if (['DRAFT', 'READY', 'FAILED', 'CONFIRMED'].includes(this.sessionStatus)) {
+                            // Reducir polling si ya terminó proceso pesado
+                            clearInterval(this.pollingInterval);
+                        }
+                    } catch (e) {
+                        console.error(e);
+                    }
+                },
+
+                async loadDrafts(page) {
+                    try {
+                        const res = await fetch(`/workspace/api/drafts/?session=${this.uuid}&page=${page}`);
+                        const data = await res.json();
+                        this.drafts = data.results;
+                        this.currentPage = data.current_page;
+                        this.numPages = data.num_pages;
+                        this.hasNext = data.has_next;
+                        this.hasPrevious = data.has_previous;
+                    } catch (e) {
+                        console.error(e);
+                    }
+                },
+
+                async selectDraft(id) {
+                    try {
+                        const res = await fetch(`/workspace/api/draft/${id}/`);
+                        this.activeDraft = await res.json();
+                    } catch (e) {
+                        console.error(e);
+                    }
+                },
+
+                async saveDraft() {
+                    if (!this.activeDraft) return;
+                    try {
+                        await fetch(`/workspace/api/draft/${this.activeDraft.id}/`, {
+                            method: 'PATCH',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({
+                                mapped_data: this.activeDraft.mapped_data,
+                                assigned_photos: this.activeDraft.assigned_photos
+                            })
+                        });
+                        alert('Guardado correctamente');
+                        this.loadDrafts(this.currentPage); // Refrescar lista para ver validación
+                    } catch (e) {
+                        alert('Error guardando');
+                    }
+                },
+                
+                removePhoto(index) {
+                    if(!this.activeDraft) return;
+                    this.activeDraft.assigned_photos.splice(index, 1);
+                },
+
+                async validateAll() {
+                    try {
+                        this.sessionStatus = 'Validando...';
+                        const res = await fetch(`/workspace/api/validate/${this.uuid}/`, {method: 'POST'});
+                        const data = await res.json();
+                        this.sessionStatus = data.status;
+                        this.totalRows = data.total_rows;
+                        this.validatedRows = data.validated_rows;
+                        this.loadDrafts(this.currentPage);
+                        if (this.activeDraft) this.selectDraft(this.activeDraft.id);
+                    } catch (e) {
+                        console.error(e);
+                        alert('Error validando');
+                    }
+                },
+
+                async confirmImport() {
+                    if (!confirm("¿Seguro que deseas insertar estos registros en la base de datos de producción?")) return;
+                    
+                    try {
+                        this.sessionStatus = 'Insertando...';
+                        const res = await fetch(`/workspace/api/confirm/${this.uuid}/`, {method: 'POST'});
+                        const data = await res.json();
+                        if (data.status === 'ok') {
+                            alert(`¡Éxito! Se crearon ${data.creados} registros.`);
+                            this.sessionStatus = 'CONFIRMED';
+                            window.location.href = '/admin/calidad/registrodefecto/';
+                        } else {
+                            alert("Error: " + data.error);
+                            this.sessionStatus = 'FAILED';
+                        }
+                    } catch (e) {
+                        alert("Error confirmando.");
+                    }
+                }
+            }));
+        });
+    </script>
+</body>
+</html>

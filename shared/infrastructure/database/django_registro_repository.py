@@ -1,0 +1,68 @@
+"""
+DjangoRegistroRepository — implementa RegistroRepository usando el ORM de Django.
+Reemplaza sqlite_registro_repository.py.
+"""
+import os
+import django
+from typing import List, Dict, Optional
+
+# Configurar Django ORM si no está inicializado (para el bot)
+if not os.environ.get('DJANGO_SETTINGS_MODULE'):
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+    import sys
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'web'))
+    django.setup()
+
+
+class DjangoRegistroRepository:
+    """Adaptador: RegistroRepository sobre Django ORM."""
+
+    def guardar(self, fotos: List[int], modelo: str, linea: str,
+                cantidad: int, responsable: str, descripcion: str,
+                user_id: int, turno: Optional[str] = None,
+                departamento: Optional[str] = None,
+                numero_parte: Optional[str] = None) -> bool:
+        from calidad.models import RegistroDefecto
+        import time
+        try:
+            # Normalizar: asegurar lista de ints
+            fotos_list = list(fotos) if isinstance(fotos, list) else []
+
+            # Dual-write: legacy TextField + nuevo ArrayField
+            fotos_str = ", ".join(str(f) for f in fotos_list)
+
+            # Sanitizar numero_parte
+            _np_upper = (numero_parte or "").strip().upper()
+            if _np_upper in ("N/A", "NA", "VACÍO", "VACIO", "_OMITIR_", "-"):
+                _np_upper = None
+
+            t0 = time.monotonic()
+            registro = RegistroDefecto.objects.create(
+                fotos=fotos_str,             # legacy — mantener mientras se migra
+                fotos_nums=fotos_list,        # Fase 1 — nuevo campo normalizado
+                modelo=modelo.upper() if modelo else "",
+                linea=linea.upper() if linea else "",
+                cantidad=cantidad,
+                responsable=responsable.upper() if responsable else "",
+                descripcion=descripcion.upper() if descripcion else "",
+                user_id=user_id,
+                turno=turno,
+                departamento=departamento,
+                numero_parte=_np_upper,
+            )
+            
+            # Dual-Write: crear EvidenciaFotografica (V2)
+            from calidad.services.legacy_sync import sync_fotos_to_evidencias
+            sync_fotos_to_evidencias(registro)
+            
+            elapsed = (time.monotonic() - t0) * 1000
+            import logging
+            logging.getLogger(__name__).info(
+                "RegistroDefecto guardado | user_id=%s fotos=%s elapsed=%.1fms",
+                user_id, fotos_list, elapsed
+            )
+            return True
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error("Error guardando RegistroDefecto: %s", e)
+            return False

@@ -6,52 +6,69 @@ Responsabilidad única: flujo principal de registro de defectos.
   - foto recibida       → guarda la imagen y actualiza el contador
   - texto libre         → delega en RegistroService (FSM)
 
-SRP : solo cambia si cambia el flujo de captura de defectos.
-DIP : recibe repos e interfaces, no concretos ni `db`.
-ISP : cada factory recibe SOLO las dependencias que necesita.
+SRP : solo cambia si cambia el flujo de captura de defectos en Telegram.
+DIP : recibe api_client. No tiene dependencias locales de base de datos ni FSM.
+ISP : usa solo metodos de api_client.
 """
+import asyncio
 import logging
 import os
-from datetime import datetime
 
-from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import ContextTypes
-from telegram.constants import ReactionEmoji
+from bot.handlers.lock_utils import prevent_double_tap
 
 logger = logging.getLogger(__name__)
 
-FOTOS_PATH = "fotos"
+import os
+FOTOS_PATH = os.getenv("FOTOS_PATH", "media_files/fotos")
+
+# Tiempo de debounce POR USUARIO para agrupar fotos.
+# Telegram divide álbumes grandes (>10 fotos) en múltiples media_group_ids.
+# Ej: 27 fotos → 3 albums con IDs distintos, enviados en ráfaga.
+# 2.0s es suficiente para capturar la pausa entre albums consecutivos
+# sin añadir latencia excesiva al usuario.
+_DEBOUNCE_SECONDS = 2.0
 
 
 # ─────────────────────────────────────────
 # /start
 # ─────────────────────────────────────────
-def create_start(conversation_repo):
+def create_start(api_client):
     """
     Factory para /start.
 
     Args:
-        conversation_repo: implementa .finalizar(), .iniciar()
+        api_client: BotApiClient
     """
     async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not update.message or not update.effective_user:
             return
 
-        user_id = update.effective_user.id
-        conversation_repo.finalizar(user_id)   # idempotente
-        conversation_repo.iniciar(user_id)
+        user_id = update.effective_user.id if update.effective_user else None
+        
+        try:
+            # Cancelamos la sesión anterior (FSM) sin borrar registros de BD
+            await api_client.cancelar_sesion(user_id)
+            await api_client.iniciar_defecto(user_id)
 
-        await update.message.reply_text(
-            "<b>Agente IQA</b>\n\n"
-            "Bienvenido al asistente de captura de defectos. Este bot está diseñado "
-            "para agilizar el reporte de incidencias en línea de producción.\n\n"
-            "<b>Flujo de Trabajo:</b>\n"
-            "1. <b>Envía las fotos</b> del defecto detectado (una o varias).\n"
-            "2. Presiona el botón <b>TERMINAR</b> para cerrar el álbum.\n"
-            "3. <b>Responde a las preguntas</b> (Modelo, Línea, Responsable, etc.).\n\n"
-            "<i>Usa el botón de <b>MENÚ</b> (abajo a la izquierda) para ver comandos útiles o escribe /info.</i>",
-            parse_mode="HTML",
-        )
+            await update.message.reply_text(
+                "<b>Agente IQA</b>\n"
+                "<i>Sistema de captura de defectos en linea de produccion.</i>\n\n"
+                "<b>Flujo de registro:</b>\n"
+                "1. <b>Envia las fotos</b> del defecto detectado (una o varias).\n"
+                "2. Presiona <b>TERMINAR</b> para cerrar el album.\n"
+                "3. <b>Responde el formulario:</b> Modelo, Linea, Responsable y descripcion.\n\n"
+                "<i>Usa el menu inferior para ver los comandos disponibles, o escribe /info.</i>",
+                parse_mode="HTML",
+                reply_markup=ReplyKeyboardRemove(),
+            )
+        except Exception as e:
+            logger.error("Error iniciando /start: %s", e)
+            await update.message.reply_text(
+                "<b>Error de conexion.</b> No se pudo iniciar la sesion. Intenta de nuevo.",
+                parse_mode="HTML"
+            )
 
     return start
 
@@ -59,184 +76,484 @@ def create_start(conversation_repo):
 # ─────────────────────────────────────────
 # Foto recibida
 # ─────────────────────────────────────────
-def create_guardar_foto(usuario_repo, contador_repo, conversation_repo, foto_storage):
+def create_guardar_foto(api_client):
     """
     Factory para el handler de fotos entrantes.
 
+    Debounce a NIVEL DE USUARIO (no por media_group_id).
+    Agrupa TODAS las fotos en una ventana y las descarga temporalmente.
+    Luego delega al backend la transición de FSM y renombrado.
+
     Args:
-        usuario_repo:      implementa .obtener(user_id)
-        contador_repo:     implementa .obtener_y_avanzar(user_id)
-        conversation_repo: implementa .tiene_conversacion(), .iniciar(), .obtener(), .persistir()
-        foto_storage:      (reservado para futura abstracción de almacenamiento)
+        api_client: BotApiClient
     """
     async def guardar_foto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not update.message or not update.effective_user:
             return
 
-        user_id = update.effective_user.id
-        usuario = usuario_repo.obtener(user_id)
-
-        if not usuario:
-            await update.message.reply_text(
-                "<b>Usuario no registrado.</b>\n"
-                "Contacta al administrador con tu ID de Telegram.\n"
-                f"Tu ID es: <code>{user_id}</code>",
-                parse_mode="HTML",
-            )
+        user_id = update.effective_user.id if update.effective_user else None
+        
+        try:
+            perfil = await api_client.obtener_perfil(user_id)
+            if not perfil:
+                await update.message.reply_text(
+                    "<b>Usuario no registrado.</b>\n"
+                    "Contacta al administrador con tu ID de Telegram.\n"
+                    f"Tu ID es: <code>{user_id}</code>",
+                    parse_mode="HTML",
+                )
+                return
+        except Exception as e:
+            logger.error("Error verificando usuario para fotos: %s", e)
             return
 
-        if not conversation_repo.tiene_conversacion(user_id):
-            conversation_repo.iniciar(user_id)
-            context.user_data["status_message_id"] = None
-
-        # ===== FUNCIÓN INTERNA DE PROCESAMIENTO ATÓMICO =====
-        async def _procesar_foto_ordenada(msg):
+        # ===== FUNCIÓN INTERNA DE DESCARGA TEMPORAL =====
+        async def _descargar_foto_temporal(msg) -> int:
+            import time
+            t0 = time.monotonic()
             try:
                 photo = msg.photo[-1]
                 file = await photo.get_file(read_timeout=30)
 
-                contador = contador_repo.obtener_y_avanzar(user_id)
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                nombre_archivo = f"{contador:03d}_{timestamp}.jpg"
+                nombre_archivo = f"tmp_{msg.message_id}.jpg"
 
                 user_folder = os.path.join(FOTOS_PATH, str(user_id))
                 os.makedirs(user_folder, exist_ok=True)
                 ruta = os.path.join(user_folder, nombre_archivo)
 
                 await file.download_to_drive(ruta)
-
-                conv = conversation_repo.obtener(user_id)
-                if conv is not None:
-                    conv["fotos"].append(contador)
-                    conversation_repo.persistir()
-                return True
+                elapsed = (time.monotonic() - t0) * 1000
+                logger.info("Descarga foto individual | user_id=%s msg_id=%s elapsed=%.1fms", user_id, msg.message_id, elapsed)
+                return msg.message_id
             except Exception as e:
-                logger.error("Error descargando foto %s: %s", msg.message_id, e)
-                return False
+                elapsed = (time.monotonic() - t0) * 1000
+                logger.error("Error descargando foto %s | elapsed=%.1fms error=%s", msg.message_id, elapsed, e)
+                return -1
 
-        # ===== SISTEMA DE BUFFERING Y DEBOUNCING =====
+        # ===== DEBOUNCE A NIVEL DE USUARIO (NO POR MEDIA GROUP) =====
+        #
+        # Estructura en context.user_data:
+        #   "photo_batch": {
+        #       "messages": [msg1, msg2, ...],   ← TODAS las fotos pendientes
+        #       "timer_task": Task | None,        ← un solo timer por usuario
+        #       "wait_msg_id": int | None,        ← un solo mensaje de espera
+        #   }
+        #   "batch_lock": asyncio.Lock()          ← protege acceso concurrente
+
+        if "batch_lock" not in context.user_data:
+            context.user_data["batch_lock"] = asyncio.Lock()
+
+        # ── Sección crítica: un solo lock por usuario ──
+        async with context.user_data["batch_lock"]:
+            is_first = "photo_batch" not in context.user_data
+
+            if is_first:
+                context.user_data["photo_batch"] = {
+                    "messages": [],
+                    "timer_task": None,
+                    "wait_msg_id": None,
+                }
+
+            batch = context.user_data["photo_batch"]
+            batch["messages"].append(update.message)
+
+            # Solo la primera foto de todo el lote envía "Recibiendo..."
+            if is_first:
+                wait_msg = await update.message.reply_text(
+                    "<i>Recibiendo y ordenando fotos, por favor espera...</i>",
+                    parse_mode="HTML",
+                )
+                batch["wait_msg_id"] = wait_msg.message_id
+
+            # Cancelar timer anterior (cada foto nueva reinicia el debounce)
+            if batch["timer_task"] is not None:
+                batch["timer_task"].cancel()
+
+            # Nuevo timer: cuando pasen _DEBOUNCE_SECONDS sin fotos nuevas, procesar todo
+            batch["timer_task"] = asyncio.create_task(
+                _process_user_batch(
+                    context, update.effective_chat.id,
+                    user_id, _descargar_foto_temporal, api_client
+                )
+            )
+        # ── Fin sección crítica ──
+
+    async def _process_user_batch(
+        context, chat_id, user_id, descargar_fn, api_client
+    ):
+        """
+        Se ejecuta tras _DEBOUNCE_SECONDS sin fotos nuevas del usuario.
+        """
+        import time
         import asyncio
+        t_batch = time.monotonic()
+        logger.info("DEBUG: Entrando a _process_user_batch, a punto de hacer sleep 2s")
+        try:
+            await asyncio.sleep(_DEBOUNCE_SECONDS)
 
-        if "media_groups" not in context.user_data:
-            context.user_data["media_groups"] = {}
-        if "processing_lock" not in context.user_data:
-            context.user_data["processing_lock"] = asyncio.Lock()
+            logger.info("DEBUG: Sleep terminado, sacando photo_batch")
+            batch = context.user_data.pop("photo_batch", None)
+            if not batch:
+                logger.info("DEBUG: photo_batch ya fue poppeado o es None")
+                return
 
-        # Identificar el grupo (álbum). Si es foto suelta, creamos un ID falso único.
-        mg_id = update.message.media_group_id
-        if not mg_id:
-            mg_id = f"single_{update.message.message_id}"
+            mensajes = batch["messages"]
+            mensajes.sort(key=lambda m: m.message_id)
 
-        # Inicializar el grupo si no existe (DE FORMA SÍNCRONA para evitar race conditions)
-        is_first = False
-        if mg_id not in context.user_data["media_groups"]:
-            is_first = True
-            context.user_data["media_groups"][mg_id] = {
-                "messages": [],
-                "timer_task": None,
-                "wait_msg_id": None
-            }
+            logger.info("Descargando lote de %d foto(s) temporalmente para user %s", len(mensajes), user_id)
 
-        grupo = context.user_data["media_groups"][mg_id]
-        grupo["messages"].append(update.message)
+            sem = asyncio.Semaphore(5)
 
-        # Si es la primera foto, mandamos el mensaje de espera
-        if is_first:
-            wait_msg = await update.message.reply_text("<i>Recibiendo y ordenando fotos, por favor espera...</i>", parse_mode="HTML")
-            # Actualizamos el ID para poder borrarlo después
-            if mg_id in context.user_data["media_groups"]:
-                context.user_data["media_groups"][mg_id]["wait_msg_id"] = wait_msg.message_id
+            async def _download_with_sem(m):
+                async with sem:
+                    return await descargar_fn(m)
 
-        # Cancelar timer anterior de ESTE grupo si existe
-        if grupo["timer_task"]:
-            grupo["timer_task"].cancel()
+            resultados = await asyncio.gather(
+                *[_download_with_sem(msg) for msg in mensajes],
+                return_exceptions=True
+            )
+        except asyncio.CancelledError:
+            logger.warning("DEBUG: _process_user_batch CANCELADO")
+            raise
+        except Exception as e:
+            logger.error("DEBUG: EXCEPCION CRITICA EN _process_user_batch: %s", e, exc_info=True)
+            return
 
-        # Función que se ejecutará tras 3.5s de inactividad en este grupo
-        async def process_group(current_mg_id, chat_id):
+        try:
+            fotos_ids = []
+            for res in resultados:
+                if isinstance(res, Exception):
+                    logger.error("Fallo de red en descarga paralela: %s", res)
+                elif res != -1:
+                    fotos_ids.append(res)
+
+            if not fotos_ids:
+                await context.bot.send_message(
+                    chat_id,
+                    "<b>Error interno al descargar las fotos.</b>",
+                    parse_mode="HTML",
+                )
+                return
+
+            elapsed_descarga_lote = (time.monotonic() - t_batch - _DEBOUNCE_SECONDS) * 1000
+            logger.info("Descarga total lote | user_id=%s cantidad=%d elapsed=%.1fms", user_id, len(mensajes), elapsed_descarga_lote)
+
+            # Delegar FSM al backend
             try:
-                await asyncio.sleep(3.5)
+                result = await api_client.adjuntar_evidencia_lote(user_id, fotos_ids)
                 
-                # Extraer y limpiar el grupo
-                grp = context.user_data["media_groups"].pop(current_mg_id, None)
-                if not grp:
-                    return
+                texto_estado = result.get('mensaje', f"Se agregaron {len(fotos_ids)} foto(s).")
                 
-                mensajes = grp["messages"]
-                
-                # ¡LA CLAVE!: Ordenar por message_id para asegurar el orden de selección
-                mensajes.sort(key=lambda m: m.message_id)
-
-                lock = context.user_data["processing_lock"]
-                
-                # Bloquear para que no se mezclen fotos de distintos grupos del mismo usuario
-                async with lock:
-                    exitos = 0
-                    for msg in mensajes:
-                        if await _procesar_foto_ordenada(msg):
-                            exitos += 1
-                    
-                    if exitos == 0:
-                        await context.bot.send_message(chat_id, "<b>Error interno al guardar las fotos.</b>", parse_mode="HTML")
-                        return
-
-                    # Feedback al usuario
-                    conv_actual = conversation_repo.obtener(user_id)
-                    total = len(conv_actual["fotos"]) if conv_actual else exitos
-                    
-                    texto_estado = (
-                        f"<b>Se han recibido {total} fotos correctamente.</b>\n\n"
-                        "<i>Sigue enviando o presiona el botón <b>TERMINAR</b>.</i>"
-                    )
-                    reply_markup = ReplyKeyboardMarkup([["TERMINAR"]], resize_keyboard=True)
-                    
-                    # Borramos el mensaje temporal de "Recibiendo..."
-                    wait_msg_id = grp.get("wait_msg_id")
-                    if wait_msg_id:
-                        try:
-                            await context.bot.delete_message(chat_id=chat_id, message_id=wait_msg_id)
-                        except Exception:
-                            pass
-                    
-                    await context.bot.send_message(
-                        chat_id=chat_id,
-                        text=texto_estado,
-                        parse_mode="HTML",
-                        reply_markup=reply_markup
-                    )
-            except asyncio.CancelledError:
-                # Comportamiento esperado: llegó otra foto antes de 1.5s
-                pass
+                reply_markup = InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("TERMINAR", callback_data="terminar_fotos")]]
+                )
             except Exception as e:
-                logger.error("Error procesando grupo %s: %s", current_mg_id, e)
+                logger.error("Error enviando lote al backend para user %s: %s", user_id, e)
+                texto_estado = "<b>Error al procesar lote en el servidor.</b>"
+                reply_markup = None
 
-        # Iniciar el nuevo timer
-        grupo["timer_task"] = asyncio.create_task(process_group(mg_id, update.effective_chat.id))
+            # Borrar mensaje temporal de "Recibiendo..."
+            wait_msg_id = batch.get("wait_msg_id")
+            if wait_msg_id:
+                try:
+                    await context.bot.delete_message(
+                        chat_id=chat_id, message_id=wait_msg_id,
+                    )
+                except Exception:
+                    pass
+
+            # Quitar botones de mensajes anteriores (si hay)
+            inline_msg_ids = context.user_data.get("inline_msg_ids", [])
+            for old_msg_id in inline_msg_ids:
+                try:
+                    await context.bot.edit_message_reply_markup(
+                        chat_id=chat_id, message_id=old_msg_id, reply_markup=None
+                    )
+                except Exception:
+                    pass
+
+            sent_msg = await context.bot.send_message(
+                chat_id=chat_id,
+                text=texto_estado,
+                parse_mode="HTML",
+                reply_markup=reply_markup,
+            )
+
+            # Rastrear ID del mensaje con botón para limpiarlo después
+            if reply_markup:
+                if "inline_msg_ids" not in context.user_data:
+                    context.user_data["inline_msg_ids"] = []
+                context.user_data["inline_msg_ids"].append(sent_msg.message_id)
+
+        except asyncio.CancelledError:
+            # Esperado: llegó otra foto antes del debounce
+            pass
+        except Exception as e:
+            logger.error("Error procesando lote de fotos para user %s: %s", user_id, e)
 
     return guardar_foto
 
 
 # ─────────────────────────────────────────
+# Callback: botón inline TERMINAR
+# ─────────────────────────────────────────
+def create_terminar_callback(api_client):
+    """
+    Factory para el callback del botón inline TERMINAR.
+    """
+    @prevent_double_tap
+    async def terminar_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        query = update.callback_query
+        if not query or not update.effective_user:
+            return
+
+        await query.answer()
+
+        user_id = update.effective_user.id if update.effective_user else None
+        
+        try:
+            result = await api_client.responder_defecto(user_id, "TERMINAR")
+            exito = result.get('exito', False)
+            mensaje = result.get('mensaje')
+            estado = result.get('estado')
+            context_data = result.get('context_data')
+
+        except Exception as e:
+            logger.error("Error terminando fotos para %s: %s", user_id, e)
+            exito = False
+            mensaje = "Error al procesar la terminación del álbum."
+
+        # Quitar TODOS los botones inline de mensajes previos
+        inline_msg_ids = context.user_data.pop("inline_msg_ids", [])
+        for msg_id in inline_msg_ids:
+            try:
+                await context.bot.edit_message_reply_markup(
+                    chat_id=update.effective_chat.id, message_id=msg_id, reply_markup=None
+                )
+            except Exception:
+                pass
+
+        # Solo enviar mensaje si TERMINAR fue exitoso (álbum cerrado)
+        if exito and mensaje:
+            reply_markup = _get_reply_markup_for_mensaje(mensaje, estado, context_data)
+
+            sent_msg = await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=mensaje,
+                parse_mode="HTML",
+                reply_markup=reply_markup,
+            )
+            if reply_markup and isinstance(reply_markup, InlineKeyboardMarkup):
+                if "inline_msg_ids" not in context.user_data:
+                    context.user_data["inline_msg_ids"] = []
+                context.user_data["inline_msg_ids"].append(sent_msg.message_id)
+        elif not exito and mensaje:
+            # TERMINAR rechazado (ya no en ESPERANDO_FOTOS) — feedback breve
+            await query.answer(text=mensaje, show_alert=True)
+
+    return terminar_callback
+
+
+# ─────────────────────────────────────────
+# Callback: botón inline OMITIR
+# ─────────────────────────────────────────
+def create_omitir_callback(api_client):
+    """
+    Factory para el callback del botón inline OMITIR (Número de Parte).
+    """
+    @prevent_double_tap
+    async def omitir_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        query = update.callback_query
+        if not query or not update.effective_user:
+            return
+
+        await query.answer()
+
+        user_id = update.effective_user.id if update.effective_user else None
+        
+        try:
+            result = await api_client.responder_defecto(user_id, "_OMITIR_")
+            mensaje = result.get('mensaje')
+            estado = result.get('estado')
+            context_data = result.get('context_data')
+        except Exception as e:
+            logger.error("Error omitiendo numero_parte para %s: %s", user_id, e)
+            mensaje = "Error al procesar la respuesta."
+
+        # Quitar TODOS los botones inline de mensajes previos
+        inline_msg_ids = context.user_data.pop("inline_msg_ids", [])
+        if update.effective_message.id not in inline_msg_ids:
+            inline_msg_ids.append(update.effective_message.id)
+            
+        for msg_id in inline_msg_ids:
+            try:
+                await context.bot.edit_message_reply_markup(
+                    chat_id=update.effective_chat.id, message_id=msg_id, reply_markup=None
+                )
+            except Exception:
+                pass
+
+        if mensaje:
+            # Check if next step needs OMITIR button (unlikely, but just in case)
+            reply_markup = _get_reply_markup_for_mensaje(mensaje, estado, context_data)
+
+            sent_msg = await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=mensaje,
+                parse_mode="HTML",
+                reply_markup=reply_markup,
+            )
+            if reply_markup and isinstance(reply_markup, InlineKeyboardMarkup):
+                if "inline_msg_ids" not in context.user_data:
+                    context.user_data["inline_msg_ids"] = []
+                context.user_data["inline_msg_ids"].append(sent_msg.message_id)
+
+    return omitir_callback
+
+
+# ─────────────────────────────────────────
 # Texto libre → FSM
 # ─────────────────────────────────────────
-def create_procesar_respuesta(registro_service):
+def create_procesar_respuesta(api_client):
     """
-    Factory: adaptador delgado Telegram → RegistroService.
-
-    Args:
-        registro_service: implementa .procesar_respuesta(user_id, texto) → Result
+    Factory: adaptador delgado Telegram → API.
     """
     async def procesar_respuesta(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not update.message or not update.effective_user or not update.message.text:
             return
 
-        user_id = update.effective_user.id
-        result = registro_service.procesar_respuesta(user_id, update.message.text)
+        user_id = update.effective_user.id if update.effective_user else None
+        
+        try:
+            result = await api_client.responder_defecto(user_id, update.message.text)
+            mensaje = result.get('mensaje')
+            estado = result.get('estado')
+            context_data = result.get('context_data')
+        except Exception as e:
+            logger.error("Error procesando texto libre para %s: %s", user_id, e)
+            mensaje = "Error al procesar tu respuesta."
 
-        if result.mensaje:
-            await update.message.reply_text(
-                result.mensaje,
-                reply_markup=ReplyKeyboardRemove(),
+        # Quitar teclados inline anteriores si el usuario responde con texto libre
+        inline_msg_ids = context.user_data.pop("inline_msg_ids", [])
+        for msg_id in inline_msg_ids:
+            try:
+                await context.bot.edit_message_reply_markup(
+                    chat_id=update.effective_chat.id, message_id=msg_id, reply_markup=None
+                )
+            except Exception:
+                pass
+
+        if mensaje:
+            reply_markup = _get_reply_markup_for_mensaje(mensaje, estado, context_data)
+                
+            sent_msg = await update.message.reply_text(
+                mensaje,
+                reply_markup=reply_markup,
                 parse_mode="HTML"
             )
+            
+            if reply_markup and isinstance(reply_markup, InlineKeyboardMarkup):
+                if "inline_msg_ids" not in context.user_data:
+                    context.user_data["inline_msg_ids"] = []
+                context.user_data["inline_msg_ids"].append(sent_msg.message_id)
 
     return procesar_respuesta
+
+
+# ─────────────────────────────────────────
+# Callback: botones inline personalizados (Línea, Responsable)
+# ─────────────────────────────────────────
+def create_opcion_callback(api_client):
+    """
+    Factory para el callback de botones inline de opciones.
+    """
+    @prevent_double_tap
+    async def opcion_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        query = update.callback_query
+        if not query or not update.effective_user:
+            return
+
+        await query.answer()
+
+        user_id = update.effective_user.id if update.effective_user else None
+        opcion = query.data.split(":", 1)[1]
+
+        # Quitar el teclado inline del mensaje actual y anteriores
+        inline_msg_ids = context.user_data.pop("inline_msg_ids", [])
+        if update.effective_message.id not in inline_msg_ids:
+            inline_msg_ids.append(update.effective_message.id)
+            
+        for msg_id in inline_msg_ids:
+            try:
+                await context.bot.edit_message_reply_markup(
+                    chat_id=update.effective_chat.id, message_id=msg_id, reply_markup=None
+                )
+            except Exception:
+                pass
+
+        if opcion in ["Otra", "Otro"]:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="<i>Por favor, escribe el valor manualmente:</i>",
+                parse_mode="HTML"
+            )
+            return
+
+        try:
+            result = await api_client.responder_defecto(user_id, opcion)
+            mensaje = result.get('mensaje')
+            estado = result.get('estado')
+            context_data = result.get('context_data')
+        except Exception as e:
+            logger.error("Error procesando opcion %s para %s: %s", opcion, user_id, e)
+            mensaje = "Error al procesar la opción."
+
+        if mensaje:
+            reply_markup = _get_reply_markup_for_mensaje(mensaje, estado, context_data)
+
+            sent_msg = await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=mensaje,
+                parse_mode="HTML",
+                reply_markup=reply_markup,
+            )
+            if reply_markup and isinstance(reply_markup, InlineKeyboardMarkup):
+                if "inline_msg_ids" not in context.user_data:
+                    context.user_data["inline_msg_ids"] = []
+                context.user_data["inline_msg_ids"].append(sent_msg.message_id)
+
+    return opcion_callback
+
+
+def _get_reply_markup_for_mensaje(mensaje: str, estado: str = None, context_data: dict = None):
+    """
+    Analiza el texto de respuesta del backend y determina si debe llevar teclado inline.
+    """
+    reply_markup = ReplyKeyboardRemove()
+    
+    if estado == "ESPERANDO_MODELO":
+        modelos = context_data.get('historial_modelos', []) if context_data else []
+        if modelos:
+            from shared.utils.format_utils import abreviar_modelo
+            # Texto corto en el botón, valor completo en callback_data
+            botones = [InlineKeyboardButton(abreviar_modelo(m), callback_data=f"opcion:{m}") for m in modelos]
+            # Como están abreviados, caben perfectamente 2 por fila
+            keyboard = [botones[i:i+2] for i in range(0, len(botones), 2)]
+            keyboard.append([InlineKeyboardButton("Otro", callback_data="opcion:Otro")])
+            reply_markup = InlineKeyboardMarkup(keyboard)
+    elif estado == "ESPERANDO_NUMERO_PARTE":
+        reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("OMITIR", callback_data="omitir_num_parte")]])
+    elif estado == "ESPERANDO_LINEA":
+        lineas = context_data.get('lineas_validas', []) if context_data else []
+        botones = [InlineKeyboardButton(val, callback_data=f"opcion:{val}") for val in lineas]
+        keyboard = [botones[i:i+3] for i in range(0, len(botones), 3)]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+    elif estado == "ESPERANDO_RESPONSABLE":
+        responsables = context_data.get('responsables_validos', []) if context_data else []
+        botones = [InlineKeyboardButton(r, callback_data=f"opcion:{r}") for r in responsables]
+        # Distribuir en filas de máximo 3
+        keyboard = [botones[i:i+3] for i in range(0, len(botones), 3)]
+        keyboard.append([InlineKeyboardButton("Otro", callback_data="opcion:Otro")])
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+    return reply_markup

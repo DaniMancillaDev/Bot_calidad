@@ -14,6 +14,7 @@ from telegram import Update, BotCommand
 from telegram.request import HTTPXRequest
 from telegram.ext import (
     ApplicationBuilder,
+    CallbackQueryHandler,
     CommandHandler,
     MessageHandler,
     TypeHandler,
@@ -25,14 +26,13 @@ from bot.handlers.registro_handler import (
     create_start,
     create_guardar_foto,
     create_procesar_respuesta,
+    create_terminar_callback,
+    create_omitir_callback,
+    create_opcion_callback,
 )
 from bot.handlers.cancelar_handler import create_cancelar
-from bot.handlers.gestion_handler import create_limpiar, create_limpiar_fotos
 from bot.handlers.consulta_handler import (
-    create_reporte,
     create_estado,
-    create_info_fotos,
-    create_descargar,
     create_info,
 )
 
@@ -42,10 +42,6 @@ async def _post_init(application):
     comandos = [
         BotCommand("start", "Iniciar o reiniciar sesión"),
         BotCommand("estado", "Ver estado actual"),
-        BotCommand("reporte", "Descargar reporte en texto"),
-        BotCommand("info_fotos", "Ver estadísticas de tus fotos"),
-        BotCommand("descargar", "Descargar fotos en ZIP"),
-        BotCommand("limpiar", "Borrar tus registros de hoy"),
         BotCommand("cancelar", "Cancelar registro en curso"),
         BotCommand("info", "Acerca del sistema"),
         BotCommand("mi_id", "Ver tu ID de Telegram"),
@@ -88,7 +84,7 @@ def build_application(token: str, container: dict):
 
     # ── Middleware de seguridad (grupo -1 = se ejecuta ANTES que cualquier handler) ──
     app.add_handler(
-        TypeHandler(Update, create_verificar_acceso(container["usuario_repo"])),
+        TypeHandler(Update, create_verificar_acceso(container["api_client"])),
         group=-1,
     )
 
@@ -96,73 +92,41 @@ def build_application(token: str, container: dict):
     app.add_handler(CommandHandler("mi_id", comando_mi_id))
 
     # ── Flujo principal de registro ────────────────────────────────────────────────
-    app.add_handler(CommandHandler("start", create_start(container["conversation_repo"])))
-
-    # ── Consultas (solo lectura) ───────────────────────────────────────────────────
-    app.add_handler(CommandHandler(
-        "reporte",
-        create_reporte(container["usuario_repo"], container["registro_repo"]),
-    ))
-    app.add_handler(CommandHandler(
-        "estado",
-        create_estado(container["usuario_repo"], container["contador_repo"], container["registro_repo"]),
-    ))
-    app.add_handler(CommandHandler(
-        "info_fotos",
-        create_info_fotos(container["usuario_repo"]),
-    ))
-    app.add_handler(CommandHandler(
-        "descargar",
-        create_descargar(container["usuario_repo"]),
-    ))
-    app.add_handler(CommandHandler(
-        "info",
-        create_info(),
+    app.add_handler(CommandHandler("start", create_start(container["api_client"])))
+    
+    app.add_handler(MessageHandler(
+        filters.PHOTO,
+        create_guardar_foto(container["api_client"])
     ))
 
-    # ── Gestión (operaciones destructivas) ────────────────────────────────────────
-    app.add_handler(CommandHandler(
-        "limpiar",
-        create_limpiar(
-            container["conversation_repo"],
-            container["usuario_repo"],
-            container["registro_repo"],
-            container["contador_repo"],
-        ),
+    app.add_handler(CallbackQueryHandler(
+        create_terminar_callback(container["api_client"]),
+        pattern="^terminar_fotos$",
     ))
-    app.add_handler(CommandHandler(
-        "limpiar_fotos",
-        create_limpiar_fotos(
-            container["conversation_repo"],
-            container["usuario_repo"],
-            container["contador_repo"],
-        ),
+    
+    app.add_handler(CallbackQueryHandler(
+        create_omitir_callback(container["api_client"]),
+        pattern="^omitir_num_parte$",
     ))
-    app.add_handler(CommandHandler(
-        "cancelar",
-        create_cancelar(
-            container["conversation_repo"],
-            container["usuario_repo"],
-            container["contador_repo"],
-        ),
+
+    app.add_handler(CallbackQueryHandler(
+        create_opcion_callback(container["api_client"]),
+        pattern="^opcion:.*$",
     ))
+
+    app.add_handler(MessageHandler(
+        filters.TEXT & ~filters.COMMAND,
+        create_procesar_respuesta(container["api_client"])
+    ))
+
+    app.add_handler(CommandHandler("estado", create_estado(container["api_client"])))
+    app.add_handler(CommandHandler("info", create_info()))
+    
+    # Comandos de cancelación/limpieza purgada
+    app.add_handler(CommandHandler("cancelar", create_cancelar(container["api_client"])))
+    app.add_handler(CommandHandler("limpiar", create_cancelar(container["api_client"]))) # Alias de cancelar
 
     # ── Diagnóstico ───────────────────────────────────────────────────────────────
     app.add_handler(CommandHandler("test", _test_bot))
-
-    # ── Mensajes (fotos y texto libre) ────────────────────────────────────────────
-    app.add_handler(MessageHandler(
-        filters.PHOTO,
-        create_guardar_foto(
-            container["usuario_repo"],
-            container["contador_repo"],
-            container["conversation_repo"],
-            container["foto_storage"],
-        ),
-    ))
-    app.add_handler(MessageHandler(
-        filters.TEXT & ~filters.COMMAND,
-        create_procesar_respuesta(container["registro_service"]),
-    ))
 
     return app

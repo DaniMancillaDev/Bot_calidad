@@ -1,0 +1,34 @@
+{% extends 'calidad/base.html' %}
+
+{% block title %}Importar Lote - Panel de Calidad{% endblock %}
+{% block page_title %}Nueva Importación de Reportes{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 600px; margin: 0 auto;">
+    <h2 class="card-title">Seleccionar Archivos</h2>
+    <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 20px;">
+        Sube el archivo Excel con los reportes y un archivo ZIP que contenga todas las fotografías asociadas. El sistema intentará emparejarlas automáticamente por nombre.
+    </p>
+
+    <form method="POST" enctype="multipart/form-data" action="{% url 'importacion_iniciar' %}">
+        {% csrf_token %}
+        
+        <div class="form-group" style="margin-bottom: 20px;">
+            <label for="data_file">1. Archivo de Datos (.xlsx o .txt)</label>
+            <input type="file" id="data_file" name="data_file" accept=".xlsx, .txt" required style="width: 100%; cursor: pointer;">
+        </div>
+
+        <div class="form-group" style="margin-bottom: 30px;">
+            <label for="zip_file">2. Fotografías (.zip)</label>
+            <input type="file" id="zip_file" name="zip_file" accept=".zip" required style="width: 100%; cursor: pointer;">
+        </div>
+
+        <div style="display: flex; gap: 12px; justify-content: flex-end;">
+            <a href="{% url 'dashboard' %}" class="btn btn-ghost">Cancelar</a>
+            <button type="submit" class="btn btn-primary">
+                <span class="material-symbols-outlined" style="vertical-align:text-bottom;">rocket_launch</span> Iniciar Importación
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

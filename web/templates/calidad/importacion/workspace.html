@@ -1,0 +1,460 @@
+{% extends 'calidad/base.html' %}
+
+{% block title %}Workspace - Importación{% endblock %}
+{% block page_title %}Revisión de Importación{% endblock %}
+
+{% block extra_head %}
+<!-- SortableJS -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+<style>
+    /* Estilos específicos del Workspace Kanban */
+    .workspace-grid {
+        display: grid;
+        grid-template-columns: 350px 1fr;
+        gap: 20px;
+        height: calc(100vh - 180px);
+    }
+    
+    .panel {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    
+    .panel-header {
+        padding: 15px 20px;
+        border-bottom: 1px solid var(--border);
+        background: var(--surface2);
+        font-weight: 600;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .panel-body {
+        padding: 15px;
+        overflow-y: auto;
+        flex: 1;
+        background: var(--bg);
+    }
+
+    /* Galería Huérfanas (Grid) */
+    .gallery-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+        gap: 10px;
+        min-height: 200px; /* Para poder soltar items si está vacío */
+    }
+
+    /* Tarjetas de Fotos */
+    .photo-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+        cursor: grab;
+        position: relative;
+        aspect-ratio: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .photo-card img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        background: #000;
+    }
+    
+    .photo-card:active {
+        cursor: grabbing;
+    }
+
+    /* Tarjetas de Registros (Excel) */
+    .record-list {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    .record-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    
+    .record-header {
+        padding: 10px 15px;
+        border-bottom: 1px solid var(--border);
+        background: var(--surface2);
+        font-size: 0.9rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+    }
+    
+    .record-body {
+        padding: 15px;
+    }
+    
+    /* Dropzone de fotos en cada registro */
+    .record-dropzone {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        min-height: 80px;
+        border: 2px dashed var(--border);
+        border-radius: 8px;
+        padding: 10px;
+        background: rgba(0,0,0,0.1);
+        transition: border-color 0.2s;
+    }
+    
+    .record-dropzone.drag-over {
+        border-color: var(--accent);
+        background: rgba(99, 102, 241, 0.05);
+    }
+    
+    .record-dropzone .photo-card {
+        width: 80px;
+        height: 80px;
+    }
+
+    /* Estado de arrastre visual */
+    .sortable-ghost {
+        opacity: 0.4;
+    }
+    
+    .sortable-drag {
+        cursor: grabbing !important;
+    }
+</style>
+{% endblock %}
+
+{% block topbar_actions %}
+<div style="display: flex; gap: 10px;">
+    <form action="{% url 'importacion_cancelar' %}" method="POST" onsubmit="return confirm('¿Estás seguro de cancelar? Se borrarán las fotos temporales y perderás el progreso.');">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-ghost" style="color: var(--danger-color);">
+            <span class="icon">❌</span> Cancelar
+        </button>
+    </form>
+    <button id="btn-confirmar" class="btn btn-primary" onclick="confirmarImportacion()">
+        <span class="icon">✅</span> Confirmar Importación
+    </button>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="workspace-grid">
+    <!-- PANEL IZQUIERDO: Fotos Huérfanas -->
+    <div class="panel">
+        <div class="panel-header">
+            <span>Fotografías sin asignar</span>
+            <span class="badge badge-yellow" id="count-huerfanas">0</span>
+        </div>
+        <div class="panel-body">
+            <div id="dropzone-huerfanas" class="gallery-grid" data-record-id="huerfanas">
+                <!-- Se llena con JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- PANEL DERECHO: Registros del Excel -->
+    <div class="panel">
+        <div class="panel-header">
+            <span>Registros (Filas de Excel)</span>
+            <span class="badge badge-purple" id="count-registros">0</span>
+        </div>
+        <div class="panel-body">
+            <div id="record-list" class="record-list">
+                <!-- Se llena con JS -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Inyectar CSRF Token -->
+{% csrf_token %}
+<!-- Inyectar el JSON State de Django de forma segura -->
+{{ request.session.importacion_activa|json_script:"init-data" }}
+
+<script>
+    // ==========================================
+    // 1. ESTADO GLOBAL
+    // ==========================================
+    let state = JSON.parse(document.getElementById('init-data').textContent);
+    
+    if (!state || !state.registros) {
+        alert("No hay sesión activa de importación.");
+        window.location.href = "{% url 'importacion_iniciar' %}";
+    }
+
+    const dictFotos = state.fotos; // Diccionario maestro de fotos
+
+    // ==========================================
+    // 2. RENDERIZADO
+    // ==========================================
+    
+    function createPhotoElement(photoId) {
+        const foto = dictFotos[photoId];
+        if (!foto) return null;
+        
+        const div = document.createElement('div');
+        div.className = 'photo-card';
+        div.dataset.photoId = photoId;
+        div.title = foto.filename;
+        
+        const img = document.createElement('img');
+        img.src = foto.url;
+        img.loading = "lazy";
+        
+        div.appendChild(img);
+        return div;
+    }
+
+    function renderWorkspace() {
+        // Render Huerfanas
+        const dzHuerfanas = document.getElementById('dropzone-huerfanas');
+        dzHuerfanas.innerHTML = '';
+        state.fotos_huerfanas.forEach(fid => {
+            const el = createPhotoElement(fid);
+            if(el) dzHuerfanas.appendChild(el);
+        });
+        document.getElementById('count-huerfanas').textContent = state.fotos_huerfanas.length;
+        
+        // Render Registros
+        const rl = document.getElementById('record-list');
+        rl.innerHTML = '';
+        state.registros.forEach(registro => {
+            // Contruir tarjeta HTML
+            const card = document.createElement('div');
+            card.className = 'record-card';
+            
+            // Texto y datos del excel (Buscamos claves comunes, o mostramos todas)
+            let datosText = '';
+            for (const [k, v] of Object.entries(registro)) {
+                if (['id', 'numero_fila_excel', 'fotos_asignadas'].includes(k)) continue;
+                datosText += `
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; border-bottom: 1px solid var(--border); padding-bottom: 4px;">
+                        <div><strong>${k.toUpperCase()}:</strong> <span id="val-${registro.id}-${k}">${v || '-'}</span></div>
+                        <button onclick="editarCampo('${registro.id}', '${k}')" class="btn btn-ghost" style="padding: 2px 6px; font-size: 0.7rem; border: none;" title="Editar">✏️</button>
+                    </div>
+                `;
+            }
+            
+            card.innerHTML = `
+                <div class="record-header">
+                    <div>
+                        <strong>Fila #${registro.numero_fila_excel}</strong>
+                    </div>
+                </div>
+                <div class="record-body">
+                    <div style="font-size: 0.85rem; margin-bottom: 15px; color: var(--text-muted); line-height: 1.4;">
+                        ${datosText}
+                    </div>
+                    <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 5px;">Fotografías Asignadas</div>
+                    <div class="record-dropzone" id="dz-${registro.id}" data-record-id="${registro.id}">
+                    </div>
+                </div>
+            `;
+            rl.appendChild(card);
+            
+            // Render fotos asignadas
+            const dz = card.querySelector('.record-dropzone');
+            registro.fotos_asignadas.forEach(fid => {
+                const el = createPhotoElement(fid);
+                if(el) dz.appendChild(el);
+            });
+        });
+        document.getElementById('count-registros').textContent = state.registros.length;
+        
+        initSortable();
+    }
+
+    // ==========================================
+    // 3. SORTABLE JS (DRAG & DROP)
+    // ==========================================
+    
+    function initSortable() {
+        // Configuracion compartida para todas las listas
+        const sharedConfig = {
+            group: 'shared', // permite arrastrar entre listas
+            animation: 150,
+            ghostClass: 'sortable-ghost',
+            onEnd: handleDropEvent
+        };
+        
+        // Iniciar Huerfanas
+        Sortable.create(document.getElementById('dropzone-huerfanas'), sharedConfig);
+        
+        // Iniciar Dropzones de Registros
+        state.registros.forEach(registro => {
+            const dz = document.getElementById(`dz-${registro.id}`);
+            Sortable.create(dz, sharedConfig);
+        });
+    }
+    
+    function handleDropEvent(evt) {
+        const itemEl = evt.item;  // elemento arrastrado
+        const fromList = evt.from;
+        const toList = evt.to;
+        
+        // Si no cambió de lista, no hacemos nada lógico
+        if (fromList === toList) return;
+        
+        const photoId = itemEl.dataset.photoId;
+        const sourceId = fromList.dataset.recordId;
+        const targetId = toList.dataset.recordId;
+        
+
+        
+        // 1. Actualizar state en RAM (Optimistic UI)
+        moverFotoEnEstado(photoId, sourceId, targetId);
+        
+        // Actualizar contadores visuales
+        document.getElementById('count-huerfanas').textContent = state.fotos_huerfanas.length;
+        
+        // 2. Avisar al servidor por AJAX (Fase 4)
+        enviarAccionAJAX({
+            action: 'MOVE_PHOTO',
+            photo_id: photoId,
+            source_id: sourceId,
+            target_id: targetId
+        });
+    }
+    
+    function moverFotoEnEstado(photoId, sourceId, targetId) {
+        // Quitar del origen
+        if (sourceId === 'huerfanas') {
+            state.fotos_huerfanas = state.fotos_huerfanas.filter(id => id !== photoId);
+        } else {
+            const row = state.registros.find(r => r.id === sourceId);
+            if (row) row.fotos_asignadas = row.fotos_asignadas.filter(id => id !== photoId);
+        }
+        
+        // Poner en destino
+        if (targetId === 'huerfanas') {
+            state.fotos_huerfanas.push(photoId);
+        } else {
+            const row = state.registros.find(r => r.id === targetId);
+            if (row) row.fotos_asignadas.push(photoId);
+        }
+    }
+
+    function editarCampo(recordId, field) {
+        const row = state.registros.find(r => r.id === recordId);
+        if (!row) return;
+        
+        const newVal = prompt(`Editar ${field.toUpperCase()}:`, row[field]);
+        if (newVal !== null && newVal !== row[field]) {
+            // Optimistic UI update
+            row[field] = newVal;
+            document.getElementById(`val-${recordId}-${field}`).textContent = newVal || '-';
+            
+            // Enviar a backend
+            enviarAccionAJAX({
+                action: 'EDIT_RECORD',
+                record_id: recordId,
+                field: field,
+                value: newVal
+            });
+        }
+    }
+
+    // ==========================================
+    // 4. AJAX COMUNICACION (Fase 4)
+    // ==========================================
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    function enviarAccionAJAX(payload) {
+        fetch("{% url 'importacion_update_ajax' %}", {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error("El servidor devolvió un error");
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.error) {
+                alert("Error al guardar: " + data.error + "\nRecargando página...");
+                window.location.reload();
+            }
+        })
+        .catch(error => {
+            console.error("Error AJAX:", error);
+            alert("Error de conexión al guardar los cambios. Recargando para mantener sincronización...");
+            window.location.reload();
+        });
+    }
+    
+    function confirmarImportacion() {
+        if (!confirm("¿Estás seguro de finalizar la importación? Se crearán los registros definitivos y no se podrá deshacer.")) {
+            return;
+        }
+        
+        const btn = document.getElementById('btn-confirmar');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="icon">⏳</span> Procesando...';
+        
+        fetch("{% url 'importacion_confirmar' %}", {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error("Error del servidor");
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.redirect) {
+                window.location.href = data.redirect;
+            } else if (data.error) {
+                alert("Error: " + data.error);
+                btn.disabled = false;
+                btn.innerHTML = '<span class="icon">✅</span> Confirmar Importación';
+            }
+        })
+        .catch(error => {
+            alert("Ocurrió un error al confirmar. Inténtalo de nuevo.");
+            console.error(error);
+            btn.disabled = false;
+            btn.innerHTML = '<span class="icon">✅</span> Confirmar Importación';
+        });
+    }
+
+    // Bootstrap
+    document.addEventListener('DOMContentLoaded', () => {
+        renderWorkspace();
+    });
+</script>
+{% endblock %}

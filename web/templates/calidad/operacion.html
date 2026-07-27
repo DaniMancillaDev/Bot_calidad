@@ -1,415 +1,122 @@
 {% extends "calidad/base.html" %}
+{% load static %}
+
 {% block title %}Panel Operativo — Calidad{% endblock %}
 {% block page_title %}Panel Operativo (En Vivo){% endblock %}
 
 {% block extra_head %}
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
-<style>
-  .controls-bar {
-    display: flex; gap: 12px; margin-bottom: 20px; align-items: center;
-    background: var(--surface); padding: 16px; border-radius: 12px;
-    border: 1px solid var(--border);
-  }
-  .search-box {
-    flex: 1; padding: 8px 12px; border: 1px solid var(--border);
-    border-radius: 8px; background: var(--surface2); color: var(--text);
-  }
-  .btn-group { display: flex; gap: 8px; }
-  
-  .table-wrapper {
-    overflow-x: auto; background: var(--surface); border-radius: 12px;
-    border: 1px solid var(--border);
-  }
-  table { width: 100%; border-collapse: collapse; }
-  th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--border); }
-  th { 
-    background: var(--surface2); color: var(--text-muted); font-weight: 600;
-    cursor: pointer; user-select: none; font-size: 0.85rem; text-transform: uppercase;
-  }
-  th:hover { color: var(--accent); }
-  tr:last-child td { border-bottom: none; }
-  tr.selected { background: rgba(99,102,241,0.1); }
-  
-  .drag-handle { cursor: grab; color: var(--text-muted); opacity: 0.5; padding-right: 8px; }
-  .drag-handle:hover { opacity: 1; }
-  .sortable-ghost { opacity: 0.4; background: rgba(99,102,241,0.2) !important; }
-  
-  .badge-user { background: rgba(16,185,129,0.15); color: #10b981; padding: 4px 8px; border-radius: 6px; font-size: 0.75rem; }
-  
-  /* Update Notifier */
-  #update-notifier {
-    position: fixed; bottom: 24px; right: 24px;
-    background: var(--accent); color: white;
-    padding: 12px 24px; border-radius: 50px;
-    box-shadow: 0 10px 25px rgba(99,102,241,0.4);
-    cursor: pointer; font-weight: 600; z-index: 1000;
-    display: none; transition: transform 0.2s;
-  }
-  #update-notifier:hover { transform: scale(1.05); }
+<!-- Meta para CSRF (usado por JS) -->
+<meta name="csrf-token" content="{{ csrf_token }}">
 
-  /* Warning Toast */
-  #toast {
-    position: fixed; top: 24px; right: 24px;
-    background: var(--danger); color: white;
-    padding: 12px 24px; border-radius: 8px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-    z-index: 1000; display: none;
-  }
-  
-  /* Super-fila agrupada */
-  tr.agrupada { border-left: 4px solid var(--accent); }
-</style>
+<!-- Dependencias externas -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+
+<!-- Estilos propios -->
+<link rel="stylesheet" href="{% static 'css/panel_operativo.css' %}">
 {% endblock %}
 
 {% block content %}
-<div id="toast"></div>
+<!-- Notificaciones -->
+<div id="toast" role="alert" aria-live="polite"></div>
 
-<button id="update-notifier" onclick="fetchNuevos()">
-  🔔 <span id="update-count">0</span> registros nuevos. Clic para recargar.
-</button>
-
-<div class="controls-bar">
-  <input type="text" id="search-input" class="search-box" placeholder="🔍 Buscar modelo, descripción, línea..." oninput="filtrarTabla()">
-  
-  <div class="btn-group">
-    <button class="btn btn-secondary" onclick="agruparSeleccionados()">🔗 Agrupar Seleccionados</button>
-    <button class="btn btn-primary" onclick="enviarExcel()">📊 Proceder a Excel</button>
+<!-- Barra de Herramientas -->
+<div class="controls-bar" role="toolbar" aria-label="Controles de la tabla">
+  <div style="flex: 1; display: flex; align-items: center; gap: 8px; position: relative;">
+    <label for="search-input" class="sr-only">Buscar registros:</label>
+    <span class="material-symbols-outlined" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none;">search</span>
+    <input type="text" id="search-input" class="search-box" style="padding-left: 40px; width: 100%;" placeholder="Buscar modelo, descripción, línea, usuario (Presiona / para enfocar)" aria-label="Buscar en la tabla">
   </div>
 </div>
 
+<!-- Tabla Principal -->
 <div class="table-wrapper">
-  <table>
+  <table aria-label="Registros de calidad">
     <thead>
       <tr>
-        <th style="width:40px;"><input type="checkbox" id="selectAll" onclick="toggleSelectAll()"></th>
-        <th onclick="ordenar('fecha')">Fecha ↕</th>
-        <th onclick="ordenar('modelo')">Modelo ↕</th>
-        <th onclick="ordenar('linea')">Línea ↕</th>
+        <th style="width:50px; vertical-align: middle;">
+          <span class="drag-handle" style="visibility: hidden;">⠿</span>
+          <input type="checkbox" id="selectAll" aria-label="Seleccionar todos los registros visibles" style="margin: 0;">
+        </th>
+        <th data-sort="fecha" tabindex="0" role="button">Fecha ↕</th>
+        <th data-sort="modelo" tabindex="0" role="button">Modelo ↕</th>
+        <th data-sort="linea" tabindex="0" role="button">Línea ↕</th>
         <th>Descripción</th>
-        <th onclick="ordenar('responsable')">Responsable ↕</th>
+        <th data-sort="responsable" tabindex="0" role="button">Responsable ↕</th>
         <th>Fotos</th>
         <th>Cant.</th>
-        <th onclick="ordenar('user_id')">User ID ↕</th>
+        <th data-sort="user_id" tabindex="0" role="button">User ID ↕</th>
         {% if user.is_superuser %}
-        <th style="width:100px; text-align:center;">Acciones</th>
+        <th style="width:110px; text-align:center;">Acciones</th>
         {% endif %}
       </tr>
     </thead>
     <tbody id="registros-body">
-      <!-- Rellenado por JS -->
+      <!-- Rellenado por JS dinámicamente -->
+      <tr>
+        <td colspan="10" style="text-align:center; padding:40px;">
+          <div class="spinner">Cargando registros...</div>
+        </td>
+      </tr>
     </tbody>
   </table>
 </div>
 
+<!-- Modal de Edición (Solo Superusuarios) -->
+<div class="modal-overlay" id="edit-modal" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+  <div class="modal-content">
+    <h3 id="modal-title">Editar Registro</h3>
+    <input type="hidden" id="edit-id">
+    
+    <div class="modal-form-group">
+      <label for="edit-cant">Cantidad:</label>
+      <input type="number" id="edit-cant" min="1">
+    </div>
+    
+    <div class="modal-form-group">
+      <label for="edit-linea">Línea:</label>
+      <input type="text" id="edit-linea">
+    </div>
+    
+    <div class="modal-form-group">
+      <label for="edit-resp">Responsable:</label>
+      <input type="text" id="edit-resp">
+    </div>
+    
+    <div class="modal-form-group">
+      <label for="edit-desc">Descripción:</label>
+      <input type="text" id="edit-desc">
+    </div>
+    
+    <div class="modal-actions">
+      <button id="btn-modal-cancel" class="btn btn-secondary">Cancelar</button>
+      <button id="btn-modal-save" class="btn btn-primary">Guardar Cambios</button>
+    </div>
+  </div>
+</div>
+
+<!-- Formulario oculto para exportación -->
 <form id="form-excel" method="POST" action="{% url 'revisar_orientacion' %}" style="display:none;">
     {% csrf_token %}
     <input type="hidden" name="registros_data" id="registros_data_input">
 </form>
 
-<script>
-  let registros = JSON.parse('{{ registros_json|escapejs }}');
-  let lastId = {{ last_id }};
-  const isSuperUser = {{ request.user.is_superuser|yesno:"true,false" }};
-  
-  // Render de la tabla
-  function renderTabla() {
-    const tbody = document.getElementById('registros-body');
-    tbody.innerHTML = '';
-    
-    if (registros.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:30px;">No hay registros para mostrar.</td></tr>';
-      return;
-    }
+<!-- Floating Action Bar -->
+<div id="floating-action-bar" aria-hidden="true">
+  <span class="selection-count" id="selection-count-text">0 seleccionados</span>
+  <button id="btn-agrupar" class="btn btn-secondary"><span class="material-symbols-outlined" style="vertical-align:text-bottom; font-size: 1.2rem;">link</span> Agrupar</button>
+  <button id="btn-excel" class="btn btn-primary"><span class="material-symbols-outlined" style="vertical-align:text-bottom; font-size: 1.2rem;">table_view</span> Proceder a Excel</button>
+</div>
 
-    registros.forEach((r, index) => {
-      // Si está oculta por búsqueda
-      if (r._hidden) return;
-      
-      const tr = document.createElement('tr');
-      tr.id = `row-${r.id}`;
-      tr.dataset.index = index;
-      if (r._agrupado) tr.classList.add('agrupada');
-      if (r._selected) tr.classList.add('selected');
-      
-      const dateStr = r.fecha_registro ? new Date(r.fecha_registro).toLocaleString() : 'Reciente';
-      const fotosStr = r.fotos_nums && r.fotos_nums.length > 0 
-        ? `[${r.fotos_nums.join(', ')}]` 
-        : (r.fotos_str || '-');
-        
-      tr.innerHTML = `
-        <td>
-          <span class="drag-handle">⠿</span>
-          <input type="checkbox" class="row-check" ${r._selected ? 'checked' : ''} onchange="toggleSelect(${index})">
-        </td>
-        <td style="font-size:0.8rem; color:var(--text-muted);">${dateStr}</td>
-        <td style="font-weight:500;">${r.modelo}</td>
-        <td><span class="badge badge-purple">${r.linea}</span></td>
-        <td style="font-size:0.9rem;">${r.descripcion}</td>
-        <td>${r.responsable}</td>
-        <td><code style="color:var(--accent); font-size:0.8rem;">${fotosStr}</code></td>
-        <td style="font-weight:bold;" id="td-cant-${r.id}">${r.cantidad || 1}</td>
-        <td><span class="badge-user">${r.user_id}</span></td>
-        ${isSuperUser ? `
-        <td style="text-align:center;">
-          <button class="btn btn-ghost" style="padding:4px 8px; font-size:0.8rem;" onclick="editarRegistro(${r.id})" title="Editar">✏️</button>
-          <button class="btn btn-ghost" style="padding:4px 8px; font-size:0.8rem; color:var(--danger);" onclick="eliminarRegistro(${r.id})" title="Eliminar">🗑️</button>
-        </td>` : ''}
-      `;
-      tbody.appendChild(tr);
-    });
+<!-- Datos iniciales para el JS -->
+{{ registros_json|json_script:"initial-data-registros" }}
+<script id="initial-data-config" type="application/json">
+  {
+    "last_id": {{ last_id|default:"null" }},
+    "is_superuser": {{ request.user.is_superuser|yesno:"true,false" }}
   }
-
-  // Interacción UI
-  function toggleSelectAll() {
-    const checked = document.getElementById('selectAll').checked;
-    registros.forEach(r => { if (!r._hidden) r._selected = checked; });
-    renderTabla();
-  }
-
-  // Hacer funciones accesibles globalmente (porque los handlers onchange="toggleSelect" usan eval en el window object)
-  window.toggleSelectAll = toggleSelectAll;
-
-  window.toggleSelect = function(index) {
-    registros[index]._selected = !registros[index]._selected;
-    document.getElementById(`row-${registros[index].id}`).classList.toggle('selected');
-  };
-
-  window.filtrarTabla = function() {
-    const term = document.getElementById('search-input').value.toLowerCase();
-    registros.forEach(r => {
-      const match = `${r.modelo} ${r.linea} ${r.descripcion} ${r.responsable}`.toLowerCase().includes(term);
-      r._hidden = !match;
-    });
-    renderTabla();
-  };
-
-  // Ordenamiento básico
-  let orderAsc = true;
-  window.ordenar = function(campo) {
-    registros.sort((a, b) => {
-      let valA = a[campo] || '';
-      let valB = b[campo] || '';
-      if (campo === 'fecha') {
-          valA = a.fecha_registro ? new Date(a.fecha_registro).getTime() : 0;
-          valB = b.fecha_registro ? new Date(b.fecha_registro).getTime() : 0;
-      }
-      if (valA < valB) return orderAsc ? -1 : 1;
-      if (valA > valB) return orderAsc ? 1 : -1;
-      return 0;
-    });
-    orderAsc = !orderAsc;
-    renderTabla();
-  };
-
-  // Agrupación Segura
-  window.agruparSeleccionados = function() {
-    const seleccionados = registros.filter(r => r._selected && !r._hidden);
-    if (seleccionados.length < 2) {
-      mostrarToast("Selecciona al menos 2 registros para agrupar.");
-      return;
-    }
-
-    const ref = seleccionados[0];
-    
-    // Validar Reglas Estrictas
-    for (let i = 1; i < seleccionados.length; i++) {
-      const r = seleccionados[i];
-      if (r.user_id !== ref.user_id) {
-        mostrarToast("❌ Error: No se pueden agrupar fotos de distintos usuarios (riesgo de orfandad).");
-        return;
-      }
-      if (r.modelo !== ref.modelo || r.descripcion !== ref.descripcion || r.responsable !== ref.responsable) {
-        mostrarToast("❌ Error: Modelo, descripción o responsable no coinciden.");
-        return;
-      }
-      
-      // Coherencia temporal (max 2 horas de diferencia)
-      if (r.fecha_registro && ref.fecha_registro) {
-          const t1 = new Date(ref.fecha_registro).getTime();
-          const t2 = new Date(r.fecha_registro).getTime();
-          const diffHours = Math.abs(t1 - t2) / (1000 * 60 * 60);
-          if (diffHours > 2) {
-              mostrarToast("❌ Error: Los registros superan las 2 horas de diferencia. Agrúpalos lógicamente.");
-              return;
-          }
-      }
-    }
-
-    // Fusión
-    const fotosSet = new Set();
-    let totalCantidad = 0;
-    seleccionados.forEach(r => {
-      (r.fotos_nums || []).forEach(n => fotosSet.add(n));
-      totalCantidad += (r.cantidad || 1);
-    });
-
-    const superRegistro = { ...ref };
-    // Eliminación de duplicados (Set) y ordenamiento ascendente obligatorio
-    superRegistro.fotos_nums = Array.from(fotosSet).sort((a, b) => a - b);
-    superRegistro.cantidad = totalCantidad;
-    superRegistro.fotos_str = `(${superRegistro.fotos_nums[0]}-${superRegistro.fotos_nums[superRegistro.fotos_nums.length-1]})`;
-    superRegistro._agrupado = true;
-    superRegistro._selected = true;
-
-    // Eliminar los originales y poner el nuevo
-    registros = registros.filter(r => !seleccionados.includes(r));
-    registros.unshift(superRegistro); // Poner arriba
-    
-    document.getElementById('selectAll').checked = false;
-    renderTabla();
-    mostrarToast("✅ Registros agrupados y fotos reordenadas correctamente.", "var(--success)");
-  };
-
-  // Toast
-  function mostrarToast(msg, bg = "var(--danger)") {
-    const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.style.background = bg;
-    t.style.display = 'block';
-    setTimeout(() => { t.style.display = 'none'; }, 4000);
-  }
-
-  // Polling Inteligente de Peso Pluma
-  setInterval(async () => {
-    try {
-      const res = await fetch(`/api/check_updates/?last_id=${lastId}`);
-      if (res.status === 304) return; 
-      
-      const data = await res.json();
-      if (data.has_updates && data.nuevos_count > 0) {
-        document.getElementById('update-count').textContent = data.nuevos_count;
-        document.getElementById('update-notifier').style.display = 'block';
-      }
-    } catch(e) { console.warn("Error en polling:", e); }
-  }, 10000);
-
-  // Descargar nuevos registros
-  window.fetchNuevos = async function() {
-    try {
-      const res = await fetch(`/api/get_nuevos/?last_id=${lastId}`);
-      const data = await res.json();
-      if (data.registros && data.registros.length > 0) {
-        registros = [...data.registros, ...registros]; // Insertar arriba
-        lastId = Math.max(...data.registros.map(r => r.id));
-        renderTabla();
-      }
-      document.getElementById('update-notifier').style.display = 'none';
-    } catch(e) { console.error("Error trayendo nuevos:", e); }
-  };
-
-  // Eliminar y Editar
-  window.eliminarRegistro = async function(id) {
-    if (!confirm("¿Seguro que deseas eliminar este registro permanentemente?")) return;
-    try {
-      const res = await fetch(`/api/registro/${id}/delete/`, {
-        method: 'POST',
-        headers: {
-          'X-CSRFToken': '{{ csrf_token }}',
-        }
-      });
-      if (res.ok) {
-        registros = registros.filter(r => r.id !== id);
-        renderTabla();
-        mostrarToast("🗑️ Registro eliminado", "var(--success)");
-      } else {
-        mostrarToast("Error al eliminar registro");
-      }
-    } catch(e) { console.error(e); }
-  };
-
-  window.editarRegistro = async function(id) {
-    const reg = registros.find(r => r.id === id);
-    if (!reg) return;
-    
-    const nuevaCant = prompt("Nueva cantidad:", reg.cantidad || 1);
-    const nuevoResp = prompt("Nuevo responsable:", reg.responsable);
-    
-    if (nuevaCant === null || nuevoResp === null) return; // Canceló
-    
-    try {
-      const res = await fetch(`/api/registro/${id}/edit/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': '{{ csrf_token }}',
-        },
-        body: JSON.stringify({
-            cantidad: parseInt(nuevaCant),
-            responsable: nuevoResp
-        })
-      });
-      if (res.ok) {
-        reg.cantidad = parseInt(nuevaCant);
-        reg.responsable = nuevoResp;
-        renderTabla();
-        mostrarToast("✏️ Registro actualizado", "var(--success)");
-      } else {
-        mostrarToast("Error al editar registro");
-      }
-    } catch(e) { console.error(e); }
-  };
-
-  // Drag & Drop
-  document.addEventListener('DOMContentLoaded', () => {
-    renderTabla();
-    
-    const tbody = document.getElementById('registros-body');
-    new Sortable(tbody, {
-      handle: '.drag-handle',
-      animation: 150,
-      ghostClass: 'sortable-ghost',
-      onEnd: function (evt) {
-        // Actualizar el array 'registros' basándose en el nuevo DOM
-        const trs = Array.from(tbody.children);
-        const nuevoOrden = [];
-        let advertencia = false;
-        
-        trs.forEach((tr, index) => {
-          const rIndex = tr.dataset.index;
-          const reg = registros[rIndex];
-          nuevoOrden.push(reg);
-          
-          // Advertencia de lógica (si arrastró algo a una sección de otro responsable)
-          if (index > 0) {
-              const prev = nuevoOrden[index-1];
-              if (reg.responsable !== prev.responsable && evt.oldIndex !== evt.newIndex) {
-                  advertencia = true;
-              }
-          }
-        });
-        
-        registros = nuevoOrden;
-        renderTabla();
-        
-        if (advertencia) {
-            mostrarToast("⚠️ Advertencia: Has movido un registro fuera del bloque lógico de su responsable/línea.", "#f59e0b");
-        }
-      }
-    });
-  });
-
-  // Enviar a Excel / Revisión de Orientación
-  window.enviarExcel = function() {
-    const seleccionados = registros.filter(r => r._selected && !r._hidden);
-    if (seleccionados.length === 0) {
-        mostrarToast("Selecciona al menos 1 registro para enviar.");
-        return;
-    }
-
-    // Doble validación estricta pre-envío
-    for (let r of seleccionados) {
-        if (!r.user_id) {
-            mostrarToast("Fallo crítico: Falta user_id en un registro.");
-            return;
-        }
-        // Aplicar sort estricto ascendente una vez más
-        if (r.fotos_nums && Array.isArray(r.fotos_nums)) {
-            r.fotos_nums = Array.from(new Set(r.fotos_nums)).sort((a,b) => a - b);
-        }
-    }
-
-    document.getElementById('registros_data_input').value = JSON.stringify(seleccionados);
-    document.getElementById('form-excel').submit();
-  };
 </script>
+
+<!-- Script de Inicialización -->
+<script src="{% static 'js/panel_operativo.js' %}?v={% now 'U' %}" defer></script>
 {% endblock %}
+
