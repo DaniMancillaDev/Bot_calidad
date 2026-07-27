@@ -113,6 +113,98 @@ ALIAS = {
 }
 
 
+def _obtener_defecto_canonico(reg, translator):
+    from shared.infrastructure.ai.defect_translator import normalize_text
+    
+    defecto_canonico = None
+    _translation = None
+
+    if translator is not None:
+        try:
+            area_ctx = reg.get('departamento') or reg.get('turno') or ''
+            _translation = translator.translate(reg.get('descripcion', ''), area_ctx)
+            defecto_canonico = (_translation.get('defect_en') or '').strip().upper() or None
+        except Exception:
+            pass
+
+    if not defecto_canonico:
+        defecto_canonico = normalize_text(reg.get('descripcion', '')).upper()
+        
+    return defecto_canonico, _translation
+
+def _construir_clave_consolidacion(defecto_canonico, reg):
+    from shared.infrastructure.ai.defect_translator import normalize_text
+    return (
+        defecto_canonico,
+        normalize_text(reg.get('modelo') or '').upper(),
+        normalize_text(reg.get('numero_parte') or '').upper(),
+    )
+
+def _inicializar_grupo(reg, defecto_canonico, _translation):
+    grupo_base = dict(reg)
+    grupo_base['cantidad'] = reg.get('cantidad') or 1
+
+    user_id = reg.get('user_id')
+    fotos_reg = reg.get('fotos_nums') or []
+    
+    fotos_por_usuario = {}
+    if user_id and fotos_reg:
+        fotos_por_usuario[str(user_id)] = list(fotos_reg)
+    grupo_base['fotos_por_usuario'] = fotos_por_usuario
+
+    id_reg = reg.get('id')
+    desc_reg = (reg.get('descripcion') or '').strip()
+    linea_reg = (reg.get('linea') or '').strip()
+
+    grupo_base['ids_originales'] = [id_reg] if id_reg is not None else []
+    grupo_base['descripciones_originales'] = [desc_reg] if desc_reg else []
+    grupo_base['lineas_involucradas'] = [linea_reg] if linea_reg else []
+
+    grupo_base['defecto_canonico'] = defecto_canonico
+    grupo_base['linea'] = linea_reg
+    
+    if _translation is not None:
+        grupo_base['_translation'] = _translation
+
+    return grupo_base
+
+def _fusionar_registro(grupo, reg):
+    grupo['cantidad'] = (grupo.get('cantidad') or 1) + (reg.get('cantidad') or 1)
+
+    user_id = reg.get('user_id')
+    fotos_reg = reg.get('fotos_nums') or []
+    
+    if user_id and fotos_reg:
+        uid_str = str(user_id)
+        nums_existentes = set(grupo['fotos_por_usuario'].get(uid_str, []))
+        nuevos = [n for n in fotos_reg if n not in nums_existentes]
+        if nuevos:
+            grupo['fotos_por_usuario'].setdefault(uid_str, []).extend(nuevos)
+
+    id_reg = reg.get('id')
+    desc_reg = (reg.get('descripcion') or '').strip()
+    linea_reg = (reg.get('linea') or '').strip()
+
+    if id_reg is not None:
+        grupo['ids_originales'].append(id_reg)
+    if desc_reg and desc_reg not in grupo['descripciones_originales']:
+        grupo['descripciones_originales'].append(desc_reg)
+    if linea_reg and linea_reg not in grupo['lineas_involucradas']:
+        grupo['lineas_involucradas'].append(linea_reg)
+
+    sn_reg = (reg.get('sn_on_set') or '').strip()
+    if sn_reg:
+        existing = (grupo.get('sn_on_set') or '').strip()
+        grupo['sn_on_set'] = (existing + '\n' + sn_reg).strip() if existing else sn_reg
+
+def _post_proceso_fotos(agrupados):
+    for grupo in agrupados.values():
+        grupo['fotos_nums'] = [
+            n
+            for nums in grupo['fotos_por_usuario'].values()
+            for n in nums
+        ]
+
 def _consolidar_registros(regs, translator=None):
     """
     Consolidación V1: fusiona registros por defecto canónico.
@@ -131,101 +223,18 @@ def _consolidar_registros(regs, translator=None):
     IMPORTANTE: El bulk_update a REVISADO en generar_excel_task usa registros_data
     ORIGINAL (sin consolidar), por lo que este proceso no afecta ese flujo.
     """
-    from shared.infrastructure.ai.defect_translator import normalize_text
-
     agrupados = {}
 
     for reg in regs:
-        # ── Obtener defecto canónico ─────────────────────────────────────────
-        defecto_canonico = None
-        _translation = None
-
-        # Si el translator está disponible, usar catálogo determinístico
-        if translator is not None:
-            try:
-                area_ctx = reg.get('departamento') or reg.get('turno') or ''
-                _translation = translator.translate(reg.get('descripcion', ''), area_ctx)
-                defecto_canonico = (_translation.get('defect_en') or '').strip().upper() or None
-            except Exception:
-                pass
-
-        # Fallback: descripción normalizada si catálogo no resolvió
-        if not defecto_canonico:
-            defecto_canonico = normalize_text(reg.get('descripcion', '')).upper()
-
-        # ── Construir clave de consolidación ────────────────────────────────
-        clave = (
-            defecto_canonico,
-            normalize_text(reg.get('modelo') or '').upper(),
-            normalize_text(reg.get('numero_parte') or '').upper(),
-        )
-
-        user_id = reg.get('user_id')
-        fotos_reg = reg.get('fotos_nums') or []
-        linea_reg = (reg.get('linea') or '').strip()
-        desc_reg  = (reg.get('descripcion') or '').strip()
-        id_reg    = reg.get('id')
+        defecto_canonico, _translation = _obtener_defecto_canonico(reg, translator)
+        clave = _construir_clave_consolidacion(defecto_canonico, reg)
 
         if clave in agrupados:
-            grupo = agrupados[clave]
-
-            # Sumar cantidad
-            grupo['cantidad'] = (grupo.get('cantidad') or 1) + (reg.get('cantidad') or 1)
-
-            # Acumular fotos por usuario (preservando estructura para recuperación en disco)
-            if user_id and fotos_reg:
-                uid_str = str(user_id)
-                nums_existentes = set(grupo['fotos_por_usuario'].get(uid_str, []))
-                nuevos = [n for n in fotos_reg if n not in nums_existentes]
-                if nuevos:
-                    grupo['fotos_por_usuario'].setdefault(uid_str, []).extend(nuevos)
-
-            # Trazabilidad
-            if id_reg is not None:
-                grupo['ids_originales'].append(id_reg)
-            if desc_reg and desc_reg not in grupo['descripciones_originales']:
-                grupo['descripciones_originales'].append(desc_reg)
-            if linea_reg and linea_reg not in grupo['lineas_involucradas']:
-                grupo['lineas_involucradas'].append(linea_reg)
-            # Acumular series
-            sn_reg = (reg.get('sn_on_set') or '').strip()
-            if sn_reg:
-                existing = (grupo.get('sn_on_set') or '').strip()
-                grupo['sn_on_set'] = (existing + '\n' + sn_reg).strip() if existing else sn_reg
-
+            _fusionar_registro(agrupados[clave], reg)
         else:
-            # Primer registro del grupo — inicializar
-            grupo_base = dict(reg)
-            grupo_base['cantidad'] = reg.get('cantidad') or 1
+            agrupados[clave] = _inicializar_grupo(reg, defecto_canonico, _translation)
 
-            # fotos_por_usuario: dict para recuperación desde múltiples carpetas de usuario
-            fotos_por_usuario = {}
-            if user_id and fotos_reg:
-                fotos_por_usuario[str(user_id)] = list(fotos_reg)
-            grupo_base['fotos_por_usuario'] = fotos_por_usuario
-
-            # Trazabilidad interna (no se imprime en Excel)
-            grupo_base['ids_originales']         = [id_reg] if id_reg is not None else []
-            grupo_base['descripciones_originales'] = [desc_reg] if desc_reg else []
-            grupo_base['lineas_involucradas']      = [linea_reg] if linea_reg else []
-
-            # Campos de presentación para Excel
-            grupo_base['defecto_canonico']  = defecto_canonico
-            grupo_base['linea']             = linea_reg   # primer valor; Excel lo usará si catálogo falla
-            
-            if _translation is not None:
-                grupo_base['_translation'] = _translation
-
-            agrupados[clave] = grupo_base
-
-    # Post-proceso: construir fotos_nums plana para compatibilidad con código legacy
-    # reporte_excel.py usará fotos_por_usuario; esto es solo seguridad adicional.
-    for grupo in agrupados.values():
-        grupo['fotos_nums'] = [
-            n
-            for nums in grupo['fotos_por_usuario'].values()
-            for n in nums
-        ]
+    _post_proceso_fotos(agrupados)
 
     return list(agrupados.values())
 
