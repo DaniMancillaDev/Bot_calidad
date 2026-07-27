@@ -98,36 +98,50 @@ def _create_draft_records(session, df, photos_dir):
         )
 
 def process_upload_logic(session_uuid):
-    session = ImportSession.objects.select_for_update().get(uuid=session_uuid)
+    from django.db import transaction
+    
+    # Bloque atómico corto para validar y proteger el estado inicial
+    with transaction.atomic():
+        session = ImportSession.objects.select_for_update().get(uuid=session_uuid)
+        
+        if session.status == 'PROCESSING':
+            return # Ya se está procesando en otro worker, abortar limpiamente
+            
+        session.status = 'PROCESSING'
+        session.save(update_fields=['status'])
     
     try:
-        from django.db import transaction
+        # Procesamiento pesado fuera de transacción/lock
+        zip_path, found_excel, photos_dir, thumbs_dir = _extract_upload_files(session_uuid)
+        
+        session.zip_extract_path = f"workspace/sessions/{session_uuid}"
+        session.save(update_fields=['zip_extract_path'])
+
+        images = _process_zip_contents(zip_path, photos_dir)
+        _create_thumbnails(images, thumbs_dir)
+
+        if os.path.exists(zip_path):
+            os.remove(zip_path)
+
+        dataframe = _load_dataframe(found_excel)
+        
+        session.total_rows = len(dataframe)
+        session.save(update_fields=['total_rows'])
+        
+        _create_draft_records(session, dataframe, photos_dir)
+            
+        if os.path.exists(found_excel):
+            os.remove(found_excel)
+            
+        # Bloque atómico corto para estado final
         with transaction.atomic():
-            zip_path, found_excel, photos_dir, thumbs_dir = _extract_upload_files(session_uuid)
-            
-            session.zip_extract_path = f"workspace/sessions/{session_uuid}"
-            session.save(update_fields=['zip_extract_path'])
-
-            images = _process_zip_contents(zip_path, photos_dir)
-            _create_thumbnails(images, thumbs_dir)
-
-            if os.path.exists(zip_path):
-                os.remove(zip_path)
-
-            dataframe = _load_dataframe(found_excel)
-            
-            session.total_rows = len(dataframe)
-            session.save(update_fields=['total_rows'])
-            
-            _create_draft_records(session, dataframe, photos_dir)
-                
-            if os.path.exists(found_excel):
-                os.remove(found_excel)
-                
+            session = ImportSession.objects.select_for_update().get(uuid=session_uuid)
             session.status = 'DRAFT'
             session.save(update_fields=['status'])
         
     except Exception as e:
-        session.status = 'FAILED'
-        session.error_message = str(e)
-        session.save(update_fields=['status', 'error_message'])
+        with transaction.atomic():
+            session = ImportSession.objects.select_for_update().get(uuid=session_uuid)
+            session.status = 'FAILED'
+            session.error_message = str(e)
+            session.save(update_fields=['status', 'error_message'])
