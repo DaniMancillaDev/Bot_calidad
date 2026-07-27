@@ -208,19 +208,6 @@ class RegistroDefecto(models.Model):
 # CONTADORES DE FOTO POR GRUPO (turno + depto)
 # ============================================================
 
-class ContadorUsuario(models.Model):
-    """Secuencia de numeración de fotos individual por usuario."""
-    telegram_user_id = models.BigIntegerField(unique=True, db_index=True)
-    contador_actual = models.IntegerField(default=1)
-
-    class Meta:
-        db_table            = 'contadores_usuario'
-        verbose_name        = 'Contador de Usuario'
-        verbose_name_plural = 'Contadores de Usuario'
-
-    def __str__(self):
-        return f"Usuario {self.telegram_user_id} → {self.contador_actual}"
-
 
 # ============================================================
 # ESTADO DE CONVERSACIONES (antes en SQLite, ahora Postgres)
@@ -301,3 +288,25 @@ class GlobalCounter(models.Model):
 
     def __str__(self):
         return f"GlobalCounter({self.nombre}) → {self.valor_actual}"
+
+class NumeroReutilizable(models.Model):
+    """
+    Pool de números fotográficos liberados tras una cancelación.
+    Reglas de negocio:
+    - Numeración global.
+    - Cancelación libera números al pool.
+    - Los números liberados se consumen antes de generar nuevos.
+    - La reutilización no conserva propiedad histórica del operador.
+    Nota: Esta tabla SOLO contiene números liberados. No representa historial fotográfico.
+    """
+    numero = models.IntegerField(unique=True, db_index=True)
+    fecha_liberacion = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'numeros_reutilizables'
+        ordering = ['numero']
+        verbose_name = 'Número Reutilizable'
+        verbose_name_plural = 'Números Reutilizables'
+
+    def __str__(self):
+        return f"Hueco fotográfico: {self.numero}"

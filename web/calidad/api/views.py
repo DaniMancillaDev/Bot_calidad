@@ -379,9 +379,23 @@ class SesionCancelarView(APIView):
         try:
             from calidad.application.workflows.defecto_workflow import DefectoWorkflow
             DefectoWorkflow()._state_repo.finalizar(telegram_id)
-
-            logger.info("FSM Cancelado para usuario %s", telegram_id)
-            return Response({'status': 'cancelled'})
+            
+            fotos = request.data.get('fotos', [])
+            numeros_liberados = []
+            
+            if fotos:
+                from calidad.models import NumeroReutilizable
+                from django.db import transaction
+                with transaction.atomic():
+                    # Crear los registros de huecos ignorando conflictos si ya existían
+                    nuevos = [NumeroReutilizable(numero=f) for f in fotos if isinstance(f, int)]
+                    if nuevos:
+                        NumeroReutilizable.objects.bulk_create(nuevos, ignore_conflicts=True)
+                        numeros_liberados = [n.numero for n in nuevos]
+                        
+            contador_revertido = min(numeros_liberados) if numeros_liberados else None
+            logger.info("FSM Cancelado para usuario %s. Numeros liberados: %s", telegram_id, numeros_liberados)
+            return Response({'status': 'cancelled', 'numeros_liberados': numeros_liberados, 'contador_revertido': contador_revertido})
         except Exception as e:
             logger.error("Error en SesionCancelarView: %s", e)
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -401,7 +415,7 @@ class SesionLimpiarView(APIView):
             return Response({'error': 'telegram_id is required'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            from calidad.models import RegistroDefecto, ContadorUsuario, PerfilUsuario
+            from calidad.models import RegistroDefecto, PerfilUsuario
             from django.db import transaction
 
             p = PerfilUsuario.objects.select_related('usuario').get(telegram_user_id=telegram_id)
@@ -461,7 +475,7 @@ class SesionLimpiarFotosView(APIView):
         try:
             import os
             from django.conf import settings
-            from calidad.models import ContadorUsuario, PerfilUsuario, EvidenciaFotografica
+            from calidad.models import PerfilUsuario, EvidenciaFotografica
             
             p = PerfilUsuario.objects.select_related('usuario').get(telegram_user_id=telegram_id)
             
@@ -494,29 +508,7 @@ class SesionLimpiarFotosView(APIView):
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class SesionCancelarView(APIView):
-    """
-    POST /workflows/sesion/cancelar/
-    Payload: { telegram_id }
-    Lógica: Solo cierra FSM en Redis. No toca registros, fotos, ni contador.
-    """
-    authentication_classes = [StaticApiKeyAuthentication]
-    permission_classes = [IsAuthenticated]
 
-    def post(self, request):
-        telegram_id = request.data.get('telegram_id')
-        if not telegram_id:
-            return Response({'error': 'telegram_id is required'}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            from calidad.application.workflows.defecto_workflow import DefectoWorkflow
-            DefectoWorkflow()._state_repo.finalizar(telegram_id)
-
-            logger.info("FSM Cancelado para usuario %s", telegram_id)
-            return Response({'status': 'cancelled'})
-        except Exception as e:
-            logger.error("Error en SesionCancelarView: %s", e)
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
