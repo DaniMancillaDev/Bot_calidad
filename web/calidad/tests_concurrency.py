@@ -20,11 +20,19 @@ class GlobalCounterConcurrencyTest(TransactionTestCase):
         
         def simulate_operator():
             import random
-            n = random.randint(1, 10)
-            return repo.obtener_y_avanzar_lote(user_id=1, n=n)
+            from django.db import connections
+            try:
+                n = random.randint(1, 10)
+                return repo.obtener_y_avanzar_lote(user_id=1, n=n)
+            finally:
+                connections.close_all()
 
         def simulate_web_import():
-            return repo.obtener_y_avanzar_lote(user_id=2, n=500)
+            from django.db import connections
+            try:
+                return repo.obtener_y_avanzar_lote(user_id=2, n=500)
+            finally:
+                connections.close_all()
 
         # Usamos 10 workers (Postgres puede tener limite de conexiones, así que 10 es seguro para tests locales)
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
@@ -35,6 +43,8 @@ class GlobalCounterConcurrencyTest(TransactionTestCase):
                 resultados.extend(future.result())
                 
         # Validaciones
+        from django.db import connections
+        connections.close_all()
         unicos = set(resultados)
         
         # Regla 1: Ningún ID debe repetirse
@@ -65,7 +75,11 @@ class GlobalCounterConcurrencyTest(TransactionTestCase):
         repo = DjangoContadorRepository()
         
         def simulate_operator():
-            return repo.obtener_y_avanzar_lote(user_id=1, n=1)
+            from django.db import connections
+            try:
+                return repo.obtener_y_avanzar_lote(user_id=1, n=1)
+            finally:
+                connections.close_all()
             
         resultados = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
@@ -74,6 +88,8 @@ class GlobalCounterConcurrencyTest(TransactionTestCase):
                 resultados.extend(future.result())
                 
         # Uno recibió el 50, el otro el 100
+        from django.db import connections
+        connections.close_all()
         self.assertCountEqual(resultados, [50, 100])
         # El contador global debe haber avanzado 1 posición a 101
         counter.refresh_from_db()
