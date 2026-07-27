@@ -27,7 +27,6 @@ from openpyxl.styles import Alignment
 # Detección de orientación: importada desde shared/ (fuente de verdad única)
 from shared.infrastructure.orientation.orientation_engine import (
     detect_orientation,
-    detect_orientations_batch,
 )
 from calidad.utils import get_best_image_path
 

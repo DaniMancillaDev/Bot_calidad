@@ -23,7 +23,7 @@ class LimpiezaViewsTest(TestCase):
 
 
     @patch('calidad.application.workflows.defecto_workflow.DefectoWorkflow')
-    def test_limpiar_fotos_view_reinicia_contador(self, mock_workflow):
+    def test_limpiar_fotos_view_reinicia_contador(self, _mock_workflow):
         """Prueba que /limpiar-fotos NO reinicia el ContadorUsuario a 1."""
         url = reverse('workflow_sesion_limpiar_fotos')
         response = self.client.post(url, {'telegram_id': self.telegram_id}, HTTP_AUTHORIZATION='Api-Key test-api-key')
@@ -34,7 +34,7 @@ class LimpiezaViewsTest(TestCase):
 
 
     @patch('calidad.application.workflows.defecto_workflow.DefectoWorkflow')
-    def test_limpiar_view_reinicia_contador(self, mock_workflow):
+    def test_limpiar_view_reinicia_contador(self, _mock_workflow):
         """Prueba que /limpiar NO reinicia el ContadorUsuario a 1."""
         url = reverse('workflow_sesion_limpiar')
         response = self.client.post(url, {'telegram_id': self.telegram_id}, HTTP_AUTHORIZATION='Api-Key test-api-key')
@@ -93,7 +93,7 @@ class SesionCancelarViewsTest(TestCase):
 
 
     @patch('calidad.application.workflows.defecto_workflow.DefectoWorkflow')
-    def test_cancelar_view_revierte_contador(self, mock_workflow):
+    def test_cancelar_view_revierte_contador(self, _mock_workflow):
         """Si un usuario subió fotos 15, 16, 17 y cancela, esos números deben liberarse en NumeroReutilizable."""
         url = reverse('workflow_sesion_cancelar')
         response = self.client.post(url, {'telegram_id': self.telegram_id, 'fotos': [15, 16, 17]}, format='json')
@@ -108,7 +108,7 @@ class SesionCancelarViewsTest(TestCase):
         self.assertCountEqual(liberados, [15, 16, 17])
 
     @patch('calidad.application.workflows.defecto_workflow.DefectoWorkflow')
-    def test_cancelar_view_sin_fotos(self, mock_workflow):
+    def test_cancelar_view_sin_fotos(self, _mock_workflow):
         """Cancelar sin fotos no debe romper nada ni liberar números."""
         url = reverse('workflow_sesion_cancelar')
         response = self.client.post(url, {'telegram_id': self.telegram_id, 'fotos': []}, format='json')
