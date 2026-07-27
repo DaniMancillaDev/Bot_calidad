@@ -1,3 +1,10 @@
+## [2.0.1](https://github.com/DaniMancillaDev/Bot_calidad/compare/v2.0.0...v2.0.1) (2026-07-27)
+
+
+### Bug Fixes
+
+* optimizar tiempo de cache de auth y configurar headers de proxy ([975ceb0](https://github.com/DaniMancillaDev/Bot_calidad/commit/975ceb00f6754b2fa07b275c7d87341d017ad840))
+
 # [2.0.0](https://github.com/DaniMancillaDev/Bot_calidad/compare/v1.0.0...v2.0.0) (2026-07-27)
 
 
