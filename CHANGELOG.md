@@ -1,3 +1,10 @@
+## [2.0.2](https://github.com/DaniMancillaDev/Bot_calidad/compare/v2.0.1...v2.0.2) (2026-07-27)
+
+
+### Bug Fixes
+
+* habilitar acceso a /media/proxies/ en nginx ([fb7730d](https://github.com/DaniMancillaDev/Bot_calidad/commit/fb7730dd4a9ccbd1f3d4fc23109aacc98cbbf928))
+
 ## [2.0.1](https://github.com/DaniMancillaDev/Bot_calidad/compare/v2.0.0...v2.0.1) (2026-07-27)
 
 
