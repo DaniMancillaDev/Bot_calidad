@@ -54,7 +54,11 @@ def create_verificar_acceso(api_client):
         ahora = time.time()
         if user_id in _CACHE_ACCESO:
             ts, cached_val = _CACHE_ACCESO[user_id]
-            if ahora - ts < TTL_CACHE:
+            
+            # ponytail: cacheamos rechazos solo 5s para que al dar de alta a un usuario pueda usarlo casi de inmediato
+            ttl = TTL_CACHE if cached_val else 5
+            
+            if ahora - ts < ttl:
                 if not cached_val:
                     raise ApplicationHandlerStop()
                 return

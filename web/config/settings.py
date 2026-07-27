@@ -159,6 +159,7 @@ CELERY_TASK_TRACK_STARTED = True
 CELERY_RESULT_EXPIRES = 3600
 
 # Cloudflare support
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 CSRF_TRUSTED_ORIGINS = [
     'https://*.trycloudflare.com',
     'https://*.danimancilladev.dev',
