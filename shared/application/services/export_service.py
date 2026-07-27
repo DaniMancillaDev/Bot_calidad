@@ -158,15 +158,8 @@ class ExportService:
             if r.fotos_nums:
                 nums = r.fotos_nums
             else:
-                import re
-                try:
-                    raw_fotos = str(r.fotos)
-                    nums = [int(n) for n in re.findall(r'\d+', raw_fotos)]
-                    rangos = re.findall(r'(\d+)\s*-\s*(\d+)', raw_fotos)
-                    for inicio_r, fin_r in rangos:
-                        nums.extend(range(int(inicio_r), int(fin_r) + 1))
-                except Exception:
-                    pass
+                from shared.utils.photo_parser import parse_photo_numbers
+                nums = parse_photo_numbers(r.fotos)
             
             for n in sorted(list(set(nums))):
                 ordered_fotos.append((uid, n))

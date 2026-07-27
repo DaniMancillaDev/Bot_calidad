@@ -1,4 +1,4 @@
-from typing import Dict, Any, Callable, Tuple
+from typing import Dict, Any, Tuple
 from .entities import EstadoConversacion, FSMContext, FSMResult
 from .validators import validar_cantidad, validar_modelo, validar_linea, validar_responsable
 

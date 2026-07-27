@@ -10,7 +10,7 @@ Uso:
     uv run python web/manage.py sync_evidencias --dry-run
 """
 import os
-from pathlib import Path
+
 from django.core.management.base import BaseCommand
 from django.conf import settings
 from calidad.models import RegistroDefecto, EvidenciaFotografica

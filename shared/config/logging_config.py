@@ -16,7 +16,7 @@ Niveles:
 
 import logging
 import os
-from pathlib import Path
+
 
 
 def setup_logging() -> None:

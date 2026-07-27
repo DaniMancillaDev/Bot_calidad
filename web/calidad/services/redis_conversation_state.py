@@ -49,8 +49,3 @@ class RedisConversationState:
 
     def finalizar(self, user_id: int) -> None:
         self._r.delete(self._key(user_id))
-
-    def persistir(self) -> None:
-        # Redis persiste automáticamente (AOF configurado en docker-compose).
-        # Este método existe por compatibilidad con el Protocol.
-        pass

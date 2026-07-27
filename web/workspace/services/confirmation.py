@@ -52,6 +52,7 @@ def confirm_import(session_uuid, user):
                 departamento=mapped.get('departamento', ''),
                 user_id=user.id,
                 fecha_registro=timezone.now(),
+                fotos="1" if draft.assigned_photos else "",
             )
             registro.save()
             

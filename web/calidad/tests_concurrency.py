@@ -45,3 +45,37 @@ class GlobalCounterConcurrencyTest(TransactionTestCase):
         counter = GlobalCounter.objects.get(nombre='fotos')
         
         self.assertEqual(counter.valor_actual, valor_inicial + total_solicitado)
+
+    def test_pool_concurrency(self):
+        """
+        Escenario concurrente:
+        GlobalCounter = 100
+        NumeroReutilizable = [50]
+        Dos operadores solicitan lote simultáneamente.
+        Debe garantizarse que uno recibe el 50, y el otro no colisiona.
+        """
+        from calidad.models import NumeroReutilizable
+        
+        counter, _ = GlobalCounter.objects.get_or_create(nombre='fotos', defaults={'valor_actual': 100})
+        counter.valor_actual = 100
+        counter.save(update_fields=['valor_actual'])
+        
+        NumeroReutilizable.objects.create(numero=50)
+        
+        repo = DjangoContadorRepository()
+        
+        def simulate_operator():
+            return repo.obtener_y_avanzar_lote(user_id=1, n=1)
+            
+        resultados = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [executor.submit(simulate_operator) for _ in range(2)]
+            for future in concurrent.futures.as_completed(futures):
+                resultados.extend(future.result())
+                
+        # Uno recibió el 50, el otro el 100
+        self.assertCountEqual(resultados, [50, 100])
+        # El contador global debe haber avanzado 1 posición a 101
+        counter.refresh_from_db()
+        self.assertEqual(counter.valor_actual, 101)
+        self.assertEqual(NumeroReutilizable.objects.count(), 0)

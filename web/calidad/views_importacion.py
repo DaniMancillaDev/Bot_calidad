@@ -18,6 +18,10 @@ def importacion_iniciar(request):
     GET: Renderiza el formulario de carga (Excel + ZIP).
     POST: Recibe archivos y redirige al workspace.
     """
+    import os
+    if os.getenv("ENABLE_WORKSPACE_V2", "false").lower() in ("true", "1", "yes"):
+        return redirect('workspace:upload')
+
     # Garbage Collection Perezoso: Limpiar carpeta temporal huérfana de este usuario
     session_key = request.session.session_key
     if session_key:
