@@ -282,23 +282,11 @@ def ver_foto(request, numero):
 # GALERÍA DE FOTOS
 # ============================================================
 
-@login_required
-def galeria_fotos(request):
-    """
-    Feed operativo de registros con thumbnails.
-    - DB-first: lee fotos_nums + metadatos del registro, no escanea filesystem.
-    - Solo thumbnails en el feed. Original solo en modal/zoom.
-    - Paginación server-side: 30 registros por página.
-    - HTMX-ready: si request trae HX-Request header, devuelve solo el partial.
-    - Filters: turno, departamento, estado_revision, fecha, línea.
-    """
-    PAGE_SIZE = 30
-
-    # ── Queryset base con permisos ────────────────────────────────────────────
+def _build_galeria_queryset(request):
     registros_qs = (
         get_registros_permitidos(request.user)
-        .select_related('supervisor')         # evitar N+1 en supervisor
-        .prefetch_related('evidencias_v2')    # Fase 2: prefetch fotos DB
+        .select_related('supervisor')
+        .prefetch_related('evidencias_v2')
         .only(
             'id', 'fotos', 'fotos_nums', 'modelo', 'linea',
             'cantidad', 'responsable', 'descripcion',
@@ -308,43 +296,43 @@ def galeria_fotos(request):
         .order_by('-fecha_registro')
     )
 
-    # ── Filtros ───────────────────────────────────────────────────────────────
-    estado_filter  = request.GET.get('estado', '')
-    turno_filter   = request.GET.get('turno', '')
-    depto_filter   = request.GET.get('depto', '')
-    linea_filter   = request.GET.get('linea', '')
-    dias_filter    = request.GET.get('dias', '')
-    q_filter       = request.GET.get('q', '')   # búsqueda libre en descripcion
-    fecha_desde    = request.GET.get('fecha_desde', '')
-    fecha_hasta    = request.GET.get('fecha_hasta', '')
+    filtros = {
+        'estado': request.GET.get('estado', ''),
+        'turno': request.GET.get('turno', ''),
+        'depto': request.GET.get('depto', ''),
+        'linea': request.GET.get('linea', ''),
+        'dias': request.GET.get('dias', ''),
+        'q': request.GET.get('q', ''),
+        'fecha_desde': request.GET.get('fecha_desde', ''),
+        'fecha_hasta': request.GET.get('fecha_hasta', '')
+    }
 
-    if estado_filter:
-        registros_qs = registros_qs.filter(estado_revision=estado_filter)
-    if turno_filter:
-        registros_qs = registros_qs.filter(turno=turno_filter)
-    if depto_filter:
-        registros_qs = registros_qs.filter(departamento=depto_filter)
-    if linea_filter:
-        registros_qs = registros_qs.filter(linea__icontains=linea_filter)
-    if dias_filter:
+    if filtros['estado']:
+        registros_qs = registros_qs.filter(estado_revision=filtros['estado'])
+    if filtros['turno']:
+        registros_qs = registros_qs.filter(turno=filtros['turno'])
+    if filtros['depto']:
+        registros_qs = registros_qs.filter(departamento=filtros['depto'])
+    if filtros['linea']:
+        registros_qs = registros_qs.filter(linea__icontains=filtros['linea'])
+    if filtros['dias']:
         try:
-            desde = timezone.now() - timedelta(days=int(dias_filter))
+            desde = timezone.now() - timedelta(days=int(filtros['dias']))
             registros_qs = registros_qs.filter(fecha_registro__gte=desde)
         except ValueError:
             pass
-    
-    if fecha_desde:
+    if filtros['fecha_desde']:
         try:
-            registros_qs = registros_qs.filter(fecha_registro__gte=fecha_desde)
+            registros_qs = registros_qs.filter(fecha_registro__gte=filtros['fecha_desde'])
         except ValueError:
             pass
-    if fecha_hasta:
+    if filtros['fecha_hasta']:
         try:
-            # Incluir todo el día hasta
-            registros_qs = registros_qs.filter(fecha_registro__lte=f"{fecha_hasta} 23:59:59")
+            registros_qs = registros_qs.filter(fecha_registro__lte=f"{filtros['fecha_hasta']} 23:59:59")
         except ValueError:
             pass
 
+    q_filter = filtros['q']
     if q_filter:
         import re
         m = re.match(r'^(\d+)\s*-\s*(\d+)$', q_filter.strip())
@@ -374,38 +362,29 @@ def galeria_fotos(request):
                 Q(responsable__icontains=q_filter) |
                 Q(fotos__icontains=q_filter)
             )
+            
+    return registros_qs, filtros
 
-    # ── Pre-cargar nombres de usuarios (1 query, no N) ────────────────────────
+def _enrich_galeria_registros(object_list):
     nombres_dict = {
         p.telegram_user_id: p.usuario.get_full_name() or p.usuario.username
         for p in PerfilUsuario.objects.select_related('usuario')
                                        .exclude(telegram_user_id__isnull=True)
     }
 
-    # ── Paginación ────────────────────────────────────────────────────────────
-    paginator = Paginator(registros_qs, PAGE_SIZE)
-    page_num  = request.GET.get('page', 1)
-    try:
-        page = paginator.page(page_num)
-    except Exception:
-        page = paginator.page(1)
-
-    # ── Enriquecer registros con URLs de thumb y original ─────────────────────
     thumbs_root = settings.THUMBS_ROOT
     fotos_root  = settings.FOTOS_ROOT
     thumbs_url  = settings.THUMBS_URL
     fotos_url   = settings.FOTOS_URL
 
     registros_enriquecidos = []
-    for reg in page.object_list:
+    for reg in object_list:
         fotos_data = []
         user_folder_fotos  = fotos_root  / str(reg.user_id)
         user_folder_thumbs = thumbs_root / str(reg.user_id)
 
-        # Fase 2: Evidencias en DB
         for ev in reg.evidencias_v2.all():
             path = ev.ruta_archivo
-            # Fix if ruta_archivo mistakenly contains media_files/ prefix
             if path.startswith('media_files/'):
                 path = path[12:]
             elif path.startswith('/media_files/'):
@@ -415,7 +394,6 @@ def galeria_fotos(request):
             url = settings.MEDIA_URL + path
             
             filename = os.path.basename(path)
-            # Intentar extraer el número de la foto si viene de Telegram (ej. 137_20260724.jpg)
             num_display = ev.id
             import re
             m = re.match(r'^(\d+)_', filename)
@@ -429,7 +407,6 @@ def galeria_fotos(request):
                 'nombre': filename,
             })
 
-        # Usar fotos_nums (Fase 1). Fallback: parsear campo legacy.
         nums = reg.fotos_nums if reg.fotos_nums else []
         if not nums and reg.fotos:
             try:
@@ -438,7 +415,6 @@ def galeria_fotos(request):
                 nums = []
 
         for num in nums:
-            # Buscar archivo con prefix num (ej. 001_20240101_120000.jpg)
             patron = f"{num:03d}_*.jpg"
             fotos_encontradas = sorted(user_folder_fotos.glob(patron))
             if not fotos_encontradas:
@@ -446,7 +422,6 @@ def galeria_fotos(request):
             foto_file = fotos_encontradas[0]
             thumb_file = user_folder_thumbs / foto_file.name
 
-            # Thumb URL: usar thumb si existe, fallback al original
             if thumb_file.exists():
                 thumb_src = f"{thumbs_url}{reg.user_id}/{foto_file.name}"
             else:
@@ -459,7 +434,6 @@ def galeria_fotos(request):
             else:
                 orig_src = f"{fotos_url}{reg.user_id}/{foto_file.name}"
 
-            # Evitar duplicados si Fase 2 y Fase 1 colisionan
             if not any(f['nombre'] == foto_file.name for f in fotos_data):
                 fotos_data.append({
                     'num':       num,
@@ -473,22 +447,48 @@ def galeria_fotos(request):
             'fotos':          fotos_data,
             'nombre_usuario': nombres_dict.get(reg.user_id, f'ID {reg.user_id}'),
         })
+        
+    return registros_enriquecidos
 
-    context = {
+def _build_galeria_context(page, paginator, registros_enriquecidos, filtros):
+    return {
         'registros':          registros_enriquecidos,
         'page':               page,
         'paginator':          paginator,
         'total':              paginator.count,
         'estados':            EstadoRevision.choices,
-        # Valores actuales de filtro
-        'f_estado':           estado_filter,
-        'f_turno':            turno_filter,
-        'f_depto':            depto_filter,
-        'f_linea':            linea_filter,
-        'f_dias':             dias_filter,
-        'f_q':                q_filter,
+        'f_estado':           filtros.get('estado', ''),
+        'f_turno':            filtros.get('turno', ''),
+        'f_depto':            filtros.get('depto', ''),
+        'f_linea':            filtros.get('linea', ''),
+        'f_dias':             filtros.get('dias', ''),
+        'f_q':                filtros.get('q', ''),
         'seccion':            'fotos',
     }
+
+@login_required
+def galeria_fotos(request):
+    """
+    Feed operativo de registros con thumbnails.
+    - DB-first: lee fotos_nums + metadatos del registro, no escanea filesystem.
+    - Solo thumbnails en el feed. Original solo en modal/zoom.
+    - Paginación server-side: 30 registros por página.
+    - HTMX-ready: si request trae HX-Request header, devuelve solo el partial.
+    - Filters: turno, departamento, estado_revision, fecha, línea.
+    """
+    registros_qs, filtros = _build_galeria_queryset(request)
+
+    PAGE_SIZE = 30
+    paginator = Paginator(registros_qs, PAGE_SIZE)
+    page_num  = request.GET.get('page', 1)
+    
+    try:
+        page = paginator.page(page_num)
+    except Exception:
+        page = paginator.page(1)
+
+    registros_enriquecidos = _enrich_galeria_registros(page.object_list)
+    context = _build_galeria_context(page, paginator, registros_enriquecidos, filtros)
 
     # HTMX: solo el partial si viene de una solicitud incremental
     if request.headers.get('HX-Request'):
@@ -557,28 +557,19 @@ def _parse_fotos_nums(registros):
     return resultado
 
 
-@login_required
-def revisar_orientacion(request):
-    """
-    Página de revisión de orientación de fotos antes de generar el Excel.
-    Muestra todas las fotos del turno con su ángulo auto-detectado,
-    y permite al usuario corregirlas con botones de rotación.
-    """
-    registros_data = []
+def _get_orientacion_registros(request):
     fecha_desde = ''
     fecha_hasta = ''
+    registros_data = []
     
     if request.method == 'POST' and request.POST.get('registros_data'):
-        # Recibir registros pre-procesados o agrupados desde el panel operativo
         try:
             registros_data = json.loads(request.POST.get('registros_data'))
         except json.JSONDecodeError:
             pass
     else:
-        # Lógica original: cargar desde base de datos
         registros_qs = get_registros_permitidos(request.user)
 
-        # Filtros opcionales heredados desde la página de reportes
         fecha_desde = request.GET.get('fecha_desde', '')
         fecha_hasta = request.GET.get('fecha_hasta', '')
         if fecha_desde:
@@ -587,21 +578,17 @@ def revisar_orientacion(request):
             registros_qs = registros_qs.filter(fecha_registro__date__lte=fecha_hasta)
 
         registros_data = _parse_fotos_nums(registros_qs)
-    
-    # Ordenar registros por usuario y número de inicio para que la tabla sea coherente
-    registros_data.sort(key=lambda x: (x.get('user_id'), x['fotos_nums'][0] if x.get('fotos_nums') else 0))
+        
+    return registros_data, fecha_desde, fecha_hasta
 
+def _build_fotos_en_disco(registros_data):
     fotos_dir = settings.MEDIA_ROOT / 'fotos'
-
-    # Encontrar qué fotos existen en disco usando clave compuesta {user_id}_{numero}
     fotos_en_disco = {}
     
-    # Cargar EvidenciaFotografica para enricher fotos_preview
     from calidad.models import EvidenciaFotografica
     registro_ids = [r['id'] for r in registros_data if r.get('id')]
     evidencias_qs = EvidenciaFotografica.objects.filter(registro_id__in=registro_ids)
     
-    # Agrupar evidencias_v2 por registro
     evs_por_registro = {}
     for ev in evidencias_qs:
         if ev.registro_id not in evs_por_registro:
@@ -614,10 +601,8 @@ def revisar_orientacion(request):
             continue
             
         user_folder = fotos_dir / str(user_id)
-        
         actual_nums = []
         
-        # 1. Fase 1: fotos legacy por número
         if user_folder.exists():
             for num in r.get('fotos_nums', []):
                 clave = f"{user_id}_{num}"
@@ -635,7 +620,6 @@ def revisar_orientacion(request):
                     }
                     actual_nums.append(num)
                     
-        # 2. Fase 2: Evidencias explícitas en base de datos
         evs = evs_por_registro.get(r['id'], [])
         for ev in evs:
             ev_path_str = ev.ruta_archivo
@@ -654,8 +638,6 @@ def revisar_orientacion(request):
                     num = int(m.group(1))
                     
                 clave = f"{user_id}_{num}"
-                
-                # Guardamos el num validado
                 actual_nums.append(num)
                 
                 fotos_en_disco[clave] = {
@@ -667,15 +649,15 @@ def revisar_orientacion(request):
                     'ruta_rel': ev_path_str
                 }
 
-        # Override fotos_nums for JS rendering consistency
         r['fotos_nums'] = sorted(list(set(actual_nums)))
+        
+    return fotos_en_disco, evidencias_qs
 
-    # Índice para legacy: ruta_archivo relativa → evidencia
+def _build_fotos_preview(fotos_en_disco, evidencias_qs):
     ev_by_path = {}
     for ev in evidencias_qs:
         ev_by_path[ev.ruta_archivo] = ev
 
-    # Construir lista de fotos para el template
     fotos_preview = []
     for clave, data in fotos_en_disco.items():
         real_path = data['path']
@@ -698,7 +680,7 @@ def revisar_orientacion(request):
         else:
             ev = data['evidencia']
             fotos_preview.append({
-                'clave':        clave.split('_v2_')[0], # para que coincida con user_id_num
+                'clave':        clave.split('_v2_')[0],
                 'numero':       data['numero'],
                 'user_id':      data['user_id'],
                 'url':          f"/media/{data['ruta_rel']}",
@@ -707,8 +689,23 @@ def revisar_orientacion(request):
                 'excluida':     bool(ev.metadatos.get('excluida')) if isinstance(ev.metadatos, dict) else False,
             })
 
-    # Ordenar por usuario y luego por número de foto para que aparezcan en secuencia (001, 002...)
     fotos_preview.sort(key=lambda x: (x['user_id'], x['numero']))
+    return fotos_preview
+
+@login_required
+def revisar_orientacion(request):
+    """
+    Página de revisión de orientación de fotos antes de generar el Excel.
+    Muestra todas las fotos del turno con su ángulo auto-detectado,
+    y permite al usuario corregirlas con botones de rotación.
+    """
+    registros_data, fecha_desde, fecha_hasta = _get_orientacion_registros(request)
+    
+    registros_data.sort(key=lambda x: (x.get('user_id'), x['fotos_nums'][0] if x.get('fotos_nums') else 0))
+    
+    fotos_en_disco, evidencias_qs = _build_fotos_en_disco(registros_data)
+    
+    fotos_preview = _build_fotos_preview(fotos_en_disco, evidencias_qs)
 
     context = {
         'registros':           registros_data,
