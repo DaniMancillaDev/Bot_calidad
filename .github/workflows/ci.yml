@@ -38,7 +38,7 @@ jobs:
         run: |
           uv run python -c "import bot.app"
           uv run python -c "import shared.infrastructure.orientation.orientation_engine"
-          uv run python -c "import database"
+          uv run python -c "import shared.infrastructure.database"
 
       - name: Verificar migraciones Django
         run: uv run python web/manage.py check --deploy 2>/dev/null || true

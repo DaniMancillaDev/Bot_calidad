@@ -16,9 +16,8 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 # Copiar dependencias primero para cache de capas
 COPY pyproject.toml uv.lock ./
 
-# Instalar dependencias de producción + gunicorn
-RUN uv sync --frozen --no-dev && \
-    uv pip install gunicorn
+# Instalar dependencias de producción
+RUN uv sync --frozen --no-dev
 
 # Copiar código fuente de la web
 COPY web/ web/
@@ -42,4 +41,4 @@ HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/login/')" || exit 1
 
 # Migrate + arrancar Gunicorn (producción real)
-CMD ["sh", "-c", "uv run python web/manage.py migrate && uv run gunicorn --pythonpath web config.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 120"]
+CMD ["sh", "-c", "uv run python web/manage.py migrate && uv run python web/manage.py collectstatic --noinput && uv run gunicorn --pythonpath web config.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 120"]
