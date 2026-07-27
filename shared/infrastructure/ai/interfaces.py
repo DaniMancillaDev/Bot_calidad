@@ -1,7 +1,3 @@
-# shared.domain.interfaces — Contratos (Protocol) basados en el comportamiento REAL del sistema.
-# DatabaseManager YA satisface estos protocolos sin modificaciones (structural subtyping).
-# NO se usan aún en producción — solo preparan el terreno para DIP.
-
 from typing import Protocol, runtime_checkable, TypedDict
 
 # ============================================================

@@ -20,7 +20,7 @@ from pathlib import Path
 
 from openai import OpenAI
 
-from shared.domain.interfaces import IDefectTranslator, DefectTranslation
+from shared.infrastructure.ai.interfaces import IDefectTranslator, DefectTranslation
 
 logger = logging.getLogger(__name__)
 
