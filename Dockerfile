@@ -27,7 +27,7 @@ COPY plantilla_reporte.xlsx ./
 
 # Usuario no-root para seguridad
 RUN useradd -m -r -u 1001 webuser && \
-    mkdir -p /app/media_files/fotos /app/data && \
+    mkdir -p /app/media_files/fotos /app/data /app/static_collected && \
     chown -R webuser:webuser /app
 
 USER webuser
