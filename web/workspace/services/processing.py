@@ -65,12 +65,15 @@ def _create_thumbnails(extracted_images, thumbs_dir):
             pass # Si no es imagen o falla, ignorar
 
 def _load_dataframe(found_excel):
-    return pd.read_excel(found_excel) if found_excel.endswith(('.xls', '.xlsx')) else pd.read_csv(found_excel)
+    df = pd.read_excel(found_excel) if found_excel.endswith(('.xls', '.xlsx')) else pd.read_csv(found_excel)
+    return df.astype(object).where(pd.notna(df), None)
 
 def _create_draft_records(session, df, photos_dir):
     for idx, row in df.iterrows():
         row_index = idx + 1
-        raw_data = row.to_dict()
+        
+        # Normalizar NaN/NaT a None para JSON
+        raw_data = {k: (v if pd.notna(v) else None) for k, v in row.to_dict().items()}
         
         # Simple lowercase cleanup for mapped_data mapping
         mapped_data = {
@@ -97,34 +100,32 @@ def _create_draft_records(session, df, photos_dir):
 def process_upload_logic(session_uuid):
     session = ImportSession.objects.select_for_update().get(uuid=session_uuid)
     
-    # TODO Fase 8C.3:
-    # Revisar atomicidad y recuperación ante errores DB
     try:
-        zip_path, found_excel, photos_dir, thumbs_dir = _extract_upload_files(session_uuid)
-        
-        session.zip_extract_path = f"workspace/sessions/{session_uuid}"
-        session.save(update_fields=['zip_extract_path'])
-
-        images = _process_zip_contents(zip_path, photos_dir)
-        _create_thumbnails(images, thumbs_dir)
-
-        # Borrar zip original temporal
-        if os.path.exists(zip_path):
-            os.remove(zip_path)
-
-        dataframe = _load_dataframe(found_excel)
-        
-        session.total_rows = len(dataframe)
-        session.save(update_fields=['total_rows'])
-        
-        _create_draft_records(session, dataframe, photos_dir)
+        from django.db import transaction
+        with transaction.atomic():
+            zip_path, found_excel, photos_dir, thumbs_dir = _extract_upload_files(session_uuid)
             
-        # Borrar Excel temporal
-        if os.path.exists(found_excel):
-            os.remove(found_excel)
+            session.zip_extract_path = f"workspace/sessions/{session_uuid}"
+            session.save(update_fields=['zip_extract_path'])
+
+            images = _process_zip_contents(zip_path, photos_dir)
+            _create_thumbnails(images, thumbs_dir)
+
+            if os.path.exists(zip_path):
+                os.remove(zip_path)
+
+            dataframe = _load_dataframe(found_excel)
             
-        session.status = 'DRAFT'
-        session.save(update_fields=['status'])
+            session.total_rows = len(dataframe)
+            session.save(update_fields=['total_rows'])
+            
+            _create_draft_records(session, dataframe, photos_dir)
+                
+            if os.path.exists(found_excel):
+                os.remove(found_excel)
+                
+            session.status = 'DRAFT'
+            session.save(update_fields=['status'])
         
     except Exception as e:
         session.status = 'FAILED'

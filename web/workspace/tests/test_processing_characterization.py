@@ -141,13 +141,26 @@ class ProcessingCharacterizationTest(TestCase):
             {"Modelo": "T03", "Foto": float('nan')},
         ])
         
-        from django.db.transaction import TransactionManagementError
+        process_upload_logic(self.session.uuid)
         
-        # EL DESCUBRIMIENTO:
+        self.session.refresh_from_db()
+        self.assertEqual(self.session.status, 'DRAFT')
+        self.assertEqual(self.session.total_rows, 3)
+        
+        drafts = DraftRegistro.objects.filter(session=self.session).order_by('row_index')
+        self.assertEqual(drafts.count(), 3)
+        
+        # EL DESCUBRIMIENTO AHORA RESUELTO:
         # Pandas lee celdas vacías como float('nan').
         # Django jsonb serializer no soporta 'NaN' nativo. 
-        # Falla con DataError, y luego falla con TransactionManagementError 
-        # al intentar guardar el status FAILED (porque la tx se rompió).
-        with self.assertRaises(TransactionManagementError):
-            process_upload_logic(self.session.uuid)
+        # Ahora se sanitizan a None, permitiendo que la importación sea exitosa.
+        d1, d2, d3 = drafts
+        
+        # d1 tiene cantidad: None -> al mapear raw_data items:
+        # mapped_data convierte `None` a string vacío porque `str(v) if pd.notna(v) else ""`
+        # 'cantidad' era NaN en el df original, se volvió None, y pd.notna(None) es False.
+        # Por tanto mapped_data['cantidad'] será "".
+        self.assertEqual(d1.mapped_data['cantidad'], "")
+        self.assertEqual(d2.assigned_photos, [])
+        self.assertEqual(d3.assigned_photos, [])
 
