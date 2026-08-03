@@ -12,7 +12,7 @@
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
 <!-- Estilos propios -->
-<link rel="stylesheet" href="{% static 'css/panel_operativo.css' %}">
+<link rel="stylesheet" href="{% static 'css/panel_operativo.css' %}?v={% now 'U' %}">
 {% endblock %}
 
 {% block content %}
@@ -21,40 +21,73 @@
 
 <!-- Barra de Herramientas -->
 <div class="controls-bar" role="toolbar" aria-label="Controles de la tabla">
-  <div style="flex: 1; display: flex; align-items: center; gap: 8px; position: relative;">
+  <div style="flex: 1; min-width: 240px; display: flex; align-items: center; gap: 8px; position: relative;">
     <label for="search-input" class="sr-only">Buscar registros:</label>
     <span class="material-symbols-outlined" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none;">search</span>
     <input type="text" id="search-input" class="search-box" style="padding-left: 40px; width: 100%;" placeholder="Buscar modelo, descripción, línea, usuario  (/ para enfocar)" aria-label="Buscar en la tabla">
   </div>
 
-  <!-- Ventanas de tiempo rápidas (mismo estilo que Reportes) -->
-  <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
-    <span style="font-size:0.75rem; color:var(--text-muted); white-space:nowrap;">
-      <span class="material-symbols-outlined" style="font-size:.9rem; vertical-align:middle;">schedule</span>
+  <!-- Ventanas de tiempo rápidas (Estandarizado) -->
+  <div style="display:flex; align-items:center; gap:8px; flex-shrink:0; flex-wrap:wrap;">
+    <span style="font-size:0.75rem; color:var(--text-muted); white-space:nowrap; display:inline-flex; align-items:center; gap:3px;">
+      <span class="material-symbols-outlined" style="font-size:.95rem;">schedule</span>
+      <span>Período</span>
     </span>
-    <div style="display:flex; gap:5px;" role="group" aria-label="Ventana de tiempo">
-      <a href="?rango=1h"  class="time-pill {% if rango_activo == '1h'  %}active{% endif %}" title="Última hora">1H</a>
-      <a href="?rango=8h"  class="time-pill {% if rango_activo == '8h'  %}active{% endif %}" title="Últimas 8 horas (turno)">8H</a>
-      <a href="?rango=24h" class="time-pill {% if rango_activo == '24h' %}active{% endif %}" title="Últimas 24 horas">24H</a>
-      <button type="button" id="btn-toggle-custom" class="time-pill custom-pill {% if rango_activo == 'custom' %}active{% endif %}" title="Rango personalizado">
+    <div id="time-presets" style="display:flex; gap:5px; flex-wrap:wrap;" role="group" aria-label="Ventana de tiempo">
+      <button type="button" class="time-pill" data-h="1">1H</button>
+      <button type="button" class="time-pill" data-h="4">4H</button>
+      <button type="button" class="time-pill" data-h="8">8H</button>
+      <button type="button" class="time-pill" data-h="24">24H</button>
+      <button type="button" class="time-pill" data-d="0">Hoy</button>
+      <button type="button" class="time-pill" data-d="1">Ayer</button>
+      <button type="button" class="time-pill" data-d="7">7 días</button>
+      <button type="button" class="time-pill custom-pill" data-custom="1" id="btn-toggle-custom" title="Rango personalizado">
         <span class="material-symbols-outlined" style="font-size:.9rem;">calendar_month</span> Personalizado
       </button>
     </div>
   </div>
 </div>
 
+<!-- Resumen del rango activo, estadísticas y controles de grupo -->
+<div id="rango-summary" style="margin-bottom:16px; padding:12px 16px; background:var(--surface); border:1px solid var(--border); border-radius:10px; font-size:.85rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+  <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+    <div style="display:flex; align-items:center; gap:6px; color:var(--text); font-weight:500;">
+      <span class="material-symbols-outlined" style="font-size:1.15rem; color:var(--accent);">calendar_today</span>
+      <span id="rango-summary-text">Cargando período...</span>
+    </div>
+    <span id="stats-badge" class="badge" style="background:var(--surface2); border:1px solid var(--border); font-size:0.78rem; font-weight:600; display:none;"></span>
+  </div>
+  
+  <div style="display:flex; align-items:center; gap:12px;">
+    <button type="button" id="btn-toggle-all-groups" class="btn btn-ghost" style="padding:4px 10px; font-size:0.78rem; display:inline-flex; align-items:center; gap:4px; border:1px solid var(--border);" title="Alternar expansión de grupos">
+      <span class="material-symbols-outlined" style="font-size:1rem;">unfold_less</span>
+      <span id="txt-toggle-all-groups">Colapsar grupos</span>
+    </button>
+    <div id="polling-badge" style="display:flex; align-items:center; gap:6px; font-size:.78rem; font-weight:600; padding:4px 10px; border-radius:20px; background:var(--surface2); border:1px solid var(--border);">
+      {% if last_id is not None %}
+      <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--success); box-shadow:0 0 6px var(--success);"></span>
+      <span style="color:var(--success);">En vivo</span>
+      {% else %}
+      <span class="material-symbols-outlined" style="font-size:0.95rem; color:var(--warning);">history</span>
+      <span style="color:var(--warning);">Histórico</span>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
 <!-- Panel de Rango Personalizado -->
-<div id="custom-range-panel" style="display:none; background:var(--surface); border-bottom:1px solid var(--border); padding:16px 24px; margin-bottom:16px;">
+<div id="custom-range-panel" style="display:none; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:16px 20px; margin-bottom:16px;">
   <form method="get" id="form-custom-range">
-    <!-- Indicador de polling pausado si es custom -->
-    <div style="margin-bottom:12px; font-size:.8rem; color:var(--text-muted); display:flex; align-items:center; gap:6px;">
+    <input type="hidden" name="preset" id="preset-input" value="{{ preset_activo }}">
+    
+    <div style="margin-bottom:12px; font-size:.82rem; color:var(--text-muted); display:flex; align-items:center; gap:6px;">
       <span class="material-symbols-outlined" style="font-size:1rem; color:var(--warning);">pause_circle</span>
-      <em>Nota: Al usar un rango personalizado hacia el pasado, la actualización automática (en vivo) se pausa.</em>
+      <em>Nota: Al seleccionar fechas u horas pasadas, la actualización automática en vivo se pausará.</em>
     </div>
     
     <!-- Atajos rápidos de turno -->
-    <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px;">
-      <span style="font-size:.75rem; color:var(--text-muted); align-self:center;">Turno rápido:</span>
+    <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; align-items:center;">
+      <span style="font-size:.75rem; color:var(--text-muted);">Turno rápido:</span>
       <button type="button" class="shift-btn" data-desde="06:00" data-hasta="14:00">Matutino (6–14h)</button>
       <button type="button" class="shift-btn" data-desde="14:00" data-hasta="22:00">Vespertino (14–22h)</button>
       <button type="button" class="shift-btn" data-desde="22:00" data-hasta="06:00" data-nextday="1">Nocturno (22–6h)</button>
@@ -63,13 +96,13 @@
     <!-- Inputs -->
     <div style="display:grid; grid-template-columns:1fr 1fr auto; gap:12px; align-items:start;">
       <div class="form-group">
-        <label for="fecha-desde-input" style="display:flex; align-items:center; gap:5px;">
+        <label for="fecha-desde-input" style="display:flex; align-items:center; gap:5px; font-size:.85rem; margin-bottom:4px;">
           <span class="material-symbols-outlined" style="font-size:.95rem; color:var(--success);">start</span> Desde
         </label>
         <input id="fecha-desde-input" type="datetime-local" name="fecha_desde" value="{{ filtros.fecha_desde }}" style="width:100%;">
       </div>
       <div class="form-group">
-        <label for="fecha-hasta-input" style="display:flex; align-items:center; gap:5px;">
+        <label for="fecha-hasta-input" style="display:flex; align-items:center; gap:5px; font-size:.85rem; margin-bottom:4px;">
           <span class="material-symbols-outlined" style="font-size:.95rem; color:var(--danger);">stop</span> Hasta
         </label>
         <input id="fecha-hasta-input" type="datetime-local" name="fecha_hasta" value="{{ filtros.fecha_hasta }}" style="width:100%;">
@@ -83,27 +116,7 @@
   </form>
 </div>
 
-
 <style>
-/* Reutiliza el mismo estilo de pill que Reportes */
-.time-pill {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 5px 13px; border-radius: 99px;
-  font-size: .8rem; font-weight: 600; font-family: inherit;
-  cursor: pointer; border: 1px solid var(--border);
-  background: var(--surface2); color: var(--text-muted);
-  text-decoration: none; transition: all .15s;
-}
-.time-pill:hover { border-color: var(--accent); color: var(--accent); background: rgba(99,102,241,.08); }
-.time-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-
-/* Botón personalizado específico para que resalte inactivo pero respete el estado activo */
-.time-pill.custom-pill { border-color: var(--accent); color: var(--text); }
-.time-pill.custom-pill .material-symbols-outlined { color: var(--accent); }
-.time-pill.custom-pill:hover { color: var(--accent); }
-.time-pill.active.custom-pill { color: #fff; }
-.time-pill.active.custom-pill .material-symbols-outlined { color: #fff; }
-
 .shift-btn {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 4px 11px; border-radius: 8px; font-size:.78rem;
@@ -113,7 +126,6 @@
 }
 .shift-btn:hover { border-color:var(--accent); color:var(--accent); background:rgba(99,102,241,.08); }
 
-/* Mejora de contraste para inputs de fecha en tema oscuro */
 input[type="datetime-local"] {
   background: var(--surface2);
   color: var(--text);
@@ -133,102 +145,237 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
 </style>
 
 <script>
-// JS ligero para el panel custom (fuera de la clase para ejecución inmediata)
 document.addEventListener('DOMContentLoaded', () => {
+  const form = document.getElementById('form-custom-range');
+  const pills = document.querySelectorAll('#time-presets .time-pill');
   const btnToggle = document.getElementById('btn-toggle-custom');
   const customPanel = document.getElementById('custom-range-panel');
+  const summaryTxt = document.getElementById('rango-summary-text');
   const inputDesde = document.getElementById('fecha-desde-input');
   const inputHasta = document.getElementById('fecha-hasta-input');
-  const form = document.getElementById('form-custom-range');
+  const presetInput = document.getElementById('preset-input');
 
-  const pad = n => String(n).padStart(2,'0');
+  const pad = n => String(n).padStart(2, '0');
   const dtStr = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  const todayStart = () => { const d=new Date(); d.setHours(0,0,0,0); return d; };
-  const todayEnd   = () => { const d=new Date(); d.setHours(23,59,0,0); return d; };
+  const todayStart = () => { const d = new Date(); d.setHours(0,0,0,0); return d; };
+  const todayEnd = () => { const d = new Date(); d.setHours(23,59,0,0); return d; };
 
-  // Limpiar URL: Evitar enviar parámetros vacíos
-  if(form) {
-    form.addEventListener('submit', function() {
-      Array.from(form.elements).forEach(el => {
-        if (el.name && !el.value) {
-          el.disabled = true;
-        }
-      });
-    });
+  function setActive(pill) {
+    pills.forEach(p => p.classList.remove('active'));
+    if (pill) pill.classList.add('active');
   }
 
-  if(btnToggle) {
-    const isCustomApplied = "{{ rango_activo }}" === "custom";
-    let originalActive = document.querySelector('.time-pill.active');
-    if(originalActive === btnToggle) originalActive = null;
+  function showCustom() {
+    customPanel.style.display = 'block';
+  }
 
-    btnToggle.addEventListener('click', (e) => {
+  function hideCustom() {
+    customPanel.style.display = 'none';
+  }
+
+  function submitFormClean() {
+    Array.from(form.elements).forEach(el => {
+      if (el.name && !el.value) el.disabled = true;
+    });
+    form.submit();
+  }
+
+  if (form) {
+    form.addEventListener('submit', (e) => {
       e.preventDefault();
-      
-      if (customPanel.style.display === 'none') {
-        customPanel.style.display = 'block';
-        if(!inputDesde.value) inputDesde.value = dtStr(todayStart());
-        if(!inputHasta.value) inputHasta.value = dtStr(todayEnd());
-        
-        document.querySelectorAll('.time-pill').forEach(p => p.classList.remove('active'));
-        btnToggle.classList.add('active');
-        inputDesde.focus();
-      } else {
-        customPanel.style.display = 'none';
-        
-        if (!isCustomApplied) {
-          // Si el filtro no está aplicado en el backend, al cerrar restauramos el botón anterior
-          btnToggle.classList.remove('active');
-          if(originalActive) originalActive.classList.add('active');
-        }
-        // Si sí está aplicado, se queda activo para indicar que sigue filtrado
-      }
+      if (presetInput) presetInput.value = 'custom';
+      submitFormClean();
     });
   }
 
+  // Atajos de turno respetando la fecha base del input
   document.querySelectorAll('.shift-btn').forEach(btn => {
-    btn.addEventListener('click', function(){
-      const now    = new Date();
+    btn.addEventListener('click', function() {
+      let baseDate = new Date();
+      if (inputDesde && inputDesde.value) {
+        const parsed = new Date(inputDesde.value);
+        if (!isNaN(parsed.getTime())) {
+          baseDate = parsed;
+        }
+      }
       const [hD, mD] = this.dataset.desde.split(':').map(Number);
       const [hH, mH] = this.dataset.hasta.split(':').map(Number);
-      const desde  = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hD, mD);
-      let hasta    = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hH, mH);
-      if(this.dataset.nextday) hasta.setDate(hasta.getDate() + 1);
-      inputDesde.value = dtStr(desde);
-      inputHasta.value = dtStr(hasta);
+      const desde = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), hD, mD);
+      let hasta = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), hH, mH);
+      if (this.dataset.nextday) {
+        hasta.setDate(hasta.getDate() + 1);
+      }
+      if (inputDesde) inputDesde.value = dtStr(desde);
+      if (inputHasta) inputHasta.value = dtStr(hasta);
     });
   });
+
+  pills.forEach(pill => {
+    pill.addEventListener('click', function(e) {
+      e.preventDefault();
+      const h = this.dataset.h;
+      const d = this.dataset.d;
+
+      if (this.dataset.custom) {
+        if (customPanel.style.display === 'block') {
+          hideCustom();
+        } else {
+          if (inputDesde && !inputDesde.value) inputDesde.value = dtStr(todayStart());
+          if (inputHasta && !inputHasta.value) inputHasta.value = dtStr(todayEnd());
+          if (presetInput) presetInput.value = 'custom';
+          showCustom();
+          setActive(this);
+          if (inputDesde) inputDesde.focus();
+        }
+        return;
+      }
+
+      if (h !== undefined) {
+        if (presetInput) presetInput.value = `h${h}`;
+      } else if (d === '0') {
+        if (presetInput) presetInput.value = 'd0';
+      } else if (d === '1') {
+        if (presetInput) presetInput.value = 'd1';
+      } else {
+        if (presetInput) presetInput.value = `d${d}`;
+      }
+
+      // En presets rápidos vaciar fechas explícitas para enviar solo ?preset=...
+      if (inputDesde) inputDesde.value = '';
+      if (inputHasta) inputHasta.value = '';
+      hideCustom();
+      setActive(this);
+      submitFormClean();
+    });
+  });
+
+  // Inicialización de estado visual basado en URL / filtros
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlPreset = urlParams.get('preset');
+  const urlDesde = urlParams.get('fecha_desde');
+  const urlHasta = urlParams.get('fecha_hasta');
+  const urlRango = urlParams.get('rango');
+
+  let currentPreset = urlPreset || (urlRango ? `h${urlRango.replace('h','')}` : ((urlDesde || urlHasta) ? 'custom' : '{{ preset_activo|default:"h24" }}'));
+  if (presetInput) presetInput.value = currentPreset;
+
+  if (currentPreset === 'custom' || (!urlPreset && (urlDesde || urlHasta))) {
+    showCustom();
+    if (btnToggle) setActive(btnToggle);
+    const dVal = (inputDesde && inputDesde.value) || 'inicio';
+    const hVal = (inputHasta && inputHasta.value) || 'ahora';
+    summaryTxt.textContent = `Filtro personalizado: ${dVal.replace('T', ' ')} → ${hVal.replace('T', ' ')}`;
+  } else {
+    let targetPill = null;
+    if (currentPreset.startsWith('h')) {
+      targetPill = document.querySelector(`[data-h="${currentPreset.substring(1)}"]`);
+      summaryTxt.textContent = `Últimas ${currentPreset.substring(1)} horas`;
+    } else if (currentPreset === 'd0') {
+      targetPill = document.querySelector('[data-d="0"]');
+      summaryTxt.textContent = 'Todo el día de hoy';
+    } else if (currentPreset === 'd1') {
+      targetPill = document.querySelector('[data-d="1"]');
+      summaryTxt.textContent = 'Todo el día de ayer';
+    } else if (currentPreset.startsWith('d')) {
+      targetPill = document.querySelector(`[data-d="${currentPreset.substring(1)}"]`);
+      summaryTxt.textContent = `Últimos ${currentPreset.substring(1)} días`;
+    }
+    if (targetPill) setActive(targetPill);
+    else {
+      const default24 = document.querySelector('[data-h="24"]');
+      if (default24) setActive(default24);
+      summaryTxt.textContent = 'Últimas 24 horas';
+    }
+  }
 });
 </script>
-
-
 
 <!-- Tabla Principal -->
 <div class="table-wrapper">
   <table aria-label="Registros de calidad">
+    <colgroup>
+      {% if user.is_superuser %}
+      <col class="col-check" style="width: 3%;">
+      <col class="col-hora" style="width: 9%;">
+      <col class="col-modelo" style="width: 17%;">
+      <col class="col-linea" style="width: 7%;">
+      <col class="col-defecto" style="width: 22%;">
+      <col class="col-resp" style="width: 14%;">
+      <col class="col-evidencia" style="width: 13%;">
+      <col class="col-cant" style="width: 7%;">
+      <col class="col-acciones" style="width: 8%;">
+      {% else %}
+      <col class="col-check" style="width: 3%;">
+      <col class="col-hora" style="width: 10%;">
+      <col class="col-modelo" style="width: 18%;">
+      <col class="col-linea" style="width: 8%;">
+      <col class="col-defecto" style="width: 26%;">
+      <col class="col-resp" style="width: 15%;">
+      <col class="col-evidencia" style="width: 13%;">
+      <col class="col-cant" style="width: 7%;">
+      {% endif %}
+    </colgroup>
     <thead>
       <tr>
-        <th style="width:50px; vertical-align: middle;">
-          <span class="material-symbols-outlined drag-handle" style="visibility: hidden; font-size:1.1rem;">drag_indicator</span>
-          <input type="checkbox" id="selectAll" aria-label="Seleccionar todos los registros visibles" style="margin: 0;">
+        <th class="col-check">
+          <div class="check-cell">
+            <input type="checkbox" id="selectAll" aria-label="Seleccionar todos los registros visibles">
+          </div>
         </th>
-        <th data-sort="fecha" tabindex="0" role="button">Fecha <span class="material-symbols-outlined" style="font-size:.9rem; vertical-align:middle;">unfold_more</span></th>
-        <th data-sort="modelo" tabindex="0" role="button">Modelo <span class="material-symbols-outlined" style="font-size:.9rem; vertical-align:middle;">unfold_more</span></th>
-        <th data-sort="linea" tabindex="0" role="button">Línea <span class="material-symbols-outlined" style="font-size:.9rem; vertical-align:middle;">unfold_more</span></th>
-        <th>Descripción</th>
-        <th data-sort="responsable" tabindex="0" role="button">Responsable <span class="material-symbols-outlined" style="font-size:.9rem; vertical-align:middle;">unfold_more</span></th>
-        <th>Fotos</th>
-        <th>Cant.</th>
-        <th data-sort="user_id" tabindex="0" role="button">User ID <span class="material-symbols-outlined" style="font-size:.9rem; vertical-align:middle;">unfold_more</span></th>
+        <th data-sort="fecha" tabindex="0" role="button" class="col-hora sortable" title="Ordenar por hora">
+          <div class="th-content">
+            <span>Hora</span>
+            <span class="material-symbols-outlined sort-icon">unfold_more</span>
+          </div>
+        </th>
+        <th data-sort="modelo" tabindex="0" role="button" class="col-modelo sortable" title="Ordenar por modelo">
+          <div class="th-content">
+            <span>Modelo</span>
+            <span class="material-symbols-outlined sort-icon">unfold_more</span>
+          </div>
+        </th>
+        <th data-sort="linea" tabindex="0" role="button" class="col-linea text-center sortable" title="Ordenar por línea">
+          <div class="th-content">
+            <span>Línea</span>
+            <span class="material-symbols-outlined sort-icon">unfold_more</span>
+          </div>
+        </th>
+        <th data-sort="descripcion" tabindex="0" role="button" class="col-defecto sortable" title="Ordenar por defecto">
+          <div class="th-content">
+            <span>Defecto</span>
+            <span class="material-symbols-outlined sort-icon">unfold_more</span>
+          </div>
+        </th>
+        <th data-sort="responsable" tabindex="0" role="button" class="col-resp text-center sortable" title="Ordenar por responsable">
+          <div class="th-content">
+            <span>Responsable</span>
+            <span class="material-symbols-outlined sort-icon">unfold_more</span>
+          </div>
+        </th>
+        <th class="col-evidencia text-center">
+          <div class="th-content">
+            <span>Evidencias</span>
+          </div>
+        </th>
+        <th data-sort="cantidad" tabindex="0" role="button" class="col-cant text-center sortable" title="Ordenar por cantidad">
+          <div class="th-content">
+            <span>Cant.</span>
+            <span class="material-symbols-outlined sort-icon">unfold_more</span>
+          </div>
+        </th>
         {% if user.is_superuser %}
-        <th style="width:110px; text-align:center;">Acciones</th>
+        <th class="col-acciones text-center">
+          <div class="th-content">
+            <span>Acciones</span>
+          </div>
+        </th>
         {% endif %}
       </tr>
     </thead>
     <tbody id="registros-body">
       <!-- Rellenado por JS dinámicamente -->
       <tr>
-        <td colspan="10" style="text-align:center; padding:40px;">
+        <td colspan="{% if user.is_superuser %}9{% else %}8{% endif %}" style="text-align:center; padding:40px;">
           <div class="spinner">Cargando registros...</div>
         </td>
       </tr>
@@ -287,7 +434,7 @@ document.addEventListener('DOMContentLoaded', () => {
 <script id="initial-data-config" type="application/json">
   {
     "last_id": {{ last_id|default:"null" }},
-    "is_superuser": {{ request.user.is_superuser|yesno:"true,false" }}
+    "is_superuser": {% if user.is_superuser %}true{% else %}false{% endif %}
   }
 </script>
 

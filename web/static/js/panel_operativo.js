@@ -43,6 +43,7 @@ class PanelOperativo {
 
     cacheDOM() {
         this.table = document.querySelector('.table-wrapper table');
+        this.isSuperUser = Boolean(document.querySelector('th.col-acciones')) || Boolean(this.config?.is_superuser);
         this.searchInput = document.getElementById('search-input');
         this.selectAllCheckbox = document.getElementById('selectAll');
         this.toast = document.getElementById('toast');
@@ -136,9 +137,37 @@ class PanelOperativo {
         // Modal buttons
         document.getElementById('btn-modal-cancel').addEventListener('click', () => this.cerrarModal());
         document.getElementById('btn-modal-save').addEventListener('click', () => this.guardarEdicion());
+
+        // Toggle all groups
+        const btnToggleAll = document.getElementById('btn-toggle-all-groups');
+        if (btnToggleAll) {
+            btnToggleAll.addEventListener('click', () => {
+                const tbodies = document.querySelectorAll('.sortable-tbody');
+                const anyOpen = Array.from(tbodies).some(tb => tb.style.display !== 'none');
+                tbodies.forEach(tb => {
+                    tb.style.display = anyOpen ? 'none' : '';
+                    const icon = document.getElementById(`icon-${tb.id}`);
+                    if (icon) icon.style.transform = anyOpen ? 'rotate(0deg)' : 'rotate(90deg)';
+                });
+                const txt = document.getElementById('txt-toggle-all-groups');
+                const iconBtn = btnToggleAll.querySelector('.material-symbols-outlined');
+                if (txt) txt.textContent = anyOpen ? 'Expandir grupos' : 'Colapsar grupos';
+                if (iconBtn) iconBtn.textContent = anyOpen ? 'unfold_more' : 'unfold_less';
+            });
+        }
     }
 
     // --- RENDERIZADO ---
+
+    updateStats() {
+        const visibleRegs = this.registros.filter(r => !r._hidden);
+        const totalRegs = visibleRegs.length;
+        const statsEl = document.getElementById('stats-badge');
+        if (statsEl) {
+            statsEl.textContent = `${totalRegs} registro${totalRegs !== 1 ? 's' : ''}`;
+            statsEl.style.display = totalRegs > 0 ? 'inline-block' : 'none';
+        }
+    }
 
     renderTabla() {
         // Eliminar tbodys anteriores
@@ -146,6 +175,7 @@ class PanelOperativo {
         
         if (this.registros.length === 0) {
             this.renderEmptyState('No hay registros para mostrar.');
+            this.updateStats();
             return;
         }
 
@@ -162,6 +192,7 @@ class PanelOperativo {
 
         if (!hasVisibleRows) {
             this.renderEmptyState('Ningún registro coincide con la búsqueda.');
+            this.updateStats();
             return;
         }
 
@@ -171,6 +202,7 @@ class PanelOperativo {
 
         this.initSortable();
         this.updateSelectionState();
+        this.updateStats();
 
         // Auto expand if search
         const term = this.searchInput.value.trim();
@@ -179,35 +211,45 @@ class PanelOperativo {
                 tb.style.display = '';
                 const icon = document.getElementById(`icon-${tb.id}`);
                 if (icon) {
-                    icon.textContent = 'expand_more';
+                    icon.style.transform = 'rotate(90deg)';
                 }
             });
         }
     }
 
     renderEmptyState(msg) {
+        const colspan = this.isSuperUser ? 9 : 8;
         const tbody = document.createElement('tbody');
-        tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; color:var(--text-muted); padding:30px;">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align:center; color:var(--text-muted); padding:40px;"><div style="display:flex; flex-direction:column; align-items:center; gap:8px;"><span class="material-symbols-outlined" style="font-size:2rem; opacity:0.5;">inbox</span><span>${msg}</span></div></td></tr>`;
         this.table.appendChild(tbody);
     }
 
     renderGrupo(userId, g) {
-        const colspan = this.isSuperUser ? 10 : 9;
+        const isSuper = Boolean(document.querySelector('th.col-acciones')) || Boolean(this.isSuperUser);
+        const colspan = isSuper ? 9 : 8;
+        const nombreUsuario = g[0]?.nombre_usuario || `Operador ${userId}`;
+
         const headerTbody = document.createElement('tbody');
         headerTbody.innerHTML = `
-            <tr class="group-header" data-group-id="group-${userId}" style="background: var(--surface2); cursor: pointer; transition: background 0.2s; user-select: none;" role="button" aria-expanded="false">
-                <td style="vertical-align: middle;">
-                    <span class="drag-handle" style="visibility: hidden;">⠿</span>
-                    <input type="checkbox" class="group-check btn-select-user" data-user="${userId}" aria-label="Seleccionar grupo completo" style="cursor: pointer; transform: scale(1.1); margin: 0;">
+            <tr class="group-header" data-group-id="group-${userId}" style="background: var(--surface2); cursor: pointer; transition: background 0.2s; user-select: none;" role="button" aria-expanded="true">
+                <td class="col-check">
+                    <div class="check-cell">
+                        <input type="checkbox" class="group-check btn-select-user" data-user="${userId}" aria-label="Seleccionar grupo completo">
+                    </div>
                 </td>
                 <td colspan="${colspan - 1}">
-                    <div style="display:flex; align-items:center;">
-                        <span id="icon-group-${userId}" class="material-symbols-outlined" style="display:inline-block; width:24px; color: var(--text-muted); transition: transform 0.2s; font-size: 1.1rem;">chevron_right</span>
-                        <span style="font-weight: 500; margin-right: 8px; color: var(--text);">Usuario</span>
-                        <span class="badge-user" style="font-size: 0.9rem; padding: 4px 8px;">${userId}</span>
-                        <span class="badge" style="margin-left: 12px; background: rgba(255,255,255,0.05); color: var(--text-muted); border: 1px solid var(--border); font-size: 0.8rem;">
-                            ${g.length} registro${g.length !== 1 ? 's' : ''}
-                        </span>
+                    <div style="display:flex; align-items:center; justify-content:space-between; padding-right:12px;">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span id="icon-group-${userId}" class="material-symbols-outlined" style="display:inline-block; color: var(--text-muted); transition: transform 0.2s; font-size: 1.2rem; transform: rotate(90deg);">chevron_right</span>
+                            <span class="material-symbols-outlined" style="font-size:1.15rem; color:var(--accent);">person</span>
+                            <span style="font-weight: 600; color: var(--text); font-size: 0.95rem;">${nombreUsuario}</span>
+                            <span class="badge-user" style="font-size: 0.75rem; padding: 2px 7px; opacity:0.85;">ID: ${userId}</span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span class="badge" style="background: rgba(255,255,255,0.05); color: var(--text-muted); border: 1px solid var(--border); font-size: 0.78rem;">
+                                ${g.length} registro${g.length !== 1 ? 's' : ''}
+                            </span>
+                        </div>
                     </div>
                 </td>
             </tr>
@@ -217,7 +259,7 @@ class PanelOperativo {
         const rowsTbody = document.createElement('tbody');
         rowsTbody.id = `group-${userId}`;
         rowsTbody.className = 'sortable-tbody';
-        rowsTbody.style.display = 'none';
+        rowsTbody.style.display = ''; // Abierto por defecto para facilitar visualización
 
         g.forEach(r => {
             const tr = document.createElement('tr');
@@ -229,29 +271,39 @@ class PanelOperativo {
             if (r._isNew) tr.classList.add('new-row');
 
             const dateObj = r.fecha_registro ? new Date(r.fecha_registro) : new Date();
-            const dateStr = dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            const timeStr = dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            const fullDateStr = dateObj.toLocaleString([], {year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'});
             
-            const fotosStr = r.fotos_nums && r.fotos_nums.length > 0 
+            const fotosStr = r.fotos_rango || (r.fotos_nums && r.fotos_nums.length > 0 
                 ? `${r.fotos_nums.length} fotos` 
-                : (r.fotos_str || '-');
+                : (r.fotos_str || '—'));
+
+            const fotosParam = encodeURIComponent(r.fotos_rango || r.fotos_str || '');
+            const hasFotos = (r.fotos_nums && r.fotos_nums.length > 0) || (r.fotos_rango && r.fotos_rango !== '—');
+            const fotosBadge = hasFotos ? `
+                <a href="/fotos/?q=${fotosParam}" target="_blank" onclick="event.stopPropagation();" title="Ver evidencias fotográficas" class="badge-evidencia">
+                    <span class="material-symbols-outlined" style="font-size:0.95rem;">photo_library</span>
+                    <span>${fotosStr}</span>
+                </a>` : `<span style="color:var(--text-muted); font-size:0.85rem;">—</span>`;
 
             tr.innerHTML = `
-                <td>
-                    <span class="drag-handle material-symbols-outlined" aria-label="Arrastrar para reordenar" style="font-size:1.1rem;">drag_indicator</span>
-                    <input type="checkbox" class="row-check" ${r._selected ? 'checked' : ''} ${r._disabled ? 'disabled' : ''} aria-label="Seleccionar registro">
+                <td class="col-check text-center">
+                    <div class="check-cell">
+                        <span class="drag-handle material-symbols-outlined" aria-label="Arrastrar para reordenar">drag_indicator</span>
+                        <input type="checkbox" class="row-check" ${r._selected ? 'checked' : ''} ${r._disabled ? 'disabled' : ''} aria-label="Seleccionar registro">
+                    </div>
                 </td>
-                <td style="font-size:0.8rem; color:var(--text-muted);">${dateStr}</td>
-                <td style="font-weight:500;">${r.modelo}</td>
-                <td><span class="badge badge-purple">${r.linea}</span></td>
-                <td style="font-size:0.9rem;">${r.descripcion}</td>
-                <td>${r.responsable}</td>
-                <td><code style="color:var(--text-muted); font-size:0.85rem; background:none; padding:0;">${fotosStr}</code></td>
-                <td style="font-weight:bold;">${r.cantidad || 1}</td>
-                <td><span class="badge-user">${r.user_id}</span></td>
-                ${this.isSuperUser ? `
-                <td style="text-align:center;" class="row-actions">
-                    <button class="btn btn-ghost btn-edit" data-id="${r.id}" title="Editar" aria-label="Editar registro">✏️</button>
-                    <button class="btn btn-ghost btn-delete" data-id="${r.id}" title="Eliminar" aria-label="Eliminar registro" style="color:var(--danger);">🗑️</button>
+                <td class="col-hora" title="${fullDateStr}">${timeStr}</td>
+                <td class="col-modelo"><span class="model-tag" title="${r.modelo}">${r.modelo}</span></td>
+                <td class="col-linea text-center"><span class="badge-linea">${r.linea}</span></td>
+                <td class="col-defecto"><span class="defect-text" title="${r.descripcion}">${r.descripcion}</span></td>
+                <td class="col-resp text-center"><span class="badge-resp">${r.responsable}</span></td>
+                <td class="col-evidencia text-center">${fotosBadge}</td>
+                <td class="col-cant text-center"><span class="badge-cant">${r.cantidad || 1}</span></td>
+                ${isSuper ? `
+                <td class="col-acciones text-center row-actions">
+                    <button class="btn btn-ghost btn-edit" data-id="${r.id}" title="Editar" aria-label="Editar registro"><span class="material-symbols-outlined" style="font-size:1rem;">edit</span></button>
+                    <button class="btn btn-ghost btn-delete" data-id="${r.id}" title="Eliminar" aria-label="Eliminar registro" style="color:var(--danger);"><span class="material-symbols-outlined" style="font-size:1rem;">delete</span></button>
                 </td>` : ''}
             `;
             rowsTbody.appendChild(tr);
@@ -414,22 +466,55 @@ class PanelOperativo {
     }
 
     filtrarTabla() {
-        const term = this.searchInput.value.toLowerCase();
+        const term = this.searchInput.value.toLowerCase().trim();
+        const gruposVisibles = {};
+
         this.registros.forEach((r, idx) => {
-            const match = `${r.modelo} ${r.linea} ${r.descripcion} ${r.responsable} ${r.user_id}`.toLowerCase().includes(term);
+            const match = !term || `${r.modelo || ''} ${r.linea || ''} ${r.descripcion || ''} ${r.responsable || ''} ${r.user_id || ''} ${r.nombre_usuario || ''} ${r.fotos_str || ''} ${r.fotos_rango || ''}`.toLowerCase().includes(term);
             r._hidden = !match;
             const tr = document.querySelector(`tr[data-index="${idx}"]`);
             if (tr) tr.classList.toggle('hidden', !match);
+            if (match) {
+                gruposVisibles[r.user_id] = true;
+            }
         });
+
+        // Hide/show group headers and auto-expand matching groups
+        document.querySelectorAll('.group-header').forEach(gh => {
+            const groupId = gh.dataset.groupId;
+            const userId = groupId ? groupId.replace('group-', '') : '';
+            const isVisible = !!gruposVisibles[userId];
+            gh.style.display = isVisible ? '' : 'none';
+            const tbody = document.getElementById(groupId);
+            if (tbody) {
+                if (term) {
+                    tbody.style.display = isVisible ? '' : 'none';
+                    const icon = document.getElementById(`icon-${groupId}`);
+                    if (icon) icon.style.transform = 'rotate(90deg)';
+                }
+            }
+        });
+
+        this.updateStats();
+        this.updateSelectionState();
     }
 
     ordenar(campo) {
         this.registros.sort((a, b) => {
-            let valA = a[campo] || '';
-            let valB = b[campo] || '';
+            let valA = a[campo] ?? '';
+            let valB = b[campo] ?? '';
             if (campo === 'fecha') {
                 valA = a.fecha_registro ? new Date(a.fecha_registro).getTime() : 0;
                 valB = b.fecha_registro ? new Date(b.fecha_registro).getTime() : 0;
+            } else if (campo === 'cantidad') {
+                valA = Number(a.cantidad) || 1;
+                valB = Number(b.cantidad) || 1;
+            } else if (campo === 'descripcion') {
+                valA = (a.descripcion || '').toLowerCase();
+                valB = (b.descripcion || '').toLowerCase();
+            } else if (typeof valA === 'string') {
+                valA = valA.toLowerCase();
+                valB = (valB || '').toLowerCase();
             }
             if (valA < valB) return this.orderAsc ? -1 : 1;
             if (valA > valB) return this.orderAsc ? 1 : -1;
@@ -452,13 +537,13 @@ class PanelOperativo {
         for (let i = 1; i < seleccionados.length; i++) {
             const r = seleccionados[i];
             if (String(r.user_id) !== String(ref.user_id)) {
-                this.mostrarToast("❌ No se pueden agrupar fotos de distintos usuarios.");
+                this.mostrarToast("No se pueden agrupar fotos de distintos usuarios.");
                 return;
             }
             if (String(r.modelo || '').trim().toLowerCase() !== String(ref.modelo || '').trim().toLowerCase() || 
                 String(r.descripcion || '').trim().toLowerCase() !== String(ref.descripcion || '').trim().toLowerCase() || 
                 String(r.responsable || '').trim().toLowerCase() !== String(ref.responsable || '').trim().toLowerCase()) {
-                this.mostrarToast("❌ Modelo, descripción o responsable no coinciden.");
+                this.mostrarToast("Modelo, descripción o responsable no coinciden.");
                 return;
             }
             
@@ -467,7 +552,7 @@ class PanelOperativo {
                 const t1 = new Date(ref.fecha_registro).getTime();
                 const t2 = new Date(r.fecha_registro).getTime();
                 if (Math.abs(t1 - t2) > 2 * 60 * 60 * 1000) {
-                    this.mostrarToast("❌ Los registros superan las 2 horas de diferencia.");
+                    this.mostrarToast("Los registros superan las 2 horas de diferencia.");
                     return;
                 }
             }
@@ -492,7 +577,7 @@ class PanelOperativo {
         
         this.selectAllCheckbox.checked = false;
         this.renderTabla();
-        this.mostrarToast("✅ Registros agrupados correctamente.", "var(--success)");
+        this.mostrarToast("Registros agrupados correctamente.", "var(--success)");
     }
 
     // --- API & PERSISTENCIA ---
@@ -527,7 +612,7 @@ class PanelOperativo {
             if (res.ok) {
                 this.registros = this.registros.filter(r => r.id !== id);
                 this.renderTabla();
-                this.mostrarToast("🗑️ Registro eliminado", "var(--success)");
+                this.mostrarToast("Registro eliminado", "var(--success)");
             } else {
                 this.mostrarToast("Error: No tienes permisos o el registro no existe.");
             }
@@ -582,7 +667,7 @@ class PanelOperativo {
                 Object.assign(reg, payload);
                 this.renderTabla();
                 this.cerrarModal();
-                this.mostrarToast("✏️ Registro actualizado", "var(--success)");
+                this.mostrarToast("Registro actualizado", "var(--success)");
             } else {
                 this.mostrarToast("Error al editar registro.");
             }
@@ -605,7 +690,7 @@ class PanelOperativo {
         const textOriginal = btnExcel.innerHTML;
         btnExcel.innerHTML = '<span class="spinner" style="width:14px;height:14px;border-width:2px;margin-right:8px;vertical-align:middle;"></span> Procesando...';
         btnExcel.disabled = true;
-        this.mostrarToast("⏳ Preparando Excel... Esto puede tardar si hay muchas fotos.", "var(--accent)");
+        this.mostrarToast("Preparando Excel... Esto puede tardar si hay muchas fotos.", "var(--accent)");
 
         // Limpiar y ordenar fotos antes de enviar
         seleccionados.forEach(r => {
@@ -627,6 +712,7 @@ class PanelOperativo {
     // --- POLLING & NOTIFICACIONES ---
 
     startPolling() {
+        if (this.lastId === null || this.lastId === undefined) return;
         if (this.pollingInterval) clearInterval(this.pollingInterval);
         this.pollingInterval = setInterval(() => this.checkUpdates(), 10000);
     }
@@ -639,6 +725,7 @@ class PanelOperativo {
     }
 
     async checkUpdates() {
+        if (this.lastId === null || this.lastId === undefined) return;
         try {
             const res = await fetch(`/api/check_updates/?last_id=${this.lastId}`);
             if (res.status === 304) return; 

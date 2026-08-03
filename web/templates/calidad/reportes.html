@@ -141,24 +141,6 @@
 </div>
 
 <style>
-.time-pill {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 5px 13px; border-radius: 99px;
-  font-size: .8rem; font-weight: 600; font-family: inherit;
-  cursor: pointer; border: 1px solid var(--border);
-  background: var(--surface2); color: var(--text-muted);
-  transition: all .15s;
-}
-.time-pill:hover { border-color: var(--accent); color: var(--accent); background: rgba(99,102,241,.08); }
-.time-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-
-/* Botón personalizado específico para que resalte inactivo pero respete el estado activo */
-.time-pill.custom-pill { border-color: var(--accent); color: var(--text); }
-.time-pill.custom-pill .material-symbols-outlined { color: var(--accent); }
-.time-pill.custom-pill:hover { color: var(--accent); }
-.time-pill.active.custom-pill { color: #fff; }
-.time-pill.active.custom-pill .material-symbols-outlined { color: #fff; }
-
 .shift-btn {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 4px 11px; border-radius: 8px; font-size:.78rem;
@@ -252,55 +234,61 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
       }
       return;
     }
-    let desde, hasta=new Date(now);
     if(h!==undefined){
-      desde=new Date(now - h*3600000);
-      showSummary(`Últimas ${h}h → desde ${dtStr(desde).replace('T',' ')} hasta ahora`);
       document.getElementById('preset-input').value = `h${h}`;
     } else if(d==='0'){
-      desde=todayStart(); hasta=todayEnd();
-      showSummary('Todo el día de hoy');
       document.getElementById('preset-input').value = `d0`;
     } else if(d==='1'){
-      const ay=new Date(now); ay.setDate(ay.getDate()-1);
-      desde=new Date(ay.getFullYear(),ay.getMonth(),ay.getDate(),0,0);
-      hasta=new Date(ay.getFullYear(),ay.getMonth(),ay.getDate(),23,59);
-      showSummary('Todo el día de ayer');
       document.getElementById('preset-input').value = `d1`;
     } else {
-      desde=new Date(now - d*86400000);
-      showSummary(`Últimos ${d} días`);
       document.getElementById('preset-input').value = `d${d}`;
     }
-    inputDesde.value=dtStr(desde); inputHasta.value=dtStr(hasta);
+    inputDesde.value = '';
+    inputHasta.value = '';
     hideCustom();
-    setActive(this); submitFormClean();
+    setActive(this);
+    submitFormClean();
   }));
 
-  // Estado inicial: basado en el parámetro preset de la URL
+  // Estado inicial: basado en el parámetro preset de la URL o context
   const urlParams = new URLSearchParams(window.location.search);
-  const preset = urlParams.get('preset') || (window.location.search ? 'custom' : 'd0');
-  document.getElementById('preset-input').value = preset;
+  const urlPreset = urlParams.get('preset');
+  const urlDesde = urlParams.get('fecha_desde');
+  const urlHasta = urlParams.get('fecha_hasta');
+  const preset = urlPreset || ((urlDesde || urlHasta) ? 'custom' : '{{ preset_activo|default:"d0" }}');
+  const presetInputEl = document.getElementById('preset-input');
+  if (presetInputEl) presetInputEl.value = preset;
 
-  if (preset === 'custom') {
+  if (preset === 'custom' || (!urlPreset && (urlDesde || urlHasta))) {
     if(inputDesde.value || inputHasta.value){
       showCustom();
-      document.querySelector('[data-custom]').classList.add('active');
+      const custBtn = document.querySelector('[data-custom]');
+      if (custBtn) setActive(custBtn);
       showSummary(`Filtro activo: ${(inputDesde.value||'inicio').replace('T',' ')} → ${(inputHasta.value||'ahora').replace('T',' ')}`);
     }
   } else {
     // Activar el botón correcto
     let targetPill = null;
-    if (preset.startsWith('h')) targetPill = document.querySelector(`[data-h="${preset.substring(1)}"]`);
-    else if (preset.startsWith('d')) targetPill = document.querySelector(`[data-d="${preset.substring(1)}"]`);
+    if (preset.startsWith('h')) {
+      targetPill = document.querySelector(`[data-h="${preset.substring(1)}"]`);
+      showSummary(`Últimas ${preset.substring(1)}h`);
+    } else if (preset === 'd0') {
+      targetPill = document.querySelector('[data-d="0"]');
+      showSummary('Todo el día de hoy');
+    } else if (preset === 'd1') {
+      targetPill = document.querySelector('[data-d="1"]');
+      showSummary('Todo el día de ayer');
+    } else if (preset.startsWith('d')) {
+      targetPill = document.querySelector(`[data-d="${preset.substring(1)}"]`);
+      showSummary(`Últimos ${preset.substring(1)} días`);
+    }
     
     if (targetPill) setActive(targetPill);
-    
-    // Restaurar resumen
-    if (preset === 'd0') showSummary('Todo el día de hoy');
-    else if (preset === 'd1') showSummary('Todo el día de ayer');
-    else if (preset === 'd7') showSummary('Últimos 7 días');
-    else if (preset.startsWith('h')) showSummary(`Últimas ${preset.substring(1)}h`);
+    else {
+      const defaultD0 = document.querySelector('[data-d="0"]');
+      if (defaultD0) setActive(defaultD0);
+      showSummary('Todo el día de hoy');
+    }
   }
 })();
 </script>
