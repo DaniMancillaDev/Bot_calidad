@@ -157,20 +157,23 @@ def dashboard(request):
     registros_recientes = registros_base.filter(fecha_registro__gte=fecha_desde).count()
 
     # Defectos más frecuentes
-    top_defectos = (
+    top_defectos = list(
         registros_base
         .values('descripcion')
         .annotate(total=Count('id'))
         .order_by('-total')[:5]
     )
 
-    # Defectos por línea
-    por_linea = (
+    # Defectos por línea con cálculo porcentual proporcional para barra visual
+    por_linea = list(
         registros_base
         .values('linea')
         .annotate(total=Count('id'))
         .order_by('-total')[:8]
     )
+    max_linea = max((item['total'] for item in por_linea), default=1) if por_linea else 1
+    for item in por_linea:
+        item['porcentaje'] = round((item['total'] / max_linea) * 100, 1) if max_linea > 0 else 0
 
     # Registros recientes
     ultimos_registros = registros_base.all()[:10]
@@ -201,8 +204,8 @@ def _parse_aware_dt(dt_str: str, end: bool = False):
     """
     Parsea un string date ('YYYY-MM-DD') o datetime ('YYYY-MM-DDTHH:MM')
     devolviendo un datetime timezone-aware usando el timezone local del servidor.
-    Si end=True y el string es solo una fecha, fija la hora a 23:59:59
-    (útil para el límite superior del filtro).
+    Si end=True y el string es solo una fecha, fija la hora a 23:59:59.
+    Si end=True y es datetime sin segundos, fija segundos a 59 para cubrir el minuto completo.
     """
     if not dt_str:
         return None
@@ -211,10 +214,12 @@ def _parse_aware_dt(dt_str: str, end: bool = False):
         if 'T' in dt_str or ' ' in dt_str:
             # 'YYYY-MM-DDTHH:MM' o 'YYYY-MM-DD HH:MM'
             dt = datetime.fromisoformat(dt_str.replace('T', ' '))
+            if end and dt.second == 0 and dt.microsecond == 0:
+                dt = dt.replace(second=59, microsecond=999999)
         else:
             # Solo fecha
             d = datetime.strptime(dt_str, '%Y-%m-%d')
-            dt = d.replace(hour=23, minute=59, second=59) if end else d
+            dt = d.replace(hour=23, minute=59, second=59, microsecond=999999) if end else d
         if tz.is_naive(dt):
             dt = tz.make_aware(dt)
         return dt
@@ -228,25 +233,21 @@ def _parse_aware_dt(dt_str: str, end: bool = False):
 
 @login_required
 def reportes(request):
-    """Lista completa de registros filtrados por turno."""
+    """Lista completa de registros filtrados por turno y presets temporales."""
 
     registros = get_registros_permitidos(request.user)
 
-    # Filtros opcionales por GET
-    from django.utils import timezone
-    hoy_str = timezone.localdate().strftime('%Y-%m-%d')
-    
     linea       = request.GET.get('linea', '')
     responsable = request.GET.get('responsable', '')
     modelo      = request.GET.get('modelo', '')
     
-    # Solo poner por defecto en la primera carga (sin querystring)
+    fecha_desde = request.GET.get('fecha_desde', '')
+    fecha_hasta = request.GET.get('fecha_hasta', '')
+    preset      = request.GET.get('preset', '')
+    
+    # Primera carga sin parámetros: por defecto Hoy (d0)
     if not request.GET:
-        fecha_desde = hoy_str
-        fecha_hasta = hoy_str
-    else:
-        fecha_desde = request.GET.get('fecha_desde', '')
-        fecha_hasta = request.GET.get('fecha_hasta', '')
+        preset = 'd0'
 
     if linea:
         registros = registros.filter(linea__icontains=linea)
@@ -254,8 +255,7 @@ def reportes(request):
         registros = registros.filter(responsable__icontains=responsable)
     if modelo:
         registros = registros.filter(modelo__icontains=modelo)
-    # Filtros por turno y departamento (ya aplicados en get_registros_permitidos)
-    # pero podemos refinar si el usuario es admin
+
     if request.user.is_superuser:
         turno_filtro = request.GET.get('turno', '')
         depto_filtro = request.GET.get('departamento', '')
@@ -263,13 +263,35 @@ def reportes(request):
             registros = registros.filter(turno=turno_filtro)
         if depto_filtro:
             registros = registros.filter(departamento=depto_filtro)
-    # Filtrado por datetime-local (con timezone correcto)
-    dt_desde = _parse_aware_dt(fecha_desde, end=False)
-    dt_hasta = _parse_aware_dt(fecha_hasta, end=True)
+
+    # Filtrado por datetime-local o presets
+    dt_desde = _parse_aware_dt(fecha_desde, end=False) if fecha_desde else None
+    dt_hasta = _parse_aware_dt(fecha_hasta, end=True) if fecha_hasta else None
+
     if dt_desde:
         registros = registros.filter(fecha_registro__gte=dt_desde)
     if dt_hasta:
         registros = registros.filter(fecha_registro__lte=dt_hasta)
+
+    if not dt_desde and not dt_hasta:
+        _HOURS = {'h1': 1, 'h4': 4, 'h8': 8, 'h24': 24}
+        if preset in _HOURS:
+            delta = timedelta(hours=_HOURS[preset])
+            dt_desde = timezone.now() - delta
+            registros = registros.filter(fecha_registro__gte=dt_desde)
+        elif preset == 'd0':
+            hoy_inicio = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            registros = registros.filter(fecha_registro__gte=hoy_inicio)
+        elif preset == 'd1':
+            hoy_inicio = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            ayer_inicio = hoy_inicio - timedelta(days=1)
+            registros = registros.filter(fecha_registro__gte=ayer_inicio, fecha_registro__lt=hoy_inicio)
+        elif preset.startswith('d') and preset[1:].isdigit():
+            dias_count = int(preset[1:])
+            dt_desde = timezone.now() - timedelta(days=dias_count)
+            registros = registros.filter(fecha_registro__gte=dt_desde)
+
+    rango_activo = 'custom' if (preset == 'custom' or (not preset and (fecha_desde or fecha_hasta))) else (preset or 'd0')
 
     # Opciones para los selects de filtro (basadas solo en lo que pueden ver)
     base_qs = get_registros_permitidos(request.user)
@@ -290,9 +312,11 @@ def reportes(request):
         'total_registros': len(registros),
         'lineas':       lineas,
         'responsables': responsables,
+        'preset_activo': rango_activo,
         'filtros': {
             'linea': linea, 'responsable': responsable, 'modelo': modelo,
             'fecha_desde': fecha_desde, 'fecha_hasta': fecha_hasta,
+            'preset': preset
         },
         'seccion': 'reportes',
     }
@@ -463,23 +487,71 @@ def _build_galeria_queryset(request):
     return registros_qs, filtros
 
 def _enrich_galeria_registros(object_list):
+    import re
+    num_prefix_re = re.compile(r'^(\d+)_')
+
     nombres_dict = {
         p.telegram_user_id: p.usuario.get_full_name() or p.usuario.username
         for p in PerfilUsuario.objects.select_related('usuario')
                                        .exclude(telegram_user_id__isnull=True)
     }
 
-    thumbs_root = settings.THUMBS_ROOT
-    fotos_root  = settings.FOTOS_ROOT
+    thumbs_root = Path(settings.THUMBS_ROOT)
+    fotos_root  = Path(settings.FOTOS_ROOT)
+    proxies_root = Path(settings.MEDIA_ROOT) / 'proxies'
     thumbs_url  = settings.THUMBS_URL
     fotos_url   = settings.FOTOS_URL
+    proxies_url = settings.MEDIA_URL + 'proxies/'
+
+    # Pre-indexar carpetas de usuario en memoria (O(1) lookups sin I/O de disco redundante)
+    user_ids = {reg.user_id for reg in object_list if reg.user_id}
+    user_photos_index = {}
+    user_thumbs_index = {}
+    user_proxies_index = {}
+
+    for uid in user_ids:
+        uid_str = str(uid)
+        photos_map = {}
+        uf_fotos = fotos_root / uid_str
+        if uf_fotos.is_dir():
+            try:
+                for entry in os.scandir(uf_fotos):
+                    if entry.is_file() and entry.name.lower().endswith('.jpg'):
+                        m = num_prefix_re.match(entry.name)
+                        if m:
+                            num = int(m.group(1))
+                            if num not in photos_map:
+                                photos_map[num] = entry.name
+            except Exception:
+                pass
+        user_photos_index[uid] = photos_map
+
+        thumbs_set = set()
+        uf_thumbs = thumbs_root / uid_str
+        if uf_thumbs.is_dir():
+            try:
+                thumbs_set = {entry.name for entry in os.scandir(uf_thumbs) if entry.is_file()}
+            except Exception:
+                pass
+        user_thumbs_index[uid] = thumbs_set
+
+        proxies_set = set()
+        uf_proxies = proxies_root / uid_str
+        if uf_proxies.is_dir():
+            try:
+                proxies_set = {entry.name for entry in os.scandir(uf_proxies) if entry.is_file()}
+            except Exception:
+                pass
+        user_proxies_index[uid] = proxies_set
 
     registros_enriquecidos = []
     for reg in object_list:
         fotos_data = []
-        user_folder_fotos  = fotos_root  / str(reg.user_id)
-        user_folder_thumbs = thumbs_root / str(reg.user_id)
 
+        thumbs_set = user_thumbs_index.get(reg.user_id, set())
+        proxies_set = user_proxies_index.get(reg.user_id, set())
+
+        # Evidencias v2
         for ev in reg.evidencias_v2.all():
             path = ev.ruta_archivo
             if path.startswith('media_files/'):
@@ -488,22 +560,23 @@ def _enrich_galeria_registros(object_list):
                 path = path[13:]
                 
             path = path.lstrip('/')
-            url = settings.MEDIA_URL + path
-            
             filename = os.path.basename(path)
             num_display = ev.id
-            import re
-            m = re.match(r'^(\d+)_', filename)
+            m = num_prefix_re.match(filename)
             if m:
                 num_display = int(m.group(1))
 
+            thumb_src = f"{thumbs_url}{reg.user_id}/{filename}" if filename in thumbs_set else f"{proxies_url}{reg.user_id}/{filename}"
+            orig_src = f"{proxies_url}{reg.user_id}/{filename}" if filename in proxies_set else f"{fotos_url}{reg.user_id}/{filename}"
+
             fotos_data.append({
                 'num': num_display,
-                'thumb_url': url,
-                'orig_url': url,
+                'thumb_url': thumb_src,
+                'orig_url': orig_src,
                 'nombre': filename,
             })
 
+        # Fotos legacy
         nums = reg.fotos_nums if reg.fotos_nums else []
         if not nums and reg.fotos:
             try:
@@ -511,32 +584,24 @@ def _enrich_galeria_registros(object_list):
             except Exception:
                 nums = []
 
+        photos_map = user_photos_index.get(reg.user_id, {})
+        thumbs_set = user_thumbs_index.get(reg.user_id, set())
+        proxies_set = user_proxies_index.get(reg.user_id, set())
+
         for num in nums:
-            patron = f"{num:03d}_*.jpg"
-            fotos_encontradas = sorted(user_folder_fotos.glob(patron))
-            if not fotos_encontradas:
+            foto_filename = photos_map.get(num)
+            if not foto_filename:
                 continue
-            foto_file = fotos_encontradas[0]
-            thumb_file = user_folder_thumbs / foto_file.name
 
-            if thumb_file.exists():
-                thumb_src = f"{thumbs_url}{reg.user_id}/{foto_file.name}"
-            else:
-                thumb_src = f"{fotos_url}{reg.user_id}/{foto_file.name}"
+            thumb_src = f"{thumbs_url}{reg.user_id}/{foto_filename}" if foto_filename in thumbs_set else f"{fotos_url}{reg.user_id}/{foto_filename}"
+            orig_src = f"{proxies_url}{reg.user_id}/{foto_filename}" if foto_filename in proxies_set else f"{fotos_url}{reg.user_id}/{foto_filename}"
 
-            proxies_root = Path(settings.MEDIA_ROOT) / 'proxies'
-            proxies_url = settings.MEDIA_URL + 'proxies/'
-            if (proxies_root / str(reg.user_id) / foto_file.name).exists():
-                orig_src = f"{proxies_url}{reg.user_id}/{foto_file.name}"
-            else:
-                orig_src = f"{fotos_url}{reg.user_id}/{foto_file.name}"
-
-            if not any(f['nombre'] == foto_file.name for f in fotos_data):
+            if not any(f['nombre'] == foto_filename for f in fotos_data):
                 fotos_data.append({
                     'num':       num,
                     'thumb_url': thumb_src,
                     'orig_url':  orig_src,
-                    'nombre':    foto_file.name,
+                    'nombre':    foto_filename,
                 })
 
         registros_enriquecidos.append({
@@ -603,15 +668,19 @@ def _parse_fotos_nums(registros):
     Extrae los números de foto individuales de los registros.
     Soporta formato nuevo '1, 2, 3' y legacy '(001-005)'.
     Resistente a registros como dict (JSON) o como objeto (ORM).
-    
-    Nota de migración (photo_parser.py):
-    - Antes: rangos sin paréntesis no eran expandidos (ej. '1-5' daba [1,5]).
-    - Después: cualquier rango válido se interpreta como secuencia completa.
-    - Motivo: alineación entre entrada del operador y representación interna.
     """
     from shared.utils.photo_parser import parse_photo_numbers
     resultado = []
     
+    # Pre-cargar mapeo de nombres de usuario
+    nombres_dict = {}
+    try:
+        from calidad.models import PerfilUsuario
+        for p in PerfilUsuario.objects.select_related('usuario').exclude(telegram_user_id__isnull=True):
+            nombres_dict[p.telegram_user_id] = p.usuario.get_full_name() or p.usuario.username
+    except Exception:
+        pass
+
     # Pre-cargar count de evidencias_v2 para evitar N+1 queries si es ORM
     if registros and not isinstance(registros[0], dict):
         try:
@@ -635,20 +704,26 @@ def _parse_fotos_nums(registros):
         
         if not fotos_str and v2_count > 0:
             fotos_str = f"{v2_count} foto(s)"
-            # Simular que hay fotos para que el frontend lo detecte como "tiene fotos"
             nums = list(range(1, v2_count + 1))
 
+        fotos_rango = getattr(r, 'fotos_rango', fotos_str) if not is_dict else r.get('fotos_rango', fotos_str)
+        nombre_usuario = getattr(r, 'nombre_usuario', None) if not is_dict else r.get('nombre_usuario')
+        if not nombre_usuario and user_id:
+            nombre_usuario = nombres_dict.get(user_id, f"Operador {user_id}")
+
         resultado.append({
-            'id':          r.get('id') if is_dict else getattr(r, 'id', None),
-            'user_id':     user_id,
-            'fotos_nums':  sorted(list(set(nums))),
-            'fotos_str':   fotos_str,
-            'modelo':      r.get('modelo', '') if is_dict else getattr(r, 'modelo', ''),
-            'numero_parte': r.get('numero_parte', '') if is_dict else getattr(r, 'numero_parte', ''),
-            'linea':       r.get('linea', '') if is_dict else getattr(r, 'linea', ''),
-            'descripcion': r.get('descripcion', '') if is_dict else getattr(r, 'descripcion', ''),
-            'responsable': r.get('responsable', '') if is_dict else getattr(r, 'responsable', ''),
-            'cantidad':    r.get('cantidad', 1) if is_dict else getattr(r, 'cantidad', 1),
+            'id':             r.get('id') if is_dict else getattr(r, 'id', None),
+            'user_id':        user_id,
+            'nombre_usuario': nombre_usuario or "Desconocido",
+            'fotos_nums':     sorted(list(set(nums))),
+            'fotos_str':      fotos_str,
+            'fotos_rango':    fotos_rango,
+            'modelo':         r.get('modelo', '') if is_dict else getattr(r, 'modelo', ''),
+            'numero_parte':   r.get('numero_parte', '') if is_dict else getattr(r, 'numero_parte', ''),
+            'linea':          r.get('linea', '') if is_dict else getattr(r, 'linea', ''),
+            'descripcion':    r.get('descripcion', '') if is_dict else getattr(r, 'descripcion', ''),
+            'responsable':    r.get('responsable', '') if is_dict else getattr(r, 'responsable', ''),
+            'cantidad':       r.get('cantidad', 1) if is_dict else getattr(r, 'cantidad', 1),
             'fecha_registro': r.get('fecha_registro') if is_dict else getattr(r, 'fecha_registro', None),
         })
     return resultado
@@ -966,38 +1041,58 @@ def api_download_excel(request, task_id):
 
 @login_required
 def panel_operativo(request):
-    """Vista HTML principal del Panel Operativo."""
+    """Vista HTML principal del Panel Operativo con presets y filtros temporales unificados."""
     
-    fecha_desde_str = request.GET.get('fecha_desde')
-    fecha_hasta_str = request.GET.get('fecha_hasta')
+    fecha_desde_str = request.GET.get('fecha_desde', '')
+    fecha_hasta_str = request.GET.get('fecha_hasta', '')
+    preset = request.GET.get('preset', '')
     
-    rango_key = request.GET.get('rango', '24h') if not (fecha_desde_str or fecha_hasta_str) else 'custom'
-    is_custom = rango_key == 'custom'
+    # Compatibilidad con querystring legacy ?rango=...
+    if not preset and not fecha_desde_str and not fecha_hasta_str:
+        rango_legacy = request.GET.get('rango')
+        if rango_legacy:
+            preset = f"h{rango_legacy.replace('h', '')}" if 'h' in rango_legacy else 'h24'
     
     registros_base = get_registros_permitidos(request.user)
     
-    if is_custom:
-        # Modo personalizado
-        dt_desde = _parse_aware_dt(fecha_desde_str, end=False)
-        dt_hasta = _parse_aware_dt(fecha_hasta_str, end=True)
+    dt_desde = _parse_aware_dt(fecha_desde_str, end=False) if fecha_desde_str else None
+    dt_hasta = _parse_aware_dt(fecha_hasta_str, end=True) if fecha_hasta_str else None
+    
+    registros_qs = registros_base
+    if dt_desde:
+        registros_qs = registros_qs.filter(fecha_registro__gte=dt_desde)
+    if dt_hasta:
+        registros_qs = registros_qs.filter(fecha_registro__lte=dt_hasta)
         
-        registros_qs = registros_base
-        if dt_desde:
-            registros_qs = registros_qs.filter(fecha_registro__gte=dt_desde)
-        if dt_hasta:
-            registros_qs = registros_qs.filter(fecha_registro__lte=dt_hasta)
-            
-        # Si dt_hasta es menor que "ahora menos 1 minuto", no tiene sentido hacer polling
-        # (estamos viendo el pasado). Desactivamos polling pasando last_id = null
-        now = timezone.now()
-        disable_polling = dt_hasta and dt_hasta < (now - timedelta(minutes=1))
-    else:
-        # Ventana temporal por botón rápido: ?rango=1h | 8h | 24h (default)
-        _RANGOS = {'1h': timedelta(hours=1), '8h': timedelta(hours=8), '24h': timedelta(hours=24)}
-        delta = _RANGOS.get(rango_key, timedelta(hours=24))
-        fecha_desde = timezone.now() - delta
-        registros_qs = registros_base.filter(fecha_registro__gte=fecha_desde)
-        disable_polling = False
+    # Si no hubo fechas explícitas pero sí preset rápido
+    if not dt_desde and not dt_hasta:
+        _HOURS = {'h1': 1, 'h4': 4, 'h8': 8, 'h24': 24}
+        if preset in _HOURS:
+            delta = timedelta(hours=_HOURS[preset])
+            dt_desde = timezone.now() - delta
+            registros_qs = registros_base.filter(fecha_registro__gte=dt_desde)
+        elif preset == 'd0':
+            # Hoy
+            hoy_inicio = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            registros_qs = registros_base.filter(fecha_registro__gte=hoy_inicio)
+        elif preset == 'd1':
+            # Ayer
+            hoy_inicio = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            ayer_inicio = hoy_inicio - timedelta(days=1)
+            registros_qs = registros_base.filter(fecha_registro__gte=ayer_inicio, fecha_registro__lt=hoy_inicio)
+        elif preset.startswith('d') and preset[1:].isdigit():
+            # d7, d14, d30...
+            dias_count = int(preset[1:])
+            dt_desde = timezone.now() - timedelta(days=dias_count)
+            registros_qs = registros_base.filter(fecha_registro__gte=dt_desde)
+        else:
+            # Default últimas 24h
+            preset = 'h24'
+            registros_qs = registros_base.filter(fecha_registro__gte=timezone.now() - timedelta(hours=24))
+
+    # Control de Polling: pausar si el límite superior está en el pasado
+    now = timezone.now()
+    disable_polling = bool(dt_hasta and dt_hasta < (now - timedelta(minutes=1)))
     
     registros_data = _parse_fotos_nums(registros_qs)
     
@@ -1007,14 +1102,18 @@ def panel_operativo(request):
     else:
         last_id = registros_qs.first().id if registros_qs.exists() else 0
     
+    rango_activo = 'custom' if (preset == 'custom' or (not preset and (fecha_desde_str or fecha_hasta_str))) else preset
+    
     context = {
         'registros_json': json.dumps(registros_data, default=str),
         'last_id': last_id,
-        'rango_activo': rango_key,
+        'rango_activo': rango_activo,
+        'preset_activo': preset or rango_activo,
         'seccion': 'operacion',
         'filtros': {
-            'fecha_desde': fecha_desde_str or '',
-            'fecha_hasta': fecha_hasta_str or ''
+            'fecha_desde': fecha_desde_str,
+            'fecha_hasta': fecha_hasta_str,
+            'preset': preset
         }
     }
     return render(request, 'calidad/operacion.html', context)

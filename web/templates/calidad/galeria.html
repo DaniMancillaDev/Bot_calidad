@@ -2,9 +2,9 @@
 {% block title %}Histórico Visual — Panel de Calidad{% endblock %}
 
 {% block topbar_actions %}
-<div style="display:flex;gap:12px;align-items:center;">
-  <span style="font-size:0.85rem;color:var(--text-muted);">
-    <span id="total-count" style="color:var(--text);font-weight:600;">{{ total }}</span> registros encontrados
+<div style="display: flex; gap: 12px; align-items: center;">
+  <span style="font-size: 0.85rem; color: #94a3b8;">
+    <strong id="total-count" style="color: #f8fafc; font-weight: 700;">{{ total }}</strong> registros encontrados
   </span>
 </div>
 {% endblock %}
@@ -12,64 +12,189 @@
 {% block page_title %}Histórico Visual (Galería){% endblock %}
 
 {% block extra_head %}
-<script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
 <style>
-/* ── Barra de filtros (Industrial y Limpia) ───────────────────────────── */
+/* ── Barra de filtros ─────────────────────────────────────────────────── */
 .filters-bar {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
   flex-wrap: wrap;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 14px 20px;
+  border-radius: 12px;
+  padding: 12px 16px;
   margin-bottom: 24px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
 }
+
 .filters-bar select,
 .filters-bar input[type="text"] {
   background: var(--surface2);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text);
+  border-radius: 8px;
+  color: #f8fafc;
   padding: 8px 12px;
-  font-size: 0.85rem;
-  font-family: 'Inter', sans-serif;
-  min-width: 140px;
-  transition: border-color .15s;
-}
-.filters-bar select:focus,
-.filters-bar input:focus {
+  font-size: 0.84rem;
+  font-family: inherit;
+  min-width: 130px;
   outline: none;
-  border-color: var(--accent);
+  transition: border-color .15s, box-shadow .15s;
+  box-sizing: border-box;
 }
-.filter-search {
+
+.filters-bar select option {
+  background: #1e2238;
+  color: #f8fafc;
+  padding: 8px;
+}
+
+.filters-bar select:focus,
+.filters-bar input[type="text"]:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+}
+
+.filter-search-wrap {
+  position: relative;
   flex: 1;
   min-width: 200px;
+}
+
+.filter-search-wrap .search-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.15rem;
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+.filter-search-wrap input {
+  width: 100%;
+  padding-left: 36px !important;
+}
+
+/* ── Módulo de Rango de Fechas ────────────────────────────────────────── */
+.date-filter-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 10px;
+  transition: border-color .15s, box-shadow .15s;
+}
+
+.date-filter-box:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+}
+
+.date-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.date-item label {
+  font-size: 0.70rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+}
+
+.date-item input[type="date"] {
+  background: transparent;
+  border: none;
+  color: #f8fafc;
+  font-size: 0.82rem;
+  font-family: inherit;
+  font-weight: 500;
+  outline: none;
+  padding: 4px 0;
+  cursor: pointer;
+  color-scheme: dark;
+}
+
+.date-sep {
+  color: #64748b;
+  font-size: 0.85rem;
+  font-weight: 700;
+  user-select: none;
+}
+
+/* Botones de acción */
+.btn-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.84rem;
+  cursor: pointer;
+  transition: all .15s ease;
+  border: none;
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.btn-filter:hover {
+  background: #4f46e5;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+}
+
+.btn-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 0.84rem;
+  cursor: pointer;
+  transition: all .15s ease;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: #94a3b8;
+  text-decoration: none;
+}
+
+.btn-clear:hover {
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.05);
 }
 
 /* ── Feed Grid (Cards) ────────────────────────────────────────────────── */
 #feed-container {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 18px;
   align-items: start;
 }
 
 /* ── Registro Card ────────────────────────────────────────────────────── */
 .reg-card {
   background: var(--surface);
-  border-radius: var(--radius);
+  border-radius: 12px;
   border: 1px solid var(--border);
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  transition: border-color .2s, box-shadow .2s;
+  transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
   position: relative;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  content-visibility: auto;
+  contain-intrinsic-size: 0 320px;
 }
+
 .reg-card:hover {
-  border-color: rgba(99,102,241,.4);
-  box-shadow: 0 4px 20px rgba(0,0,0,.2);
+  transform: translateY(-2px);
+  border-color: rgba(99, 102, 241, 0.5);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
 }
 
 /* ── Card Header ──────────────────────────────────────────────────────── */
@@ -77,164 +202,397 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 14px 16px 12px;
-  border-bottom: 1px solid rgba(255,255,255,0.03);
-}
-.rc-time {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  font-weight: 500;
-  letter-spacing: 0.02em;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid var(--border);
 }
 
-/* Badges Operativos */
-.st-badge {
-  font-size: 0.7rem;
+.rc-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.76rem;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
   font-weight: 600;
-  padding: 4px 10px;
-  border-radius: 4px;
+  white-space: nowrap;
+}
+
+/* Badges de Estado */
+.st-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 6px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  display: inline-flex;
+  align-items: center;
 }
-.st-pendiente  { background: rgba(148, 163, 184, 0.1); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.2); }
-.st-revisado   { background: rgba(52, 211, 153, 0.1);  color: #34d399; border: 1px solid rgba(52, 211, 153, 0.2); }
-.st-aprobado   { background: rgba(52, 211, 153, 0.1);  color: #34d399; border: 1px solid rgba(52, 211, 153, 0.2); }
-.st-rechazado  { background: rgba(248, 113, 113, 0.1); color: #f87171; border: 1px solid rgba(248, 113, 113, 0.2); }
-.st-duplicado  { background: rgba(167, 139, 250, 0.1); color: #a78bfa; border: 1px solid rgba(167, 139, 250, 0.2); }
-.st-borroso    { background: rgba(251, 191, 36, 0.1);  color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.2); }
 
-/* ── Thumbnails Strip ─────────────────────────────────────────────────── */
+.st-pendiente  { background: rgba(148, 163, 184, 0.15); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.3); }
+.st-revisado, .st-aprobado { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+.st-rechazado  { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+.st-duplicado  { background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); }
+.st-borroso    { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+
+.badge-turno {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #94a3b8;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* ── Defecto & Cantidad Box ────────────────────────────────────────────── */
+.rc-defect-box {
+  padding: 12px 14px 10px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.defect-title {
+  color: #f8fafc;
+  font-weight: 600;
+  font-size: 0.90rem;
+  line-height: 1.35;
+  flex: 1;
+}
+
+.badge-cant {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: #f8fafc;
+  white-space: nowrap;
+}
+
+/* ── Thumbnails Strip & Themed Scrollbar ───────────────────────────────── */
 .rc-thumbs {
   display: flex;
   gap: 8px;
-  padding: 16px;
+  padding: 10px 14px;
   overflow-x: auto;
   scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
+  scrollbar-color: var(--border) rgba(0, 0, 0, 0.2);
+  background: rgba(0, 0, 0, 0.22);
 }
+
+.rc-thumbs::-webkit-scrollbar {
+  height: 5px;
+}
+
+.rc-thumbs::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.rc-thumbs::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+.rc-thumbs::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
 .thumb-wrap {
   position: relative;
   flex: 0 0 auto;
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: 8px;
   overflow: hidden;
-  background: #000;
+  background: #090d16;
+  border: 1px solid var(--border);
+  transition: transform .2s ease, border-color .2s ease;
 }
+
 .thumb-img {
   width: 90px;
   height: 90px;
   object-fit: cover;
   display: block;
-  opacity: 0.85;
+  opacity: 0.92;
   transition: opacity .2s, transform .2s;
 }
-.thumb-wrap:hover .thumb-img {
-  opacity: 1;
-  transform: scale(1.05);
-}
-.thumb-label {
+
+.thumb-overlay {
   position: absolute;
-  bottom: 4px;
-  right: 4px;
-  background: rgba(0,0,0,0.7);
-  color: #fff;
-  font-size: 0.65rem;
-  font-weight: 500;
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-.rc-no-fotos {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  padding: 12px 0;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity .2s ease;
 }
 
-/* ── Info Grid ───────────────────────────────────────────────────────── */
-.rc-info {
-  padding: 0 16px 16px;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+.thumb-overlay .material-symbols-outlined {
+  color: #ffffff;
+  font-size: 1.3rem;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.6));
 }
-.rc-field-label {
-  font-size: 0.65rem;
-  color: var(--text-muted);
+
+.thumb-wrap:hover {
+  border-color: var(--accent);
+  transform: scale(1.03);
+}
+
+.thumb-wrap:hover .thumb-img {
+  opacity: 1;
+}
+
+.thumb-wrap:hover .thumb-overlay {
+  opacity: 1;
+}
+
+.thumb-label {
+  position: absolute;
+  bottom: 3px;
+  right: 3px;
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  backdrop-filter: blur(4px);
+}
+
+.rc-no-fotos {
+  font-size: 0.80rem;
+  color: #94a3b8;
+  padding: 16px 0;
+  width: 100%;
+  text-align: center;
+}
+
+/* ── Structured Metadata Footer ────────────────────────────────────────── */
+.rc-meta-footer {
+  padding: 10px 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  background: var(--surface);
+  border-top: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.rc-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.78rem;
+}
+
+.rc-meta-full {
+  width: 100%;
+  margin-top: 2px;
+}
+
+.rc-meta-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #64748b;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 2px;
+  letter-spacing: 0.04em;
 }
-.rc-field-value {
-  font-size: 0.85rem;
-  color: var(--text);
+
+.rc-user-val {
+  color: #cbd5e1;
+  font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.rc-field-full {
-  grid-column: 1 / -1;
-  white-space: normal;
-  line-height: 1.4;
-  color: #cbd5e1;
+  max-width: 130px;
 }
 
-/* ── Load more & Empty ────────────────────────────────────────────────── */
-.load-more-indicator {
-  grid-column: 1 / -1;
-  text-align: center;
-  padding: 30px;
-  color: var(--text-muted);
-  font-size: 0.85rem;
+/* Design System Badges */
+.model-tag {
+  display: inline-block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 5px;
+  padding: 1px 7px;
+  white-space: nowrap;
 }
+
+.badge-linea {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 5px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  background: rgba(139, 92, 246, 0.18);
+  color: #c4b5fd;
+  border: 1px solid rgba(139, 92, 246, 0.35);
+}
+
+.badge-resp {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 5px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.05);
+  color: #f8fafc;
+  border: 1px solid var(--border);
+}
+
+/* ── Load more & Infinite Scroll Trigger ───────────────────────────────── */
+#next-page-trigger {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+.load-more-indicator {
+  text-align: center;
+  padding: 28px 16px;
+  color: #94a3b8;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  border-radius: 10px;
+  transition: background .2s, color .2s;
+}
+
+.load-more-indicator:hover {
+  background: var(--surface);
+  color: #f8fafc;
+}
+
 .feed-empty {
   grid-column: 1 / -1;
   text-align: center;
   padding: 60px 20px;
-  color: var(--text-muted);
+  color: #94a3b8;
   background: var(--surface);
-  border-radius: var(--radius);
+  border-radius: 12px;
   border: 1px dashed var(--border);
 }
 
-/* ── Modal Zoom ───────────────────────────────────────────────────────── */
+/* ── Modal Zoom / Lightbox ────────────────────────────────────────────── */
 #foto-modal {
   display: none;
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: rgba(15, 17, 23, 0.95);
+  background: rgba(10, 15, 29, 0.95);
+  backdrop-filter: blur(8px);
   align-items: center;
   justify-content: center;
   flex-direction: column;
-  gap: 16px;
 }
-#foto-modal.open { display: flex; }
+
+#foto-modal.open {
+  display: flex;
+}
+
+.modal-content-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 92vw;
+  max-height: 90vh;
+}
+
 #modal-img {
-  max-width: 90vw;
-  max-height: 85vh;
+  max-width: 88vw;
+  max-height: 72vh;
   border-radius: 8px;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
   object-fit: contain;
+  transition: transform 0.2s ease;
 }
-#modal-caption {
-  color: var(--text-muted);
-  font-size: 0.9rem;
+
+.modal-nav-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid var(--border);
+  color: #ffffff;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all .15s ease;
+  z-index: 10;
 }
+
+.modal-nav-btn:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  transform: translateY(-50%) scale(1.1);
+}
+
+.modal-nav-prev { left: -56px; }
+.modal-nav-next { right: -56px; }
+
+@media (max-width: 768px) {
+  .modal-nav-prev { left: 10px; }
+  .modal-nav-next { right: 10px; }
+}
+
+.modal-footer {
+  margin-top: 14px;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 18px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  color: #f8fafc;
+  font-size: 0.85rem;
+}
+
 .modal-close-btn {
   position: absolute;
   top: 24px;
-  right: 32px;
-  background: transparent;
+  right: 28px;
+  background: rgba(15, 23, 42, 0.85);
   border: 1px solid var(--border);
-  color: var(--text);
-  font-size: 1.2rem;
-  width: 40px; height: 40px;
+  color: #f8fafc;
+  width: 40px;
+  height: 40px;
   border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   transition: all .2s;
+  z-index: 20;
 }
+
 .modal-close-btn:hover {
-  background: var(--surface2);
+  background: var(--danger);
   color: #fff;
+  border-color: var(--danger);
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 </style>
 {% endblock %}
@@ -243,21 +601,27 @@
 
 {# ── Filtros ──────────────────────────────────────────────────────────────── #}
 <form method="GET" class="filters-bar" id="filtros-form">
-  <select name="estado" onchange="this.form.submit()">
+  <div class="filter-search-wrap">
+    <span class="material-symbols-outlined search-icon">search</span>
+    <input type="text" name="q" placeholder="Buscar modelo, defecto, operario..."
+           value="{{ f_q }}" class="filter-search" aria-label="Búsqueda de registros">
+  </div>
+
+  <select name="estado" aria-label="Filtrar por estado de revisión" onchange="this.form.submit()">
     <option value="">Todos los estados</option>
     {% for val, label in estados %}
     <option value="{{ val }}" {% if f_estado == val %}selected{% endif %}>{{ label }}</option>
     {% endfor %}
   </select>
 
-  <select name="turno" onchange="this.form.submit()">
+  <select name="turno" aria-label="Filtrar por turno" onchange="this.form.submit()">
     <option value="">Todos los turnos</option>
     <option value="A" {% if f_turno == "A" %}selected{% endif %}>Turno A</option>
     <option value="B" {% if f_turno == "B" %}selected{% endif %}>Turno B</option>
     <option value="C" {% if f_turno == "C" %}selected{% endif %}>Turno C</option>
   </select>
 
-  <select name="dias" onchange="this.form.submit()">
+  <select name="dias" aria-label="Filtrar por rango temporal" onchange="this.form.submit()">
     <option value="">Todo el tiempo</option>
     <option value="1"  {% if f_dias == "1"  %}selected{% endif %}>Hoy</option>
     <option value="3"  {% if f_dias == "3"  %}selected{% endif %}>Últimos 3 días</option>
@@ -265,20 +629,28 @@
     <option value="30" {% if f_dias == "30" %}selected{% endif %}>Último mes</option>
   </select>
 
-  <!-- Filtros de Rango de Fechas (Compatibilidad con Historial) -->
-  <input type="date" name="fecha_desde" value="{{ request.GET.fecha_desde }}" title="Desde fecha">
-  <input type="date" name="fecha_hasta" value="{{ request.GET.fecha_hasta }}" title="Hasta fecha">
+  <!-- Módulo de Rango de Fechas -->
+  <div class="date-filter-box">
+    <div class="date-item">
+      <label for="fecha_desde">Desde</label>
+      <input type="date" id="fecha_desde" name="fecha_desde" value="{{ request.GET.fecha_desde }}" title="Fecha de inicio">
+    </div>
+    <span class="date-sep">→</span>
+    <div class="date-item">
+      <label for="fecha_hasta">Hasta</label>
+      <input type="date" id="fecha_hasta" name="fecha_hasta" value="{{ request.GET.fecha_hasta }}" title="Fecha de fin">
+    </div>
+  </div>
 
-  <input type="text" name="q" placeholder="Buscar modelo, defecto, operario..."
-         value="{{ f_q }}" class="filter-search">
-
-  <button type="submit" class="btn btn-primary" style="padding:8px 16px;">
-    Filtrar
+  <button type="submit" class="btn-filter">
+    <span class="material-symbols-outlined" style="font-size: 1.1rem;">filter_alt</span>
+    <span>Filtrar</span>
   </button>
 
   {% if f_estado or f_turno or f_dias or f_q or request.GET.fecha_desde or request.GET.fecha_hasta %}
-  <a href="{% url 'galeria_fotos' %}" class="btn btn-ghost" style="padding:8px 16px;">
-    Limpiar
+  <a href="{% url 'galeria_fotos' %}" class="btn-clear">
+    <span class="material-symbols-outlined" style="font-size: 1.1rem;">restart_alt</span>
+    <span>Limpiar</span>
   </a>
   {% endif %}
 </form>
@@ -289,34 +661,214 @@
 
   {% if not registros %}
   <div class="feed-empty">
-    <div style="font-size:1.1rem; font-weight:500; color:var(--text); margin-bottom:8px;">No se encontraron registros</div>
-    Intenta ajustando los filtros de búsqueda.
+    <span class="material-symbols-outlined" style="font-size: 2.5rem; opacity: 0.4; display: block; margin-bottom: 8px;">image_not_supported</span>
+    <div style="font-size: 1.1rem; font-weight: 600; color: #f8fafc; margin-bottom: 6px;">No se encontraron registros fotográficos</div>
+    Intenta ajustando los filtros de búsqueda o fechas seleccionadas.
   </div>
   {% endif %}
 </div>
 
-{# ── Modal zoom ────────────────────────────────────────────────────────────── #}
-<div id="foto-modal" role="dialog" aria-modal="true" aria-label="Vista ampliada">
-  <button class="modal-close-btn" onclick="cerrarModal()" aria-label="Cerrar">✕</button>
-  <img id="modal-img" src="" alt="Foto ampliada">
-  <p id="modal-caption"></p>
+{# ── Modal zoom / Lightbox ────────────────────────────────────────────── #}
+<div id="foto-modal" role="dialog" aria-modal="true" aria-label="Visor de Evidencia Fotográfica">
+  <button class="modal-close-btn" onclick="cerrarModal()" aria-label="Cerrar visor">
+    <span class="material-symbols-outlined" style="font-size: 1.2rem;">close</span>
+  </button>
+
+  <div class="modal-content-wrap">
+    <button class="modal-nav-btn modal-nav-prev" id="modal-btn-prev" onclick="cambiarFotoModal(-1)" aria-label="Foto anterior">
+      <span class="material-symbols-outlined">chevron_left</span>
+    </button>
+    <button class="modal-nav-btn modal-nav-next" id="modal-btn-next" onclick="cambiarFotoModal(1)" aria-label="Foto siguiente">
+      <span class="material-symbols-outlined">chevron_right</span>
+    </button>
+
+    <img id="modal-img" src="" alt="Foto ampliada">
+
+    <div class="modal-footer" id="modal-footer-info">
+      <div><strong id="modal-modelo"></strong> <span id="modal-foto-num" style="color:#94a3b8; font-size:0.80rem;"></span></div>
+      <div id="modal-linea-badge"></div>
+      <div id="modal-defecto" style="color:#f1f5f9; font-weight:500;"></div>
+      <div id="modal-resp-badge"></div>
+    </div>
+  </div>
 </div>
 
 <script>
-function abrirModal(origUrl, modelo, num) {
-  document.getElementById('modal-img').src = origUrl;
-  document.getElementById('modal-caption').textContent = modelo + ' — Foto #' + String(num).padStart(3,'0');
+/* ── Infinite Scroll con IntersectionObserver en .content ─────────────── */
+let isLoadingNextPage = false;
+let infiniteObserver = null;
+
+function initInfiniteScrollObserver() {
+  const trigger = document.getElementById('next-page-trigger');
+  if (!trigger) return;
+
+  if (infiniteObserver) {
+    infiniteObserver.disconnect();
+  }
+
+  const scrollParent = document.querySelector('.content') || null;
+
+  infiniteObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting && !isLoadingNextPage) {
+        cargarSiguientePagina();
+      }
+    });
+  }, {
+    root: scrollParent,
+    rootMargin: '250px'
+  });
+
+  infiniteObserver.observe(trigger);
+}
+
+async function cargarSiguientePagina() {
+  const trigger = document.getElementById('next-page-trigger');
+  if (!trigger || isLoadingNextPage) return;
+
+  const url = trigger.getAttribute('data-url');
+  if (!url) return;
+
+  isLoadingNextPage = true;
+  const indicator = trigger.querySelector('.load-more-indicator');
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'HX-Request': 'true',
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const htmlText = await response.text();
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = htmlText;
+
+    const container = document.getElementById('feed-container');
+    const newCards = tempDiv.querySelectorAll('.reg-card');
+    const newTrigger = tempDiv.querySelector('#next-page-trigger');
+
+    // Desconectar observer y remover trigger viejo
+    if (infiniteObserver) infiniteObserver.disconnect();
+    trigger.remove();
+
+    // Insertar nuevas tarjetas
+    newCards.forEach(card => container.appendChild(card));
+
+    // Si hay página siguiente, insertar nuevo trigger y reactivar observer
+    if (newTrigger) {
+      container.appendChild(newTrigger);
+      initInfiniteScrollObserver();
+    }
+  } catch (err) {
+    console.error('Error al cargar siguiente página de registros:', err);
+    if (indicator) {
+      indicator.innerHTML = `
+        <span class="material-symbols-outlined" style="color: #ef4444;">error</span>
+        <span>Error al cargar. Haz clic aquí para reintentar.</span>
+      `;
+      indicator.onclick = () => {
+        indicator.innerHTML = `
+          <span class="material-symbols-outlined" style="font-size: 1.2rem; animation: spin 1s linear infinite;">sync</span>
+          <span>Reintentando carga...</span>
+        `;
+        isLoadingNextPage = false;
+        cargarSiguientePagina();
+      };
+    }
+  } finally {
+    isLoadingNextPage = false;
+  }
+}
+
+// Inicializar al cargar el DOM
+document.addEventListener('DOMContentLoaded', () => {
+  initInfiniteScrollObserver();
+});
+
+// Respaldo inmediato si el script corre tras DOMContentLoaded
+initInfiniteScrollObserver();
+
+
+/* ── Modal Zoom / Lightbox ────────────────────────────────────────────── */
+let currentModalPhotos = [];
+let currentModalIndex = 0;
+let currentModalMeta = {};
+
+function abrirModalDesdeThumb(el) {
+  const container = el.closest('.rc-thumbs');
+  const thumbs = Array.from(container.querySelectorAll('.thumb-wrap'));
+  
+  currentModalPhotos = thumbs.map(t => ({
+    orig_url: t.dataset.orig,
+    num: t.dataset.num
+  }));
+  
+  currentModalIndex = thumbs.indexOf(el);
+  if (currentModalIndex < 0) currentModalIndex = 0;
+
+  currentModalMeta = {
+    modelo: el.dataset.modelo || '',
+    linea: el.dataset.linea || '',
+    descripcion: el.dataset.descripcion || '',
+    responsable: el.dataset.responsable || ''
+  };
+
+  renderModalState();
   document.getElementById('foto-modal').classList.add('open');
   document.body.style.overflow = 'hidden';
 }
+
+function renderModalState() {
+  if (!currentModalPhotos || currentModalPhotos.length === 0) return;
+  const currentPhoto = currentModalPhotos[currentModalIndex];
+  if (!currentPhoto) return;
+
+  document.getElementById('modal-img').src = currentPhoto.orig_url;
+  document.getElementById('modal-modelo').textContent = currentModalMeta.modelo || '';
+  document.getElementById('modal-foto-num').textContent = `· Foto #${String(currentPhoto.num).padStart(3, '0')} (${currentModalIndex + 1} de ${currentModalPhotos.length})`;
+  document.getElementById('modal-defecto').textContent = currentModalMeta.descripcion ? `Defecto: ${currentModalMeta.descripcion}` : '';
+  
+  const lineaEl = document.getElementById('modal-linea-badge');
+  lineaEl.innerHTML = currentModalMeta.linea ? `<span class="badge-linea">${currentModalMeta.linea}</span>` : '';
+
+  const respEl = document.getElementById('modal-resp-badge');
+  respEl.innerHTML = currentModalMeta.responsable ? `<span class="badge-resp">${currentModalMeta.responsable}</span>` : '';
+
+  const btnPrev = document.getElementById('modal-btn-prev');
+  const btnNext = document.getElementById('modal-btn-next');
+
+  btnPrev.style.display = currentModalPhotos.length > 1 ? 'flex' : 'none';
+  btnNext.style.display = currentModalPhotos.length > 1 ? 'flex' : 'none';
+}
+
+function cambiarFotoModal(delta) {
+  if (currentModalPhotos.length <= 1) return;
+  currentModalIndex = (currentModalIndex + delta + currentModalPhotos.length) % currentModalPhotos.length;
+  renderModalState();
+}
+
 function cerrarModal() {
   document.getElementById('foto-modal').classList.remove('open');
   document.getElementById('modal-img').src = '';
   document.body.style.overflow = '';
 }
-document.addEventListener('keydown', e => { if(e.key==='Escape') cerrarModal(); });
-document.getElementById('foto-modal').addEventListener('click', function(e){
-  if(e.target===this) cerrarModal();
+
+document.addEventListener('keydown', (e) => {
+  const modal = document.getElementById('foto-modal');
+  if (!modal.classList.contains('open')) return;
+
+  if (e.key === 'Escape') cerrarModal();
+  if (e.key === 'ArrowLeft') cambiarFotoModal(-1);
+  if (e.key === 'ArrowRight') cambiarFotoModal(1);
+});
+
+document.getElementById('foto-modal').addEventListener('click', function(e) {
+  if (e.target === this) cerrarModal();
 });
 </script>
 

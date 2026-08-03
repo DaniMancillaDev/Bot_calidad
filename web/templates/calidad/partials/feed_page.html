@@ -1,4 +1,4 @@
-{# Partial: feed_page.html — Cards de un lote de registros (HTMX append) #}
+{# Partial: feed_page.html — Cards de un lote de registros (HTMX / Infinite Scroll) #}
 {# Renderiza las cards del page.object_list y el trigger de siguiente página. #}
 
 {% for item in registros %}
@@ -6,7 +6,7 @@
 
   {# ── Header ─────────────────────────────────────────────────────────── #}
   <div class="rc-header">
-    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+    <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
       <span class="st-badge st-{{ item.reg.estado_revision }}">
         {{ item.reg.get_estado_revision_display }}
       </span>
@@ -16,69 +16,87 @@
       {% if item.reg.is_blurry %}
         <span class="st-badge st-borroso">Borroso</span>
       {% endif %}
+      <span class="badge-turno" title="Turno {{ item.reg.turno }} · {{ item.reg.departamento }}">
+        T{{ item.reg.turno }} · {{ item.reg.departamento }}
+      </span>
     </div>
+
     <time class="rc-time" datetime="{{ item.reg.fecha_registro|date:'c' }}" title="{{ item.reg.fecha_registro|date:'d/m/Y H:i' }}">
+      <span class="material-symbols-outlined" style="font-size: 0.90rem;">schedule</span>
       {{ item.reg.fecha_registro|date:"d/m H:i" }}
     </time>
+  </div>
+
+  {# ── Main Defect & Quantity Block ────────────────────────────────────── #}
+  <div class="rc-defect-box">
+    <div class="defect-title">{{ item.reg.descripcion }}</div>
+    <div class="badge-cant" title="Cantidad">{{ item.reg.cantidad }} pz{% if item.reg.cantidad > 1 %}s{% endif %}</div>
   </div>
 
   {# ── Thumbnails Strip ────────────────────────────────────────────────── #}
   <div class="rc-thumbs">
     {% for foto in item.fotos %}
-    <div class="thumb-wrap" onclick="abrirModal('{{ foto.orig_url }}', '{{ item.reg.modelo|escapejs }}', {{ foto.num }})">
-      <img src="{{ foto.thumb_url }}" alt="Foto #{{ foto.num|stringformat:'03d' }}" loading="lazy" decoding="async" class="thumb-img">
+    <div class="thumb-wrap" 
+         data-orig="{{ foto.orig_url }}"
+         data-num="{{ foto.num }}"
+         data-modelo="{{ item.reg.modelo }}"
+         data-linea="{{ item.reg.linea|default:'' }}"
+         data-descripcion="{{ item.reg.descripcion }}"
+         data-responsable="{{ item.reg.responsable|default:'' }}"
+         onclick="abrirModalDesdeThumb(this)"
+         title="Ampliar foto #{{ foto.num|stringformat:'03d' }}">
+      <img src="{{ foto.thumb_url }}" alt="Foto #{{ foto.num|stringformat:'03d' }}" loading="lazy" decoding="async" width="90" height="90" class="thumb-img">
+      <div class="thumb-overlay">
+        <span class="material-symbols-outlined">zoom_in</span>
+      </div>
       <span class="thumb-label">#{{ foto.num|stringformat:"03d" }}</span>
     </div>
     {% empty %}
     <div class="rc-no-fotos">
+      <span class="material-symbols-outlined" style="font-size: 1.2rem; vertical-align: middle; opacity: 0.5;">no_photography</span>
       <span>Sin fotos registradas</span>
     </div>
     {% endfor %}
   </div>
 
-  {# ── Metadata ───────────────────────────────────────────────────────── #}
-  <div class="rc-info">
-    <div>
-      <div class="rc-field-label">Modelo</div>
-      <div class="rc-field-value" title="{{ item.reg.modelo }}">{{ item.reg.modelo }}</div>
+  {# ── Structured Metadata Footer ─────────────────────────────────────── #}
+  <div class="rc-meta-footer">
+    <div class="rc-meta-item">
+      <span class="rc-meta-label">Modelo</span>
+      <span class="model-tag" title="{{ item.reg.modelo }}">{{ item.reg.modelo }}</span>
     </div>
-    <div>
-      <div class="rc-field-label">Línea</div>
-      <div class="rc-field-value">{{ item.reg.linea|default:"—" }}</div>
+
+    <div class="rc-meta-item">
+      <span class="rc-meta-label">Línea</span>
+      {% if item.reg.linea %}
+        <span class="badge-linea">{{ item.reg.linea }}</span>
+      {% else %}
+        <span style="color: #64748b;">—</span>
+      {% endif %}
     </div>
-    <div>
-      <div class="rc-field-label">Cantidad</div>
-      <div class="rc-field-value">{{ item.reg.cantidad }}</div>
+
+    <div class="rc-meta-item">
+      <span class="rc-meta-label">Operario</span>
+      <span class="rc-user-val" title="{{ item.nombre_usuario }}">{{ item.nombre_usuario }}</span>
     </div>
-    <div>
-      <div class="rc-field-label">Operario</div>
-      <div class="rc-field-value" title="{{ item.nombre_usuario }}">{{ item.nombre_usuario }}</div>
+
+    {% if item.reg.responsable %}
+    <div class="rc-meta-item rc-meta-full">
+      <span class="rc-meta-label">Resp:</span>
+      <span class="badge-resp" title="{{ item.reg.responsable }}">{{ item.reg.responsable }}</span>
     </div>
-    <div class="rc-field-full">
-      <div class="rc-field-label">Defecto</div>
-      <div class="rc-field-value rc-field-full">{{ item.reg.descripcion }}</div>
-    </div>
-    <div>
-      <div class="rc-field-label">Turno / Depto</div>
-      <div class="rc-field-value">{{ item.reg.turno }} · {{ item.reg.departamento }}</div>
-    </div>
-    <div>
-      <div class="rc-field-label">Responsable</div>
-      <div class="rc-field-value" title="{{ item.reg.responsable }}">{{ item.reg.responsable }}</div>
-    </div>
+    {% endif %}
   </div>
 
 </article>
 {% endfor %}
 
-{# ── Trigger de siguiente página (HTMX) ───────────────────────────────── #}
+{# ── Trigger de siguiente página (Infinite Scroll) ────────────────────── #}
 {% if page.has_next %}
 <div id="next-page-trigger"
-     hx-get="?{% if f_estado %}estado={{ f_estado }}&{% endif %}{% if f_turno %}turno={{ f_turno }}&{% endif %}{% if f_dias %}dias={{ f_dias }}&{% endif %}{% if f_q %}q={{ f_q }}&{% endif %}page={{ page.next_page_number }}"
-     hx-trigger="revealed"
-     hx-target="#feed-container"
-     hx-swap="beforeend">
+     data-url="{% url 'galeria_fotos' %}?{% if f_estado %}estado={{ f_estado }}&{% endif %}{% if f_turno %}turno={{ f_turno }}&{% endif %}{% if f_dias %}dias={{ f_dias }}&{% endif %}{% if f_q %}q={{ f_q }}&{% endif %}{% if request.GET.fecha_desde %}fecha_desde={{ request.GET.fecha_desde }}&{% endif %}{% if request.GET.fecha_hasta %}fecha_hasta={{ request.GET.fecha_hasta }}&{% endif %}page={{ page.next_page_number }}">
   <div class="load-more-indicator">
+    <span class="material-symbols-outlined" style="font-size: 1.2rem; animation: spin 1s linear infinite;">sync</span>
     <span>Cargando más registros (Página {{ page.next_page_number }} de {{ paginator.num_pages }})...</span>
   </div>
 </div>
