@@ -594,6 +594,22 @@
       });
     });
   </script>
+  <!-- Script global para limpiar parámetros vacíos de la URL visualmente -->
+  <script>
+    if (window.location.search) {
+      const params = new URLSearchParams(window.location.search);
+      let changed = false;
+      for (const [key, value] of Array.from(params.entries())) {
+        if (!value) {
+          params.delete(key);
+          changed = true;
+        }
+      }
+      if (changed) {
+        const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+        window.history.replaceState({}, document.title, newUrl);
+      }
+    }
+  </script>
 </body>
-
 </html>

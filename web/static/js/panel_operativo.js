@@ -28,6 +28,17 @@ class PanelOperativo {
         this.bindEvents();
         this.renderTabla();
         this.startPolling();
+
+        // Pausa el polling cuando el usuario cambia de pestaña o minimiza el navegador.
+        // Al volver, hace un fetch inmediato (catch-up) antes de reanudar el intervalo.
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                this.stopPolling();
+            } else {
+                this.checkUpdates(); // catch-up inmediato
+                this.startPolling();
+            }
+        });
     }
 
     cacheDOM() {
@@ -167,7 +178,9 @@ class PanelOperativo {
             document.querySelectorAll('.sortable-tbody').forEach(tb => {
                 tb.style.display = '';
                 const icon = document.getElementById(`icon-${tb.id}`);
-                if (icon) icon.textContent = '▼';
+                if (icon) {
+                    icon.textContent = 'expand_more';
+                }
             });
         }
     }
@@ -189,7 +202,7 @@ class PanelOperativo {
                 </td>
                 <td colspan="${colspan - 1}">
                     <div style="display:flex; align-items:center;">
-                        <span id="icon-group-${userId}" style="display:inline-block; width:24px; color: var(--text-muted); transition: transform 0.2s; font-size: 0.9rem;">▶</span>
+                        <span id="icon-group-${userId}" class="material-symbols-outlined" style="display:inline-block; width:24px; color: var(--text-muted); transition: transform 0.2s; font-size: 1.1rem;">chevron_right</span>
                         <span style="font-weight: 500; margin-right: 8px; color: var(--text);">Usuario</span>
                         <span class="badge-user" style="font-size: 0.9rem; padding: 4px 8px;">${userId}</span>
                         <span class="badge" style="margin-left: 12px; background: rgba(255,255,255,0.05); color: var(--text-muted); border: 1px solid var(--border); font-size: 0.8rem;">
@@ -224,7 +237,7 @@ class PanelOperativo {
 
             tr.innerHTML = `
                 <td>
-                    <span class="drag-handle" aria-label="Arrastrar para reordenar">⠿</span>
+                    <span class="drag-handle material-symbols-outlined" aria-label="Arrastrar para reordenar" style="font-size:1.1rem;">drag_indicator</span>
                     <input type="checkbox" class="row-check" ${r._selected ? 'checked' : ''} ${r._disabled ? 'disabled' : ''} aria-label="Seleccionar registro">
                 </td>
                 <td style="font-size:0.8rem; color:var(--text-muted);">${dateStr}</td>
@@ -618,6 +631,13 @@ class PanelOperativo {
         this.pollingInterval = setInterval(() => this.checkUpdates(), 10000);
     }
 
+    stopPolling() {
+        if (this.pollingInterval) {
+            clearInterval(this.pollingInterval);
+            this.pollingInterval = null;
+        }
+    }
+
     async checkUpdates() {
         try {
             const res = await fetch(`/api/check_updates/?last_id=${this.lastId}`);
@@ -643,6 +663,14 @@ class PanelOperativo {
                 
                 this.registros = [...nuevos, ...this.registros];
                 this.lastId = Math.max(this.lastId, ...nuevos.map(r => r.id));
+
+                // ponytail: cap en 200 para proteger el DOM en sesiones largas.
+                // Upgrade path: virtualización si se necesitan más de 200 filas visibles.
+                const MAX_ROWS = 200;
+                if (this.registros.length > MAX_ROWS) {
+                    this.registros = this.registros.slice(0, MAX_ROWS);
+                }
+
                 this.renderTabla();
                 
                 // Cleanup animation class after it plays

@@ -24,9 +24,184 @@
   <div style="flex: 1; display: flex; align-items: center; gap: 8px; position: relative;">
     <label for="search-input" class="sr-only">Buscar registros:</label>
     <span class="material-symbols-outlined" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none;">search</span>
-    <input type="text" id="search-input" class="search-box" style="padding-left: 40px; width: 100%;" placeholder="Buscar modelo, descripción, línea, usuario (Presiona / para enfocar)" aria-label="Buscar en la tabla">
+    <input type="text" id="search-input" class="search-box" style="padding-left: 40px; width: 100%;" placeholder="Buscar modelo, descripción, línea, usuario  (/ para enfocar)" aria-label="Buscar en la tabla">
+  </div>
+
+  <!-- Ventanas de tiempo rápidas (mismo estilo que Reportes) -->
+  <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
+    <span style="font-size:0.75rem; color:var(--text-muted); white-space:nowrap;">
+      <span class="material-symbols-outlined" style="font-size:.9rem; vertical-align:middle;">schedule</span>
+    </span>
+    <div style="display:flex; gap:5px;" role="group" aria-label="Ventana de tiempo">
+      <a href="?rango=1h"  class="time-pill {% if rango_activo == '1h'  %}active{% endif %}" title="Última hora">1H</a>
+      <a href="?rango=8h"  class="time-pill {% if rango_activo == '8h'  %}active{% endif %}" title="Últimas 8 horas (turno)">8H</a>
+      <a href="?rango=24h" class="time-pill {% if rango_activo == '24h' %}active{% endif %}" title="Últimas 24 horas">24H</a>
+      <button type="button" id="btn-toggle-custom" class="time-pill custom-pill {% if rango_activo == 'custom' %}active{% endif %}" title="Rango personalizado">
+        <span class="material-symbols-outlined" style="font-size:.9rem;">calendar_month</span> Personalizado
+      </button>
+    </div>
   </div>
 </div>
+
+<!-- Panel de Rango Personalizado -->
+<div id="custom-range-panel" style="display:none; background:var(--surface); border-bottom:1px solid var(--border); padding:16px 24px; margin-bottom:16px;">
+  <form method="get" id="form-custom-range">
+    <!-- Indicador de polling pausado si es custom -->
+    <div style="margin-bottom:12px; font-size:.8rem; color:var(--text-muted); display:flex; align-items:center; gap:6px;">
+      <span class="material-symbols-outlined" style="font-size:1rem; color:var(--warning);">pause_circle</span>
+      <em>Nota: Al usar un rango personalizado hacia el pasado, la actualización automática (en vivo) se pausa.</em>
+    </div>
+    
+    <!-- Atajos rápidos de turno -->
+    <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px;">
+      <span style="font-size:.75rem; color:var(--text-muted); align-self:center;">Turno rápido:</span>
+      <button type="button" class="shift-btn" data-desde="06:00" data-hasta="14:00">Matutino (6–14h)</button>
+      <button type="button" class="shift-btn" data-desde="14:00" data-hasta="22:00">Vespertino (14–22h)</button>
+      <button type="button" class="shift-btn" data-desde="22:00" data-hasta="06:00" data-nextday="1">Nocturno (22–6h)</button>
+    </div>
+
+    <!-- Inputs -->
+    <div style="display:grid; grid-template-columns:1fr 1fr auto; gap:12px; align-items:start;">
+      <div class="form-group">
+        <label for="fecha-desde-input" style="display:flex; align-items:center; gap:5px;">
+          <span class="material-symbols-outlined" style="font-size:.95rem; color:var(--success);">start</span> Desde
+        </label>
+        <input id="fecha-desde-input" type="datetime-local" name="fecha_desde" value="{{ filtros.fecha_desde }}" style="width:100%;">
+      </div>
+      <div class="form-group">
+        <label for="fecha-hasta-input" style="display:flex; align-items:center; gap:5px;">
+          <span class="material-symbols-outlined" style="font-size:.95rem; color:var(--danger);">stop</span> Hasta
+        </label>
+        <input id="fecha-hasta-input" type="datetime-local" name="fecha_hasta" value="{{ filtros.fecha_hasta }}" style="width:100%;">
+      </div>
+      <div style="padding-top:23px;">
+        <button type="submit" class="btn btn-primary" style="height:38px;">
+          <span class="material-symbols-outlined" style="font-size:1.1rem;">filter_alt</span> Aplicar
+        </button>
+      </div>
+    </div>
+  </form>
+</div>
+
+
+<style>
+/* Reutiliza el mismo estilo de pill que Reportes */
+.time-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 5px 13px; border-radius: 99px;
+  font-size: .8rem; font-weight: 600; font-family: inherit;
+  cursor: pointer; border: 1px solid var(--border);
+  background: var(--surface2); color: var(--text-muted);
+  text-decoration: none; transition: all .15s;
+}
+.time-pill:hover { border-color: var(--accent); color: var(--accent); background: rgba(99,102,241,.08); }
+.time-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* Botón personalizado específico para que resalte inactivo pero respete el estado activo */
+.time-pill.custom-pill { border-color: var(--accent); color: var(--text); }
+.time-pill.custom-pill .material-symbols-outlined { color: var(--accent); }
+.time-pill.custom-pill:hover { color: var(--accent); }
+.time-pill.active.custom-pill { color: #fff; }
+.time-pill.active.custom-pill .material-symbols-outlined { color: #fff; }
+
+.shift-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 11px; border-radius: 8px; font-size:.78rem;
+  font-weight:500; font-family:inherit; cursor:pointer;
+  border: 1px solid var(--border); background:var(--surface2);
+  color:var(--text-muted); transition:all .15s;
+}
+.shift-btn:hover { border-color:var(--accent); color:var(--accent); background:rgba(99,102,241,.08); }
+
+/* Mejora de contraste para inputs de fecha en tema oscuro */
+input[type="datetime-local"] {
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-family: inherit;
+  color-scheme: dark;
+}
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.8;
+}
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+</style>
+
+<script>
+// JS ligero para el panel custom (fuera de la clase para ejecución inmediata)
+document.addEventListener('DOMContentLoaded', () => {
+  const btnToggle = document.getElementById('btn-toggle-custom');
+  const customPanel = document.getElementById('custom-range-panel');
+  const inputDesde = document.getElementById('fecha-desde-input');
+  const inputHasta = document.getElementById('fecha-hasta-input');
+  const form = document.getElementById('form-custom-range');
+
+  const pad = n => String(n).padStart(2,'0');
+  const dtStr = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const todayStart = () => { const d=new Date(); d.setHours(0,0,0,0); return d; };
+  const todayEnd   = () => { const d=new Date(); d.setHours(23,59,0,0); return d; };
+
+  // Limpiar URL: Evitar enviar parámetros vacíos
+  if(form) {
+    form.addEventListener('submit', function() {
+      Array.from(form.elements).forEach(el => {
+        if (el.name && !el.value) {
+          el.disabled = true;
+        }
+      });
+    });
+  }
+
+  if(btnToggle) {
+    const isCustomApplied = "{{ rango_activo }}" === "custom";
+    let originalActive = document.querySelector('.time-pill.active');
+    if(originalActive === btnToggle) originalActive = null;
+
+    btnToggle.addEventListener('click', (e) => {
+      e.preventDefault();
+      
+      if (customPanel.style.display === 'none') {
+        customPanel.style.display = 'block';
+        if(!inputDesde.value) inputDesde.value = dtStr(todayStart());
+        if(!inputHasta.value) inputHasta.value = dtStr(todayEnd());
+        
+        document.querySelectorAll('.time-pill').forEach(p => p.classList.remove('active'));
+        btnToggle.classList.add('active');
+        inputDesde.focus();
+      } else {
+        customPanel.style.display = 'none';
+        
+        if (!isCustomApplied) {
+          // Si el filtro no está aplicado en el backend, al cerrar restauramos el botón anterior
+          btnToggle.classList.remove('active');
+          if(originalActive) originalActive.classList.add('active');
+        }
+        // Si sí está aplicado, se queda activo para indicar que sigue filtrado
+      }
+    });
+  }
+
+  document.querySelectorAll('.shift-btn').forEach(btn => {
+    btn.addEventListener('click', function(){
+      const now    = new Date();
+      const [hD, mD] = this.dataset.desde.split(':').map(Number);
+      const [hH, mH] = this.dataset.hasta.split(':').map(Number);
+      const desde  = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hD, mD);
+      let hasta    = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hH, mH);
+      if(this.dataset.nextday) hasta.setDate(hasta.getDate() + 1);
+      inputDesde.value = dtStr(desde);
+      inputHasta.value = dtStr(hasta);
+    });
+  });
+});
+</script>
+
+
 
 <!-- Tabla Principal -->
 <div class="table-wrapper">
@@ -34,17 +209,17 @@
     <thead>
       <tr>
         <th style="width:50px; vertical-align: middle;">
-          <span class="drag-handle" style="visibility: hidden;">⠿</span>
+          <span class="material-symbols-outlined drag-handle" style="visibility: hidden; font-size:1.1rem;">drag_indicator</span>
           <input type="checkbox" id="selectAll" aria-label="Seleccionar todos los registros visibles" style="margin: 0;">
         </th>
-        <th data-sort="fecha" tabindex="0" role="button">Fecha ↕</th>
-        <th data-sort="modelo" tabindex="0" role="button">Modelo ↕</th>
-        <th data-sort="linea" tabindex="0" role="button">Línea ↕</th>
+        <th data-sort="fecha" tabindex="0" role="button">Fecha <span class="material-symbols-outlined" style="font-size:.9rem; vertical-align:middle;">unfold_more</span></th>
+        <th data-sort="modelo" tabindex="0" role="button">Modelo <span class="material-symbols-outlined" style="font-size:.9rem; vertical-align:middle;">unfold_more</span></th>
+        <th data-sort="linea" tabindex="0" role="button">Línea <span class="material-symbols-outlined" style="font-size:.9rem; vertical-align:middle;">unfold_more</span></th>
         <th>Descripción</th>
-        <th data-sort="responsable" tabindex="0" role="button">Responsable ↕</th>
+        <th data-sort="responsable" tabindex="0" role="button">Responsable <span class="material-symbols-outlined" style="font-size:.9rem; vertical-align:middle;">unfold_more</span></th>
         <th>Fotos</th>
         <th>Cant.</th>
-        <th data-sort="user_id" tabindex="0" role="button">User ID ↕</th>
+        <th data-sort="user_id" tabindex="0" role="button">User ID <span class="material-symbols-outlined" style="font-size:.9rem; vertical-align:middle;">unfold_more</span></th>
         {% if user.is_superuser %}
         <th style="width:110px; text-align:center;">Acciones</th>
         {% endif %}

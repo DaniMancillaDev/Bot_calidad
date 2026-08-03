@@ -21,65 +21,290 @@
 {% block content %}
 
 <!-- FILTROS -->
-<div class="card" style="margin-bottom:24px; padding: 20px 24px;">
-  <form method="get" style="display: flex; flex-direction: column; gap: 16px;">
-    
-    <!-- Fila 1: Búsqueda Principal y Acciones -->
-    <div style="display: flex; gap: 16px; align-items: flex-end;">
-      <div class="form-group" style="flex: 1; position: relative;">
-        <label>Buscar Modelo</label>
-        <span class="material-symbols-outlined" style="position: absolute; left: 12px; bottom: 10px; color: var(--text-muted); pointer-events: none;">search</span>
-        <input type="text" name="modelo" value="{{ filtros.modelo }}" placeholder="Ej. NS-50F501..." style="padding-left: 40px; width: 100%;">
+<div class="card" style="margin-bottom:24px; padding: 0; overflow: hidden;">
+  <form method="get" id="filtros-form">
+
+    <!-- Cabecera -->
+    <div style="padding: 14px 24px; border-bottom: 1px solid var(--border); display:flex; align-items:center; gap:10px;">
+      <span class="material-symbols-outlined" style="color:var(--accent); font-size:1.1rem;">manage_search</span>
+      <span style="font-size:0.8rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:.06em;">Filtros de búsqueda</span>
+    </div>
+
+    <!-- Fila 1: Modelo + acciones -->
+    <div style="padding:16px 24px; display:flex; gap:12px; align-items:flex-end; border-bottom:1px solid var(--border);">
+      <div class="form-group" style="flex:1; position:relative;">
+        <label for="filtro-modelo">Modelo</label>
+        <span class="material-symbols-outlined" style="position:absolute; left:12px; bottom:11px; color:var(--text-muted); pointer-events:none; font-size:1.1rem;">search</span>
+        <input id="filtro-modelo" type="text" name="modelo" value="{{ filtros.modelo }}" placeholder="Ej. NS-50F501…" style="padding-left:40px; width:100%;">
       </div>
-      
-      <div style="display:flex; gap:8px;">
+      <div style="display:flex; gap:6px;">
         <button type="submit" class="btn btn-primary">
-          <span class="material-symbols-outlined" style="font-size: 1.1rem; vertical-align: text-bottom;">filter_alt</span> Filtrar
+          <span class="material-symbols-outlined" style="font-size:1.1rem;">filter_alt</span> Filtrar
         </button>
-        <a href="{% url 'galeria_fotos' %}?{{ request.GET.urlencode }}" class="btn btn-secondary" title="Ver estas fotos en la Galería">
-          <span class="material-symbols-outlined" style="font-size: 1.1rem; vertical-align: text-bottom;">image</span>
+        <a href="{% url 'galeria_fotos' %}?{{ request.GET.urlencode }}" class="btn btn-ghost" title="Ver fotos en Galería">
+          <span class="material-symbols-outlined" style="font-size:1.1rem;">image</span>
         </a>
-        <a href="{% url 'reportes' %}" class="btn btn-ghost" title="Limpiar Filtros">
-          <span class="material-symbols-outlined" style="font-size: 1.1rem; vertical-align: text-bottom;">mop</span>
+        <a href="{% url 'reportes' %}" class="btn btn-ghost" title="Limpiar filtros">
+          <span class="material-symbols-outlined" style="font-size:1.1rem;">mop</span>
         </a>
       </div>
     </div>
 
-    <!-- Fila 2: Filtros Secundarios -->
-    <div class="grid grid-4" style="align-items:end; border-top: 1px solid var(--border); padding-top: 16px;">
+    <!-- Fila 2: Selectores secundarios -->
+    <div style="padding:16px 24px; display:grid; grid-template-columns:1fr 1fr; gap:12px; border-bottom:1px solid var(--border);">
       <div class="form-group">
         <label>Línea</label>
-        <select name="linea" style="width: 100%;">
+        <select name="linea" style="width:100%;">
           <option value="">Todas las líneas</option>
           {% for l in lineas %}
           <option value="{{ l }}" {% if filtros.linea == l %}selected{% endif %}>{{ l }}</option>
           {% endfor %}
         </select>
       </div>
-
       <div class="form-group">
         <label>Responsable</label>
-        <select name="responsable" style="width: 100%;">
+        <select name="responsable" style="width:100%;">
           <option value="">Todos</option>
           {% for r in responsables %}
           <option value="{{ r }}" {% if filtros.responsable == r %}selected{% endif %}>{{ r }}</option>
           {% endfor %}
         </select>
       </div>
+    </div>
 
-      <div class="form-group">
-        <label>Desde Fecha</label>
-        <input type="date" name="fecha_desde" value="{{ filtros.fecha_desde }}" style="width: 100%;">
+    <!-- Fila 3: Rango temporal -->
+    <div style="padding:16px 24px;">
+
+      <!-- Etiqueta + pills -->
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap;">
+        <span style="font-size:0.78rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:.06em; white-space:nowrap;">
+          <span class="material-symbols-outlined" style="font-size:.95rem; vertical-align:middle;">schedule</span>
+          Período
+        </span>
+        <div style="width:1px; height:16px; background:var(--border); flex-shrink:0;"></div>
+        <div id="time-presets" style="display:flex; gap:6px; flex-wrap:wrap;" role="group" aria-label="Accesos rápidos de tiempo">
+          <button type="button" class="time-pill" data-h="1">1H</button>
+          <button type="button" class="time-pill" data-h="4">4H</button>
+          <button type="button" class="time-pill" data-h="8">8H</button>
+          <button type="button" class="time-pill" data-d="0">Hoy</button>
+          <button type="button" class="time-pill" data-d="1">Ayer</button>
+          <button type="button" class="time-pill" data-d="7">7 días</button>
+          <button type="button" class="time-pill custom-pill" data-custom="1">
+            <span class="material-symbols-outlined" style="font-size:.9rem;">calendar_month</span> Personalizado
+          </button>
+        </div>
       </div>
 
-      <div class="form-group">
-        <label>Hasta Fecha</label>
-        <input type="date" name="fecha_hasta" value="{{ filtros.fecha_hasta }}" style="width: 100%;">
+      <!-- Inputs: solo visibles en modo Personalizado -->
+      <div id="custom-range" style="display:none;">
+
+        <!-- Atajos rápidos de turno dentro del personalizado -->
+        <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px;">
+          <span style="font-size:.75rem; color:var(--text-muted); align-self:center;">Turno rápido:</span>
+          <button type="button" class="shift-btn" data-desde="06:00" data-hasta="14:00">Matutino (6–14h)</button>
+          <button type="button" class="shift-btn" data-desde="14:00" data-hasta="22:00">Vespertino (14–22h)</button>
+          <button type="button" class="shift-btn" data-desde="22:00" data-hasta="06:00" data-nextday="1">Nocturno (22–6h)</button>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr auto; gap:12px; align-items:start;">
+          <div class="form-group">
+            <label for="fecha-desde-input" style="display:flex; align-items:center; gap:5px;">
+              <span class="material-symbols-outlined" style="font-size:.95rem; color:var(--success);">play_arrow</span>
+              Desde
+            </label>
+            <input type="hidden" name="preset" id="preset-input" value="custom">
+            <input id="fecha-desde-input" type="datetime-local" name="fecha_desde" value="{{ filtros.fecha_desde }}" style="width:100%;">
+          </div>
+          <div class="form-group">
+            <label for="fecha-hasta-input" style="display:flex; align-items:center; gap:5px;">
+              <span class="material-symbols-outlined" style="font-size:.95rem; color:var(--danger);">stop</span>
+              Hasta
+            </label>
+            <input id="fecha-hasta-input" type="datetime-local" name="fecha_hasta" value="{{ filtros.fecha_hasta }}" style="width:100%;">
+          </div>
+          <div style="padding-top:23px;">
+            <button type="submit" class="btn btn-primary" style="height:38px;">
+              <span class="material-symbols-outlined" style="font-size:1.1rem;">filter_alt</span> Aplicar
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Resumen del rango activo -->
+      <div id="rango-summary" style="display:none; margin-top:10px; padding:10px 14px; background:rgba(99,102,241,.08); border:1px solid rgba(99,102,241,.2); border-radius:8px; font-size:.82rem; color:var(--text-muted);">
+        <span class="material-symbols-outlined" style="font-size:.95rem; vertical-align:middle; color:var(--accent);">info</span>
+        <span id="rango-summary-text"></span>
       </div>
     </div>
 
   </form>
 </div>
+
+<style>
+.time-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 5px 13px; border-radius: 99px;
+  font-size: .8rem; font-weight: 600; font-family: inherit;
+  cursor: pointer; border: 1px solid var(--border);
+  background: var(--surface2); color: var(--text-muted);
+  transition: all .15s;
+}
+.time-pill:hover { border-color: var(--accent); color: var(--accent); background: rgba(99,102,241,.08); }
+.time-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* Botón personalizado específico para que resalte inactivo pero respete el estado activo */
+.time-pill.custom-pill { border-color: var(--accent); color: var(--text); }
+.time-pill.custom-pill .material-symbols-outlined { color: var(--accent); }
+.time-pill.custom-pill:hover { color: var(--accent); }
+.time-pill.active.custom-pill { color: #fff; }
+.time-pill.active.custom-pill .material-symbols-outlined { color: #fff; }
+
+.shift-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 11px; border-radius: 8px; font-size:.78rem;
+  font-weight:500; font-family:inherit; cursor:pointer;
+  border: 1px solid var(--border); background:var(--surface2);
+  color:var(--text-muted); transition:all .15s;
+}
+.shift-btn:hover { border-color:var(--accent); color:var(--accent); background:rgba(99,102,241,.08); }
+
+/* Mejora de contraste para inputs de fecha en tema oscuro */
+input[type="datetime-local"] {
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-family: inherit;
+  color-scheme: dark;
+}
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.8;
+}
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+</style>
+
+<script>
+(function(){
+  const form       = document.getElementById('filtros-form');
+  const pills      = document.querySelectorAll('.time-pill');
+  const customDiv  = document.getElementById('custom-range');
+  const summary    = document.getElementById('rango-summary');
+  const summaryTxt = document.getElementById('rango-summary-text');
+  const inputDesde = document.getElementById('fecha-desde-input');
+  const inputHasta = document.getElementById('fecha-hasta-input');
+
+  const pad = n => String(n).padStart(2,'0');
+  const dtStr = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const todayStart = () => { const d=new Date(); d.setHours(0,0,0,0); return d; };
+  const todayEnd   = () => { const d=new Date(); d.setHours(23,59,0,0); return d; };
+
+  function setActive(pill){ pills.forEach(p=>p.classList.remove('active')); if(pill) pill.classList.add('active'); }
+  function showSummary(t){ summaryTxt.textContent=t; summary.style.display='block'; }
+  function hideSummary(){ summary.style.display='none'; }
+  function showCustom(){ customDiv.style.display='block'; }
+  function hideCustom(){ customDiv.style.display='none'; }
+  
+  function submitFormClean() {
+    Array.from(form.elements).forEach(el => {
+      if (el.name && !el.value) el.disabled = true;
+    });
+    form.submit();
+  }
+
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    submitFormClean();
+  });
+
+  // Atajos de turno dentro del panel personalizado
+  document.querySelectorAll('.shift-btn').forEach(btn => {
+    btn.addEventListener('click', function(){
+      const now    = new Date();
+      const [hD, mD] = this.dataset.desde.split(':').map(Number);
+      const [hH, mH] = this.dataset.hasta.split(':').map(Number);
+      const desde  = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hD, mD);
+      let hasta    = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hH, mH);
+      if(this.dataset.nextday) hasta.setDate(hasta.getDate() + 1);
+      inputDesde.value = dtStr(desde);
+      inputHasta.value = dtStr(hasta);
+    });
+  });
+
+  pills.forEach(pill => pill.addEventListener('click', function(){
+    const now=new Date(), h=this.dataset.h, d=this.dataset.d;
+    if(this.dataset.custom){
+      if (customDiv.style.display === 'block') {
+        hideCustom();
+        if (inputDesde.value || inputHasta.value) {
+          showSummary(`Filtro activo: ${(inputDesde.value||'inicio').replace('T',' ')} → ${(inputHasta.value||'ahora').replace('T',' ')}`);
+        }
+      } else {
+        if(!inputDesde.value) inputDesde.value = dtStr(todayStart());
+        if(!inputHasta.value) inputHasta.value = dtStr(todayEnd());
+        document.getElementById('preset-input').value = 'custom';
+        showCustom();
+        setActive(this); hideSummary();
+        inputDesde.focus(); 
+      }
+      return;
+    }
+    let desde, hasta=new Date(now);
+    if(h!==undefined){
+      desde=new Date(now - h*3600000);
+      showSummary(`Últimas ${h}h → desde ${dtStr(desde).replace('T',' ')} hasta ahora`);
+      document.getElementById('preset-input').value = `h${h}`;
+    } else if(d==='0'){
+      desde=todayStart(); hasta=todayEnd();
+      showSummary('Todo el día de hoy');
+      document.getElementById('preset-input').value = `d0`;
+    } else if(d==='1'){
+      const ay=new Date(now); ay.setDate(ay.getDate()-1);
+      desde=new Date(ay.getFullYear(),ay.getMonth(),ay.getDate(),0,0);
+      hasta=new Date(ay.getFullYear(),ay.getMonth(),ay.getDate(),23,59);
+      showSummary('Todo el día de ayer');
+      document.getElementById('preset-input').value = `d1`;
+    } else {
+      desde=new Date(now - d*86400000);
+      showSummary(`Últimos ${d} días`);
+      document.getElementById('preset-input').value = `d${d}`;
+    }
+    inputDesde.value=dtStr(desde); inputHasta.value=dtStr(hasta);
+    hideCustom();
+    setActive(this); submitFormClean();
+  }));
+
+  // Estado inicial: basado en el parámetro preset de la URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const preset = urlParams.get('preset') || (window.location.search ? 'custom' : 'd0');
+  document.getElementById('preset-input').value = preset;
+
+  if (preset === 'custom') {
+    if(inputDesde.value || inputHasta.value){
+      showCustom();
+      document.querySelector('[data-custom]').classList.add('active');
+      showSummary(`Filtro activo: ${(inputDesde.value||'inicio').replace('T',' ')} → ${(inputHasta.value||'ahora').replace('T',' ')}`);
+    }
+  } else {
+    // Activar el botón correcto
+    let targetPill = null;
+    if (preset.startsWith('h')) targetPill = document.querySelector(`[data-h="${preset.substring(1)}"]`);
+    else if (preset.startsWith('d')) targetPill = document.querySelector(`[data-d="${preset.substring(1)}"]`);
+    
+    if (targetPill) setActive(targetPill);
+    
+    // Restaurar resumen
+    if (preset === 'd0') showSummary('Todo el día de hoy');
+    else if (preset === 'd1') showSummary('Todo el día de ayer');
+    else if (preset === 'd7') showSummary('Últimos 7 días');
+    else if (preset.startsWith('h')) showSummary(`Últimas ${preset.substring(1)}h`);
+  }
+})();
+</script>
+
 
 <!-- TABLA DE RESULTADOS -->
 <div class="card">
