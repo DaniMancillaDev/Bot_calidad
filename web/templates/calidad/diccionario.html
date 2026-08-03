@@ -5,321 +5,765 @@
 
 {% block extra_head %}
 <style>
-  .tabs {
+  .dict-container {
     display: flex;
-    gap: 10px;
-    margin-bottom: 20px;
-    border-bottom: 1px solid var(--border);
-    padding-bottom: 10px;
-    overflow-x: auto;
+    flex-direction: column;
+    gap: 1.25rem;
   }
-  .tab-btn {
+
+  /* Segmented Tabs Navigation */
+  .dict-tabs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .dict-tab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
     background: transparent;
     border: none;
     color: var(--text-muted);
-    padding: 8px 16px;
+    padding: 8px 14px;
     cursor: pointer;
-    font-weight: 500;
-    border-radius: 6px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    border-radius: 8px;
     white-space: nowrap;
+    transition: all 0.15s ease;
+    user-select: none;
   }
-  .tab-btn.active {
-    background: var(--surface2);
+
+  .dict-tab-btn:hover:not(.active) {
+    background: rgba(255, 255, 255, 0.05);
     color: var(--text);
   }
-  .tab-btn:hover:not(.active) {
-    background: rgba(255, 255, 255, 0.05);
+
+  .dict-tab-btn.active {
+    background: var(--accent);
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);
   }
-  .tab-content {
+
+  .dict-tab-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.1);
+    color: inherit;
+  }
+
+  .dict-tab-btn.active .dict-tab-badge {
+    background: rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+  }
+
+  /* Header Controls & Search */
+  .dict-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .dict-search-wrapper {
+    position: relative;
+    flex: 1;
+    min-width: 260px;
+    max-width: 450px;
+  }
+
+  .dict-search-wrapper .search-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 1.1rem;
+    color: var(--text-muted);
+    pointer-events: none;
+  }
+
+  .dict-search-input {
+    width: 100%;
+    padding: 8px 36px 8px 36px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 0.85rem;
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    box-sizing: border-box;
+  }
+
+  .dict-search-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+  }
+
+  .dict-search-clear {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 2px;
     display: none;
   }
-  .tab-content.active {
-    display: block;
+
+  .dict-search-clear:hover {
+    color: var(--text);
   }
-  
-  .add-form {
+
+  /* Add / Edit Form Card */
+  .dict-form-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
     display: flex;
-    gap: 10px;
-    margin-bottom: 20px;
-    background: var(--surface2);
-    padding: 15px;
-    border-radius: 8px;
+    flex-direction: column;
+    gap: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    transition: border-color 0.2s;
+  }
+
+  .dict-form-card.editing {
+    border-color: var(--accent);
+    background: rgba(99, 102, 241, 0.03);
+  }
+
+  .dict-form-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+
+  .dict-form-header .mode-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--accent);
+  }
+
+  .dict-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 12px;
     align-items: flex-end;
   }
-  .add-form .form-group {
-    flex: 1;
+
+  @media (max-width: 768px) {
+    .dict-form-grid {
+      grid-template-columns: 1fr;
+    }
   }
-  
+
+  .dict-input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .dict-input-group label {
+    font-size: 0.76rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+  }
+
+  .dict-input {
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 0.85rem;
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    box-sizing: border-box;
+  }
+
+  .dict-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+  }
+
+  .dict-form-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  /* Table Customizations */
+  .dict-table-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  }
+
   .dict-table {
     width: 100%;
     border-collapse: collapse;
+    table-layout: fixed;
   }
+
   .dict-table th, .dict-table td {
-    padding: 10px;
-    border-bottom: 1px solid var(--border);
+    padding: 10px 14px;
     text-align: left;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+    box-sizing: border-box;
   }
+
   .dict-table th {
+    background: var(--surface2);
     color: var(--text-muted);
-    font-size: 0.85rem;
+    font-size: 0.72rem;
+    font-weight: 700;
     text-transform: uppercase;
+    letter-spacing: 0.05em;
+    user-select: none;
   }
-  .btn-delete {
-    background: rgba(239, 68, 68, 0.2);
-    color: #f87171;
-    border: none;
-    padding: 4px 8px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.8rem;
+
+  .dict-table tbody tr {
+    transition: background 0.15s ease;
   }
-  .btn-delete:hover {
-    background: var(--danger);
-    color: white;
+
+  .dict-table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.02);
   }
-  
-  .status-msg {
-    padding: 10px;
+
+  .dict-table tbody tr.row-editing {
+    background: rgba(99, 102, 241, 0.12) !important;
+  }
+
+  .canonical-tag {
+    display: inline-block;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    font-size: 0.80rem;
+    font-weight: 600;
+    color: #c4b5fd;
+    background: rgba(139, 92, 246, 0.12);
+    border: 1px solid rgba(139, 92, 246, 0.25);
     border-radius: 6px;
-    margin-bottom: 15px;
-    display: none;
-    font-weight: 500;
+    padding: 2px 8px;
+    letter-spacing: 0.02em;
   }
-  .status-msg.success { background: rgba(16, 185, 129, 0.2); color: #34d399; }
-  .status-msg.error { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+
+  .key-text {
+    font-size: 0.86rem;
+    font-weight: 500;
+    color: #f1f5f9;
+  }
+
+  .highlight-match {
+    background: rgba(245, 158, 11, 0.25);
+    color: #fbbf24;
+    border-radius: 2px;
+    padding: 0 2px;
+  }
+
+  /* Action Buttons */
+  .row-actions-cell {
+    text-align: right !important;
+  }
+
+  .row-actions-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    justify-content: flex-end;
+  }
+
+  .btn-icon-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-icon-action:hover {
+    background: var(--surface2);
+    color: var(--text);
+    border-color: var(--border);
+  }
+
+  .btn-icon-action.btn-delete:hover {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--danger);
+    border-color: rgba(239, 68, 68, 0.3);
+  }
+
+  /* Unsaved Changes Indicator */
+  .unsaved-badge {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+  }
+
+  .unsaved-badge.visible {
+    display: inline-flex;
+  }
+
+  /* Toast Notification */
+  .dict-toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    z-index: 1000;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+    opacity: 0;
+    transform: translateY(12px);
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    pointer-events: none;
+  }
+
+  .dict-toast.show {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+
+  .dict-toast.success {
+    background: #064e3b;
+    color: #6ee7b7;
+    border: 1px solid #059669;
+  }
+
+  .dict-toast.error {
+    background: #7f1d1d;
+    color: #fca5a5;
+    border: 1px solid #dc2626;
+  }
+
+  .dict-toast.info {
+    background: #1e1b4b;
+    color: #c7d2fe;
+    border: 1px solid #4f46e5;
+  }
 </style>
 {% endblock %}
 
 {% block topbar_actions %}
-  {% if user.is_superuser %}
-  <button id="btn-save" class="btn btn-primary" onclick="guardarDiccionario()">
-    <span class="material-symbols-outlined" style="vertical-align:text-bottom;">save</span> Guardar Cambios
-  </button>
-  {% endif %}
+  <div style="display: flex; align-items: center; gap: 10px;">
+    <div id="unsaved-indicator" class="unsaved-badge">
+      <span class="material-symbols-outlined" style="font-size: 0.95rem;">error</span>
+      Cambios sin guardar
+    </div>
+    {% if user.is_superuser %}
+    <button id="btn-save" class="btn btn-primary" onclick="guardarDiccionario()">
+      <span class="material-symbols-outlined" style="font-size: 1.1rem; vertical-align: middle;">save</span>
+      <span>Guardar Cambios</span>
+    </button>
+    {% endif %}
+  </div>
 {% endblock %}
 
 {% block content %}
-<div class="card">
-  <div class="card-title">Categorías del Diccionario</div>
+<div class="dict-container">
   
-  <div id="status-msg" class="status-msg"></div>
+  <!-- Tabs bar -->
+  <nav class="dict-tabs" id="tabs-container" aria-label="Categorías de Diccionario">
+    <!-- Rendered via JS -->
+  </nav>
 
-  <div class="tabs" id="tabs-container">
-    <!-- Tabs generados por JS -->
+  <!-- Toolbar with Live Search -->
+  <div class="dict-toolbar">
+    <div class="dict-search-wrapper">
+      <span class="material-symbols-outlined search-icon">search</span>
+      <input type="text" id="dict-search" class="dict-search-input" placeholder="Buscar término o canónico..." aria-label="Buscar en diccionario">
+      <button id="dict-search-clear" class="dict-search-clear" onclick="clearSearch()" aria-label="Limpiar búsqueda">
+        <span class="material-symbols-outlined" style="font-size: 1rem;">close</span>
+      </button>
+    </div>
+    <div id="search-counter" style="font-size: 0.80rem; color: var(--text-muted);">
+      <!-- Rendered count -->
+    </div>
   </div>
 
-  <div id="tab-contents-container">
-    <!-- Contenidos generados por JS -->
+  <!-- Form for Adding / Editing Terms -->
+  {% if user.is_superuser %}
+  <div class="dict-form-card" id="form-card">
+    <div class="dict-form-header">
+      <span id="form-title">Agregar nueva regla</span>
+      <span id="form-mode" class="mode-indicator" style="display:none;">
+        <span class="material-symbols-outlined" style="font-size: 1rem;">edit</span>
+        Modo edición activo
+      </span>
+    </div>
+    <div class="dict-form-grid">
+      <div class="dict-input-group">
+        <label id="lbl-key" for="input-key">Término / Clave</label>
+        <input type="text" id="input-key" class="dict-input" placeholder="ej. corbata, rayad..." autocomplete="off">
+      </div>
+      <div class="dict-input-group">
+        <label id="lbl-val" for="input-val">Valor Canónico</label>
+        <input type="text" id="input-val" class="dict-input" placeholder="ej. PAPER BOARD, SCRATCHED..." autocomplete="off">
+      </div>
+      <div class="dict-form-actions">
+        <button id="btn-submit-entry" class="btn btn-primary" onclick="submitEntry()">
+          <span class="material-symbols-outlined" style="font-size: 1rem;">add</span>
+          <span id="btn-submit-text">Añadir</span>
+        </button>
+        <button id="btn-cancel-edit" class="btn btn-ghost" style="display:none;" onclick="cancelEdit()">
+          Cancelar
+        </button>
+      </div>
+    </div>
   </div>
+  {% endif %}
+
+  <!-- Table Container -->
+  <div class="dict-table-container">
+    <table class="dict-table" aria-label="Lista de reglas del diccionario">
+      <colgroup>
+        <col style="width: 45%;">
+        <col style="width: 43%;">
+        {% if user.is_superuser %}
+        <col style="width: 12%;">
+        {% endif %}
+      </colgroup>
+      <thead>
+        <tr>
+          <th>Clave / Variación Reconocida</th>
+          <th>Traducción / Valor Canónico</th>
+          {% if user.is_superuser %}
+          <th class="row-actions-cell">Acciones</th>
+          {% endif %}
+        </tr>
+      </thead>
+      <tbody id="dict-tbody">
+        <!-- Rendered via JS -->
+      </tbody>
+    </table>
+  </div>
+
 </div>
 
+<!-- Floating Toast -->
+<div id="dict-toast" class="dict-toast" role="status" aria-live="polite"></div>
+
 <script>
-  // Cargar JSON desde el backend
   let catalog = {{ catalog_json|safe }};
   const isSuperuser = {{ user.is_superuser|yesno:"true,false" }};
-  
+  let activeTab = 'components';
+  let searchQuery = '';
+  let editingKey = null;
+  let hasUnsavedChanges = false;
+
   const categories = [
-    { id: 'components', name: 'Materiales/Componentes', keyLabel: 'Término (ej. corbata)', valLabel: 'Canónico (ej. PAPER BOARD)' },
-    { id: 'symptoms', name: 'Síntomas/Defectos', keyLabel: 'Término (ej. rayad)', valLabel: 'Canónico (ej. SCRATCHED)' },
-    { id: 'connectors', name: 'Conectores', keyLabel: 'Término (ej. con poco de)', valLabel: 'Canónico (ej. WITH LITTLE)' },
-    { id: 'exact_matches', name: 'Frases Exactas', keyLabel: 'Frase', valLabel: 'Canónico' },
-    { id: 'areas', name: 'Áreas', keyLabel: 'Término (ej. desempaque)', valLabel: 'Canónico (ej. UNPACKING)' },
+    { id: 'components', name: 'Materiales/Componentes', keyLabel: 'Término / Frase', valLabel: 'Canónico (ej. PAPER BOARD)' },
+    { id: 'symptoms', name: 'Síntomas/Defectos', keyLabel: 'Término / Variación', valLabel: 'Canónico (ej. SCRATCHED)' },
+    { id: 'connectors', name: 'Conectores', keyLabel: 'Término', valLabel: 'Canónico (ej. WITH LITTLE)' },
+    { id: 'exact_matches', name: 'Frases Exactas', keyLabel: 'Frase completa', valLabel: 'Canónico' },
+    { id: 'areas', name: 'Áreas', keyLabel: 'Término', valLabel: 'Canónico (ej. UNPACKING)' },
     { id: 'material_areas', name: 'Áreas de Materiales', keyLabel: 'Material Canónico', valLabel: 'Área Canónica' }
   ];
 
-  function renderUI() {
-    const tabsCont = document.getElementById('tabs-container');
-    const contentsCont = document.getElementById('tab-contents-container');
-    
-    tabsCont.innerHTML = '';
-    contentsCont.innerHTML = '';
-    
-    categories.forEach((cat, index) => {
-      // Asegurar que la categoría exista
-      if (!catalog[cat.id]) catalog[cat.id] = {};
+  function initApp() {
+    renderTabs();
+    updateFormLabels();
+    renderTable();
+
+    // Event listeners
+    const searchInput = document.getElementById('dict-search');
+    searchInput.addEventListener('input', (e) => {
+      searchQuery = e.target.value.trim().toLowerCase();
+      document.getElementById('dict-search-clear').style.display = searchQuery ? 'block' : 'none';
+      renderTable();
+    });
+
+    if (isSuperuser) {
+      const keyInput = document.getElementById('input-key');
+      const valInput = document.getElementById('input-val');
       
-      // Tab button
-      const btn = document.createElement('button');
-      btn.className = `tab-btn ${index === 0 ? 'active' : ''}`;
-      btn.textContent = cat.name;
-      btn.onclick = () => switchTab(cat.id);
-      btn.dataset.tabTarget = cat.id;
-      tabsCont.appendChild(btn);
-      
-      // Tab content
-      const content = document.createElement('div');
-      content.id = `tab-${cat.id}`;
-      content.className = `tab-content ${index === 0 ? 'active' : ''}`;
-      
-      let html = '';
-      if (isSuperuser) {
-        html += `
-          <div class="add-form">
-            <div class="form-group">
-              <label>${cat.keyLabel}</label>
-              <input type="text" id="add-key-${cat.id}" placeholder="Escribe aquí...">
-            </div>
-            <div class="form-group">
-              <label>${cat.valLabel}</label>
-              <input type="text" id="add-val-${cat.id}" placeholder="Escribe aquí...">
-            </div>
-            <button id="btn-add-${cat.id}" class="btn btn-primary" onclick="addEntry('${cat.id}')">
-              <span class="icon">➕</span> Añadir
-            </button>
-            <button id="btn-cancel-${cat.id}" class="btn btn-ghost" style="display:none;" onclick="cancelEdit('${cat.id}')">
-              Cancelar
-            </button>
-          </div>
-        `;
-      }
-      
-      html += `
-        <div class="table-wrapper">
-          <table class="dict-table">
-            <thead>
-              <tr>
-                <th>Clave / Variación</th>
-                <th>Valor Canónico</th>
-                ${isSuperuser ? '<th width="150">Acción</th>' : ''}
-              </tr>
-            </thead>
-            <tbody id="tbody-${cat.id}">
-              ${renderTableRows(cat.id)}
-            </tbody>
-          </table>
-        </div>
-      `;
-      content.innerHTML = html;
-      contentsCont.appendChild(content);
-      
-      // Añadir eventos Enter a los inputs
-      if (isSuperuser) {
-        const inputVal = content.querySelector(`#add-val-${cat.id}`);
-        if(inputVal) {
-          inputVal.addEventListener('keypress', function(e) {
-            if(e.key === 'Enter') addEntry(cat.id);
-          });
-        }
+      valInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') submitEntry();
+      });
+
+      keyInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') valInput.focus();
+        if (e.key === 'Escape') cancelEdit();
+      });
+
+      valInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') cancelEdit();
+      });
+    }
+
+    // Advertir al salir con cambios sin guardar
+    window.addEventListener('beforeunload', (e) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = '';
       }
     });
   }
-  
-  function renderTableRows(catId) {
-    const data = catalog[catId];
-    if (!data || Object.keys(data).length === 0) {
-      return `<tr><td colspan="${isSuperuser ? 3 : 2}" style="text-align: center; color: var(--text-muted);">Sin registros</td></tr>`;
-    }
-    
-    // Ordenar alfabéticamente por clave
+
+  function renderTabs() {
+    const tabsCont = document.getElementById('tabs-container');
+    tabsCont.innerHTML = '';
+
+    categories.forEach(cat => {
+      if (!catalog[cat.id]) catalog[cat.id] = {};
+      const count = Object.keys(catalog[cat.id]).length;
+
+      const btn = document.createElement('button');
+      btn.className = `dict-tab-btn ${cat.id === activeTab ? 'active' : ''}`;
+      btn.innerHTML = `
+        <span>${cat.name}</span>
+        <span class="dict-tab-badge">${count}</span>
+      `;
+      btn.onclick = () => switchTab(cat.id);
+      tabsCont.appendChild(btn);
+    });
+  }
+
+  function switchTab(catId) {
+    if (editingKey) cancelEdit();
+    activeTab = catId;
+    renderTabs();
+    updateFormLabels();
+    renderTable();
+  }
+
+  function updateFormLabels() {
+    if (!isSuperuser) return;
+    const cat = categories.find(c => c.id === activeTab);
+    if (!cat) return;
+
+    document.getElementById('lbl-key').textContent = cat.keyLabel;
+    document.getElementById('lbl-val').textContent = cat.valLabel;
+  }
+
+  function renderTable() {
+    const tbody = document.getElementById('dict-tbody');
+    const data = catalog[activeTab] || {};
     const keys = Object.keys(data).sort();
-    let rows = '';
-    
-    keys.forEach(k => {
-      const v = data[k];
-      rows += `
+    const totalCount = keys.length;
+
+    let filteredKeys = keys;
+    if (searchQuery) {
+      filteredKeys = keys.filter(k => {
+        const v = data[k] || '';
+        return k.toLowerCase().includes(searchQuery) || v.toLowerCase().includes(searchQuery);
+      });
+    }
+
+    // Actualizar contador
+    const counterEl = document.getElementById('search-counter');
+    if (searchQuery) {
+      counterEl.textContent = `Mostrando ${filteredKeys.length} de ${totalCount} reglas`;
+    } else {
+      counterEl.textContent = `Total: ${totalCount} reglas registradas`;
+    }
+
+    if (filteredKeys.length === 0) {
+      const emptyMsg = searchQuery 
+        ? `No se encontraron coincidencias para "<strong>${escapeHtml(searchQuery)}</strong>"`
+        : `No hay reglas registradas en esta categoría.`;
+      
+      tbody.innerHTML = `
         <tr>
-          <td>${escapeHtml(k)}</td>
-          <td><strong>${escapeHtml(v)}</strong></td>
-          ${isSuperuser ? `<td>
-            <button class="btn-ghost" style="padding: 4px 8px; font-size: 0.8rem;" onclick="editEntry('${catId}', '${escapeHtml(k).replace(/'/g, "\\'")}')">Editar</button>
-            <button class="btn-delete" onclick="deleteEntry('${catId}', '${escapeHtml(k).replace(/'/g, "\\'")}')">Borrar</button>
+          <td colspan="${isSuperuser ? 3 : 2}" style="text-align: center; padding: 32px 16px; color: var(--text-muted);">
+            <span class="material-symbols-outlined" style="font-size: 2rem; opacity: 0.4; display: block; margin-bottom: 6px;">search_off</span>
+            ${emptyMsg}
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    let rowsHtml = '';
+    filteredKeys.forEach(k => {
+      const v = data[k];
+      const isEditingThis = editingKey === k;
+
+      const formattedKey = highlightMatch(k, searchQuery);
+      const formattedVal = highlightMatch(v, searchQuery);
+
+      rowsHtml += `
+        <tr id="row-${escapeHtml(k)}" class="${isEditingThis ? 'row-editing' : ''}">
+          <td>
+            <span class="key-text">${formattedKey}</span>
+          </td>
+          <td>
+            <span class="canonical-tag">${formattedVal}</span>
+          </td>
+          ${isSuperuser ? `
+          <td class="row-actions-cell">
+            <div class="row-actions-wrap">
+              <button class="btn-icon-action" title="Editar regla" aria-label="Editar" onclick="startEdit('${escapeJs(k)}')">
+                <span class="material-symbols-outlined" style="font-size: 1rem;">edit</span>
+              </button>
+              <button class="btn-icon-action btn-delete" title="Eliminar regla" aria-label="Eliminar" onclick="deleteEntry('${escapeJs(k)}')">
+                <span class="material-symbols-outlined" style="font-size: 1rem;">delete</span>
+              </button>
+            </div>
           </td>` : ''}
         </tr>
       `;
     });
-    return rows;
+
+    tbody.innerHTML = rowsHtml;
   }
 
-  function switchTab(catId) {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-    
-    document.querySelector(`.tab-btn[data-tab-target="${catId}"]`).classList.add('active');
-    document.getElementById(`tab-${catId}`).classList.add('active');
+  function startEdit(key) {
+    if (!isSuperuser) return;
+    const val = catalog[activeTab][key];
+    if (val === undefined) return;
+
+    editingKey = key;
+
+    const keyInput = document.getElementById('input-key');
+    const valInput = document.getElementById('input-val');
+    const formCard = document.getElementById('form-card');
+    const formTitle = document.getElementById('form-title');
+    const formMode = document.getElementById('form-mode');
+    const btnSubmitText = document.getElementById('btn-submit-text');
+    const btnCancel = document.getElementById('btn-cancel-edit');
+
+    keyInput.value = key;
+    valInput.value = val;
+
+    formCard.classList.add('editing');
+    formTitle.textContent = `Editando regla: "${key}"`;
+    formMode.style.display = 'inline-flex';
+    btnSubmitText.textContent = 'Actualizar';
+    btnCancel.style.display = 'inline-flex';
+
+    formCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    keyInput.focus();
+
+    renderTable();
   }
 
-  // Variable global para rastrear edición
-  const editingState = {};
+  function cancelEdit() {
+    if (!isSuperuser) return;
+    editingKey = null;
 
-  function editEntry(catId, key) {
-    const val = catalog[catId][key];
-    document.getElementById(`add-key-${catId}`).value = key;
-    document.getElementById(`add-val-${catId}`).value = val;
-    
-    editingState[catId] = key; // Guardar la llave original
-    
-    document.getElementById(`btn-add-${catId}`).innerHTML = '<span class="icon">✏️</span> Actualizar';
-    document.getElementById(`btn-cancel-${catId}`).style.display = 'inline-flex';
-    document.getElementById(`add-key-${catId}`).focus();
+    document.getElementById('input-key').value = '';
+    document.getElementById('input-val').value = '';
+
+    const formCard = document.getElementById('form-card');
+    formCard.classList.remove('editing');
+    document.getElementById('form-title').textContent = 'Agregar nueva regla';
+    document.getElementById('form-mode').style.display = 'none';
+    document.getElementById('btn-submit-text').textContent = 'Añadir';
+    document.getElementById('btn-cancel-edit').style.display = 'none';
+
+    renderTable();
   }
 
-  function cancelEdit(catId) {
-    document.getElementById(`add-key-${catId}`).value = '';
-    document.getElementById(`add-val-${catId}`).value = '';
-    
-    delete editingState[catId];
-    
-    document.getElementById(`btn-add-${catId}`).innerHTML = '<span class="icon">➕</span> Añadir';
-    document.getElementById(`btn-cancel-${catId}`).style.display = 'none';
-  }
+  function submitEntry() {
+    if (!isSuperuser) return;
+    const keyInput = document.getElementById('input-key');
+    const valInput = document.getElementById('input-val');
 
-  function addEntry(catId) {
-    const keyInput = document.getElementById(`add-key-${catId}`);
-    const valInput = document.getElementById(`add-val-${catId}`);
-    
-    const key = keyInput.value.trim().toLowerCase(); // Guardamos llaves en minúscula para búsqueda estándar
-    const val = valInput.value.trim().toUpperCase(); // Canónicos suelen ir en mayúscula
-    
+    const key = keyInput.value.trim().toLowerCase();
+    const val = valInput.value.trim().toUpperCase();
+
     if (!key || !val) {
-      showMessage('Ambos campos son obligatorios.', 'error');
+      showToast('Por favor completa tanto la clave como el valor canónico.', 'error');
       return;
     }
-    
-    const oldKey = editingState[catId];
-    if (oldKey && oldKey !== key) {
-      // Si estamos editando y cambiamos la llave, borrar la vieja
-      delete catalog[catId][oldKey];
+
+    if (!catalog[activeTab]) catalog[activeTab] = {};
+
+    const isUpdate = !!editingKey;
+    if (isUpdate && editingKey !== key) {
+      delete catalog[activeTab][editingKey];
     }
-    
-    catalog[catId][key] = val;
-    
-    cancelEdit(catId); // Limpia inputs y resetea estado
-    refreshTable(catId);
-    
-    if (oldKey) {
-      showMessage(`Actualizado: ${key} → ${val}`, 'success');
-    } else {
-      showMessage(`Añadido: ${key} → ${val}`, 'success');
+
+    catalog[activeTab][key] = val;
+    markUnsaved(true);
+
+    cancelEdit();
+    renderTabs();
+    renderTable();
+
+    showToast(isUpdate ? `Regla actualizada: "${key}" → "${val}"` : `Regla añadida: "${key}" → "${val}"`, 'success');
+  }
+
+  function deleteEntry(key) {
+    if (!isSuperuser) return;
+    if (confirm(`¿Eliminar la regla "${key}"?`)) {
+      if (editingKey === key) cancelEdit();
+      delete catalog[activeTab][key];
+      markUnsaved(true);
+      renderTabs();
+      renderTable();
+      showToast(`Regla eliminada: "${key}"`, 'info');
     }
   }
 
-  function deleteEntry(catId, key) {
-    if(confirm(`¿Eliminar la entrada "${key}"?`)) {
-      delete catalog[catId][key];
-      refreshTable(catId);
+  function clearSearch() {
+    const searchInput = document.getElementById('dict-search');
+    searchInput.value = '';
+    searchQuery = '';
+    document.getElementById('dict-search-clear').style.display = 'none';
+    renderTable();
+    searchInput.focus();
+  }
+
+  function markUnsaved(status) {
+    hasUnsavedChanges = status;
+    const indicator = document.getElementById('unsaved-indicator');
+    if (indicator) {
+      indicator.classList.toggle('visible', status);
     }
-  }
-
-  function refreshTable(catId) {
-    const tbody = document.getElementById(`tbody-${catId}`);
-    tbody.innerHTML = renderTableRows(catId);
-  }
-
-  function showMessage(msg, type) {
-    const el = document.getElementById('status-msg');
-    el.textContent = msg;
-    el.className = `status-msg ${type}`;
-    el.style.display = 'block';
-    setTimeout(() => {
-      el.style.display = 'none';
-    }, 3000);
   }
 
   function guardarDiccionario() {
+    if (!isSuperuser) return;
     const btnSave = document.getElementById('btn-save');
     btnSave.disabled = true;
-    btnSave.innerHTML = '<span class="icon">⏳</span> Guardando...';
-    
+    btnSave.innerHTML = '<span class="material-symbols-outlined" style="font-size: 1.1rem; animation: spin 1s linear infinite; vertical-align: middle;">sync</span> <span>Guardando...</span>';
+
     fetch('{% url "api_guardar_diccionario" %}', {
       method: 'POST',
       headers: {
@@ -331,34 +775,63 @@
     .then(r => r.json())
     .then(data => {
       btnSave.disabled = false;
-      btnSave.innerHTML = '<span class="material-symbols-outlined" style="vertical-align:text-bottom;">save</span> Guardar Cambios';
-      
+      btnSave.innerHTML = '<span class="material-symbols-outlined" style="font-size: 1.1rem; vertical-align: middle;">save</span> <span>Guardar Cambios</span>';
+
       if (data.success) {
-        showMessage('✅ Diccionario guardado en el servidor correctamente.', 'success');
+        markUnsaved(false);
+        showToast('Diccionario guardado exitosamente en el servidor.', 'success');
       } else {
-        showMessage('❌ Error: ' + (data.error || 'Desconocido'), 'error');
+        showToast('Error al guardar: ' + (data.error || 'Desconocido'), 'error');
       }
     })
     .catch(e => {
       btnSave.disabled = false;
-      btnSave.innerHTML = '<span class="material-symbols-outlined" style="vertical-align:text-bottom;">save</span> Guardar Cambios';
-      showMessage('❌ Error de red.', 'error');
+      btnSave.innerHTML = '<span class="material-symbols-outlined" style="font-size: 1.1rem; vertical-align: middle;">save</span> <span>Guardar Cambios</span>';
+      showToast('Error de conexión al guardar cambios.', 'error');
     });
   }
 
-  // Utils
-  function escapeHtml(unsafe) {
-    return (unsafe||"").toString()
-         .replace(/&/g, "&amp;")
-         .replace(/</g, "&lt;")
-         .replace(/>/g, "&gt;")
-         .replace(/"/g, "&quot;")
-         .replace(/'/g, "&#039;");
+  function showToast(msg, type = 'info') {
+    const toast = document.getElementById('dict-toast');
+    const icon = type === 'success' ? 'check_circle' : type === 'error' ? 'cancel' : 'info';
+    toast.innerHTML = `<span class="material-symbols-outlined" style="font-size: 1.1rem;">${icon}</span> <span>${escapeHtml(msg)}</span>`;
+    toast.className = `dict-toast ${type} show`;
+
+    clearTimeout(toast._timer);
+    toast._timer = setTimeout(() => {
+      toast.classList.remove('show');
+    }, 3500);
   }
 
-  // Init UI
+  function highlightMatch(text, query) {
+    if (!query) return escapeHtml(text);
+    const escapedText = escapeHtml(text);
+    const escapedQuery = escapeHtml(query);
+    const regex = new RegExp(`(${escapedQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    return escapedText.replace(regex, '<mark class="highlight-match">$1</mark>');
+  }
+
+  function escapeHtml(str) {
+    return (str || '').toString()
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  function escapeJs(str) {
+    return (str || '').toString().replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
-    renderUI();
+    initApp();
   });
 </script>
+<style>
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+</style>
 {% endblock %}
