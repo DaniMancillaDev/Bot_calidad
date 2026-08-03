@@ -74,6 +74,71 @@ class _AutoDeleteFile:
         except OSError: pass
 
 # ============================================================
+# HELPERS PARA EXPORT CON NUMERACIÓN SECUENCIAL
+# ============================================================
+
+def _build_display_map(registros_sorted, fotos_dir):
+    """
+    Construye un mapa {user_id: {real_num: display_num}} para renumeración
+    visual durante la exportación. Solo vive en memoria, nunca se persiste.
+    Recorre los registros en el mismo orden que el ZIP, garantizando consistencia
+    entre ambos archivos exportados.
+    """
+    from shared.utils.photo_parser import parse_photo_numbers
+    display_map = {}  # {user_id: {real_num: display_num}}
+    counters = {}     # {user_id: int}
+
+    for reg in registros_sorted:
+        uid = reg.user_id
+        if uid not in display_map:
+            display_map[uid] = {}
+            counters[uid] = 0
+
+        # Fase 2: evidencias v2
+        for ev in reg.evidencias_v2.all():
+            import re as _re
+            filename = Path(settings.MEDIA_ROOT / ev.ruta_archivo.lstrip('/')).name
+            m = _re.match(r'^(\d+)_', filename)
+            real_num = int(m.group(1)) if m else ev.id
+            if real_num not in display_map[uid]:
+                counters[uid] += 1
+                display_map[uid][real_num] = counters[uid]
+
+        # Fase 1 / Legacy
+        nums = reg.fotos_nums if reg.fotos_nums else parse_photo_numbers(reg.fotos)
+        for num in sorted(list(set(nums))):
+            img = get_best_image_path(fotos_dir, str(uid), num)
+            if img and img.exists() and num not in display_map[uid]:
+                counters[uid] += 1
+                display_map[uid][num] = counters[uid]
+
+    return display_map
+
+
+def _display_rango(real_nums, uid_map):
+    """
+    Convierte una lista de números reales en un string de rango usando
+    números de display del mapa. Ej: [457,512,589] -> '001-003'.
+    Si un número no está en el mapa (no hay foto en disco), lo omite.
+    """
+    display_nums = sorted(uid_map[n] for n in real_nums if n in uid_map)
+    if not display_nums:
+        return '-'
+
+    rangos = []
+    inicio = display_nums[0]
+    anterior = display_nums[0]
+    for n in display_nums[1:]:
+        if n == anterior + 1:
+            anterior = n
+        else:
+            rangos.append(f"{inicio:03d}" if inicio == anterior else f"{inicio:03d}-{anterior:03d}")
+            inicio = anterior = n
+    rangos.append(f"{inicio:03d}" if inicio == anterior else f"{inicio:03d}-{anterior:03d}")
+    return ", ".join(rangos)
+
+
+# ============================================================
 # DASHBOARD PRINCIPAL
 # ============================================================
 
@@ -129,6 +194,35 @@ def dashboard(request):
 
 
 # ============================================================
+# HELPERS
+# ============================================================
+
+def _parse_aware_dt(dt_str: str, end: bool = False):
+    """
+    Parsea un string date ('YYYY-MM-DD') o datetime ('YYYY-MM-DDTHH:MM')
+    devolviendo un datetime timezone-aware usando el timezone local del servidor.
+    Si end=True y el string es solo una fecha, fija la hora a 23:59:59
+    (útil para el límite superior del filtro).
+    """
+    if not dt_str:
+        return None
+    from django.utils import timezone as tz
+    try:
+        if 'T' in dt_str or ' ' in dt_str:
+            # 'YYYY-MM-DDTHH:MM' o 'YYYY-MM-DD HH:MM'
+            dt = datetime.fromisoformat(dt_str.replace('T', ' '))
+        else:
+            # Solo fecha
+            d = datetime.strptime(dt_str, '%Y-%m-%d')
+            dt = d.replace(hour=23, minute=59, second=59) if end else d
+        if tz.is_naive(dt):
+            dt = tz.make_aware(dt)
+        return dt
+    except (ValueError, TypeError):
+        return None
+
+
+# ============================================================
 # REPORTES (LISTA DE DEFECTOS)
 # ============================================================
 
@@ -169,10 +263,13 @@ def reportes(request):
             registros = registros.filter(turno=turno_filtro)
         if depto_filtro:
             registros = registros.filter(departamento=depto_filtro)
-    if fecha_desde:
-        registros = registros.filter(fecha_registro__date__gte=fecha_desde)
-    if fecha_hasta:
-        registros = registros.filter(fecha_registro__date__lte=fecha_hasta)
+    # Filtrado por datetime-local (con timezone correcto)
+    dt_desde = _parse_aware_dt(fecha_desde, end=False)
+    dt_hasta = _parse_aware_dt(fecha_hasta, end=True)
+    if dt_desde:
+        registros = registros.filter(fecha_registro__gte=dt_desde)
+    if dt_hasta:
+        registros = registros.filter(fecha_registro__lte=dt_hasta)
 
     # Opciones para los selects de filtro (basadas solo en lo que pueden ver)
     base_qs = get_registros_permitidos(request.user)
@@ -870,21 +967,55 @@ def api_download_excel(request, task_id):
 @login_required
 def panel_operativo(request):
     """Vista HTML principal del Panel Operativo."""
-    # Obtenemos los registros iniciales permitidos del día o los últimos N días
-    dias = int(request.GET.get('dias', 1))
-    fecha_desde = timezone.now() - timedelta(days=dias)
-    registros_qs = get_registros_permitidos(request.user).filter(fecha_registro__gte=fecha_desde)
     
-    # Preparar el JSON inicial igual que en revisar_orientacion
+    fecha_desde_str = request.GET.get('fecha_desde')
+    fecha_hasta_str = request.GET.get('fecha_hasta')
+    
+    rango_key = request.GET.get('rango', '24h') if not (fecha_desde_str or fecha_hasta_str) else 'custom'
+    is_custom = rango_key == 'custom'
+    
+    registros_base = get_registros_permitidos(request.user)
+    
+    if is_custom:
+        # Modo personalizado
+        dt_desde = _parse_aware_dt(fecha_desde_str, end=False)
+        dt_hasta = _parse_aware_dt(fecha_hasta_str, end=True)
+        
+        registros_qs = registros_base
+        if dt_desde:
+            registros_qs = registros_qs.filter(fecha_registro__gte=dt_desde)
+        if dt_hasta:
+            registros_qs = registros_qs.filter(fecha_registro__lte=dt_hasta)
+            
+        # Si dt_hasta es menor que "ahora menos 1 minuto", no tiene sentido hacer polling
+        # (estamos viendo el pasado). Desactivamos polling pasando last_id = null
+        now = timezone.now()
+        disable_polling = dt_hasta and dt_hasta < (now - timedelta(minutes=1))
+    else:
+        # Ventana temporal por botón rápido: ?rango=1h | 8h | 24h (default)
+        _RANGOS = {'1h': timedelta(hours=1), '8h': timedelta(hours=8), '24h': timedelta(hours=24)}
+        delta = _RANGOS.get(rango_key, timedelta(hours=24))
+        fecha_desde = timezone.now() - delta
+        registros_qs = registros_base.filter(fecha_registro__gte=fecha_desde)
+        disable_polling = False
+    
     registros_data = _parse_fotos_nums(registros_qs)
     
-    # Obtener el último ID para el polling
-    last_id = registros_qs.first().id if registros_qs.exists() else 0
+    # Si polling está deshabilitado enviamos last_id=None, sino enviamos el MAX(id) actual
+    if disable_polling:
+        last_id = None
+    else:
+        last_id = registros_qs.first().id if registros_qs.exists() else 0
     
     context = {
         'registros_json': json.dumps(registros_data, default=str),
         'last_id': last_id,
+        'rango_activo': rango_key,
         'seccion': 'operacion',
+        'filtros': {
+            'fecha_desde': fecha_desde_str or '',
+            'fecha_hasta': fecha_hasta_str or ''
+        }
     }
     return render(request, 'calidad/operacion.html', context)
 
@@ -1025,11 +1156,13 @@ def descargar_txt(request):
     
     fecha_desde = request.GET.get('fecha_desde')
     fecha_hasta = request.GET.get('fecha_hasta')
-    
-    if fecha_desde:
-        registros_qs = registros_qs.filter(fecha_registro__date__gte=fecha_desde)
-    if fecha_hasta:
-        registros_qs = registros_qs.filter(fecha_registro__date__lte=fecha_hasta)
+
+    dt_desde = _parse_aware_dt(fecha_desde, end=False)
+    dt_hasta = _parse_aware_dt(fecha_hasta, end=True)
+    if dt_desde:
+        registros_qs = registros_qs.filter(fecha_registro__gte=dt_desde)
+    if dt_hasta:
+        registros_qs = registros_qs.filter(fecha_registro__lte=dt_hasta)
 
     perfil = getattr(request.user, 'perfil', None)
     turno = perfil.turno if perfil else '?'
@@ -1050,22 +1183,29 @@ def descargar_txt(request):
     # ceiling: N*log(N) en memoria.
     registros_sorted = sorted(registros_qs, key=_sort_by_foto)
 
+    # Mapa de numeración secuencial visual-only (no persiste)
+    fotos_dir = settings.MEDIA_ROOT / 'fotos'
+    display_map = _build_display_map(registros_sorted, fotos_dir)
+
     lines = [
         f"REPORTE DE DEFECTOS - TURNO {turno} - {depto}",
         f"Generado por: {usuario} | Fecha: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
         "=" * 60,
         "",
     ]
-    
+
     from itertools import groupby
     for user_id, grupo in groupby(registros_sorted, key=lambda x: x.user_id):
         nombre_usuario = usuarios_map.get(user_id, f"Operador_{user_id}")
         registros_grupo = list(grupo)
-        
+        uid_map = display_map.get(user_id, {})
+
         lines.append(f"--- {nombre_usuario} ({len(registros_grupo)} registros) ---")
         for r in registros_grupo:
+            nums_reales = sorted(list(set(r.fotos_nums))) if r.fotos_nums else []
+            fotos_display = _display_rango(nums_reales, uid_map) if uid_map else (r.fotos_rango or '-')
             lines.append(
-                f"{r.fotos_rango or '-'} | Modelo: {r.modelo} | Línea: {r.linea} | "
+                f"{fotos_display} | Modelo: {r.modelo} | Línea: {r.linea} | "
                 f"Cant: {r.cantidad} | Resp: {r.responsable} | Desc: {r.descripcion}"
             )
         lines.append("")
@@ -1091,14 +1231,21 @@ def descargar_zip(request):
     
     fecha_desde = request.GET.get('fecha_desde')
     fecha_hasta = request.GET.get('fecha_hasta')
-    
-    if fecha_desde:
-        registros_qs = registros_qs.filter(fecha_registro__date__gte=fecha_desde)
-    if fecha_hasta:
-        registros_qs = registros_qs.filter(fecha_registro__date__lte=fecha_hasta)
+
+    dt_desde = _parse_aware_dt(fecha_desde, end=False)
+    dt_hasta = _parse_aware_dt(fecha_hasta, end=True)
+    if dt_desde:
+        registros_qs = registros_qs.filter(fecha_registro__gte=dt_desde)
+    if dt_hasta:
+        registros_qs = registros_qs.filter(fecha_registro__lte=dt_hasta)
         
     # Mismo orden y agrupación que el TXT
     registros_sorted = sorted(registros_qs, key=_sort_by_foto)
+
+    # Mapa de numeración secuencial visual-only — mismo algoritmo que TXT
+    # ponytail: se recalcula por separado pero con mismos inputs → mismo resultado garantizado.
+    fotos_dir = settings.MEDIA_ROOT / 'fotos'
+    display_map = _build_display_map(registros_sorted, fotos_dir)
     
     # Obtener nombres de usuarios
     from django.contrib.auth.models import User
@@ -1121,41 +1268,39 @@ def descargar_zip(request):
             for reg in registros_sorted:
                 user_id = reg.user_id
                 nombre_dir = usuarios_map.get(user_id, f"Operador_{user_id}")
-                
+                uid_map = display_map.get(user_id, {})
+
                 # Fase 2: Evidencias en DB
                 for ev in reg.evidencias_v2.all():
                     ev_path = Path(settings.MEDIA_ROOT) / ev.ruta_archivo.lstrip('/')
-                    # Strip media_files if accidentally saved
                     if ev.ruta_archivo.startswith('media_files/'):
                         ev_path = Path(settings.MEDIA_ROOT) / ev.ruta_archivo[12:].lstrip('/')
-                        
+
                     if ev_path.exists():
-                        count += 1
-                        filename = ev_path.name
-                        
-                        # Extraer numero real si es foto telegram
-                        import re
-                        num_display = ev.id
-                        m = re.match(r'^(\d+)_', filename)
-                        if m:
-                            num_display = int(m.group(1))
-                            
-                        arcname = f"{nombre_dir}/{num_display:03d}{ev_path.suffix}"
-                        zf.write(ev_path, arcname=arcname)
-                
+                        import re as _re
+                        m = _re.match(r'^(\d+)_', ev_path.name)
+                        real_num = int(m.group(1)) if m else ev.id
+                        display_num = uid_map.get(real_num)
+                        if display_num is None:
+                            continue  # no en mapa = ya contado o sin foto
+                        arcname = f"{nombre_dir}/{display_num:03d}{ev_path.suffix}"
+                        if arcname not in zf.namelist():
+                            count += 1
+                            zf.write(ev_path, arcname=arcname)
+
                 # Fase 1 / Legacy
-                nums = []
-                if reg.fotos_nums:
-                    nums = reg.fotos_nums
-                else:
+                nums = reg.fotos_nums if reg.fotos_nums else []
+                if not nums:
                     from shared.utils.photo_parser import parse_photo_numbers
                     nums = parse_photo_numbers(reg.fotos)
 
                 for num in sorted(list(set(nums))):
                     img = get_best_image_path(fotos_dir, str(user_id), num)
                     if img and img.exists():
-                        # Evitar duplicados (ya incluidos por Fase 2)
-                        arcname = f"{nombre_dir}/{num:03d}{img.suffix}"
+                        display_num = uid_map.get(num)
+                        if display_num is None:
+                            continue
+                        arcname = f"{nombre_dir}/{display_num:03d}{img.suffix}"
                         if arcname not in zf.namelist():
                             count += 1
                             zf.write(img, arcname=arcname)
