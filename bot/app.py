@@ -49,18 +49,6 @@ async def _post_init(application):
     await application.bot.set_my_commands(comandos)
 
 
-async def _test_bot(update, context):
-    """Comando de diagnóstico rápido."""
-    if not update.message:
-        return
-    await update.message.reply_text(
-        "**BOT FUNCIONANDO CORRECTAMENTE**\n\n"
-        "Arquitectura Clean Architecture + SOLID activa.\n"
-        "Usa /start para comenzar.",
-        parse_mode="Markdown",
-    )
-
-
 def build_application(token: str, container: dict):
     """
     Construye y devuelve la Application de Telegram completamente configurada.
@@ -125,8 +113,5 @@ def build_application(token: str, container: dict):
     # Comandos de cancelación/limpieza purgada
     app.add_handler(CommandHandler("cancelar", create_cancelar(container["api_client"])))
     app.add_handler(CommandHandler("limpiar", create_cancelar(container["api_client"]))) # Alias de cancelar
-
-    # ── Diagnóstico ───────────────────────────────────────────────────────────────
-    app.add_handler(CommandHandler("test", _test_bot))
 
     return app

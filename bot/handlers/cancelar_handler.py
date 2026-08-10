@@ -15,7 +15,6 @@ from telegram.ext import ContextTypes
 
 logger = logging.getLogger(__name__)
 
-import os
 FOTOS_PATH   = os.getenv("FOTOS_PATH",   "media_files/fotos")
 THUMBS_PATH  = os.getenv("THUMBS_PATH",  "media_files/thumbs")
 PROXIES_PATH = os.getenv("PROXIES_PATH", "media_files/proxies")
@@ -36,6 +35,7 @@ def create_cancelar(api_client):
             user_id = update.effective_user.id if update.effective_user else None
 
             # Cancelar buffers temporales (fotos en debounce)
+            context.user_data.pop("photo_status_msg_id", None)
             batch = context.user_data.pop("photo_batch", None)
             if batch:
                 if batch.get("timer_task"):

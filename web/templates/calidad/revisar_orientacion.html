@@ -3,117 +3,604 @@
 {% block page_title %}Centro de Revisión{% endblock %}
 
 {% block topbar_actions %}
-  <div style="display:flex; gap:10px; align-items:center;">
-    <span id="status-msg" style="font-size:.85rem; color:var(--text-muted);"></span>
-    <button id="btn-generar" class="btn btn-primary" onclick="generarExcel()" style="display:flex; align-items:center; background:#3b82f6; color:white; border:none; padding:8px 16px; border-radius:6px; cursor:pointer;">
-      <span class="material-symbols-outlined" style="font-size: 1.1rem; margin-right: 6px;">download</span> 
-      <span id="btn-generar-text">Generar Excel</span>
-    </button>
-  </div>
+<div style="display:flex; gap:10px; align-items:center;">
+  <span id="status-msg" style="font-size:.85rem; color:var(--text-muted);"></span>
+  <button id="btn-generar" class="btn btn-primary" onclick="generarExcel()"
+    style="display:flex; align-items:center; background:#3b82f6; color:white; border:none; padding:8px 16px; border-radius:6px; cursor:pointer;">
+    <span class="material-symbols-outlined" style="font-size: 1.1rem; margin-right: 6px;">download</span>
+    <span id="btn-generar-text">Generar Excel</span>
+  </button>
+</div>
 {% endblock %}
 
 {% block extra_head %}
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <style>
-/* CSS Reset and layout */
-body { overflow: hidden; background: #0f1117; color: #e2e8f0; }
-#content-wrapper { padding: 0 !important; margin: 0 !important; height: calc(100vh - 70px); }
+  /* CSS Reset and layout */
+  body {
+    overflow: hidden;
+    background: #0f1117;
+    color: #e2e8f0;
+  }
 
-.app-container { display: flex; height: 100%; width: 100%; font-family: 'Inter', system-ui, sans-serif; }
+  #content-wrapper {
+    padding: 0 !important;
+    margin: 0 !important;
+    height: calc(100vh - 70px);
+  }
 
-/* Left Navigator */
-.navigator { width: 300px; min-width: 300px; background: #161a22; border-right: 1px solid #2d3748; display: flex; flex-direction: column; z-index: 10; }
-.navigator-header { padding: 14px; border-bottom: 1px solid #2d3748; }
-.navigator-header input { width: 100%; margin-top: 10px; padding: 9px; border-radius: 6px; border: 1px solid #334155; background: #0f1117; color: white; outline: none; box-sizing: border-box; }
-.navigator-header input:focus { border-color: #3b82f6; }
+  .app-container {
+    display: flex;
+    height: 100%;
+    width: 100%;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
 
-.record-list { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
-.record-card { padding: 10px; border-radius: 8px; background: #1e293b; cursor: pointer; border: 2px solid transparent; transition: all 0.2s; position: relative; }
-.record-card:hover { background: #2d3748; }
-.record-card.active { border-color: #3b82f6; background: #2a374f; }
-.record-card h4 { margin: 0 0 3px 0; font-size: 0.9rem; color: #f8fafc; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.record-card p { margin: 0 0 3px 0; font-size: 0.78rem; color: #94a3b8; }
-.record-card .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; background: #334155; color: #cbd5e1; }
-.record-card .badge.error { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
+  /* Left Navigator */
+  .navigator {
+    width: 300px;
+    min-width: 300px;
+    background: #161a22;
+    border-right: 1px solid #2d3748;
+    display: flex;
+    flex-direction: column;
+    z-index: 10;
+  }
 
-/* Viewer */
-.viewer { flex: 1; display: flex; flex-direction: column; position: relative; overflow: hidden; background: #090a0f; }
-.viewer-toolbar { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); z-index: 20; display: flex; gap: 12px; background: rgba(15, 17, 23, 0.7); backdrop-filter: blur(8px); padding: 8px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); }
-.viewer-toolbar button { background: transparent; border: none; color: #cbd5e1; border-radius: 8px; padding: 8px 12px; cursor: pointer; font-size: 0.9rem; transition: background 0.2s; display: flex; align-items: center; gap: 6px; }
-.viewer-toolbar button:hover { background: rgba(255,255,255,0.1); color: white; }
+  .navigator-header {
+    padding: 14px;
+    border-bottom: 1px solid #2d3748;
+  }
 
-.main-photo-wrapper { flex: 1; display: flex; justify-content: center; align-items: center; overflow: hidden; position: relative; cursor: grab; }
-.main-photo-wrapper:active { cursor: grabbing; }
-.main-photo { max-width: 100%; max-height: 100%; object-fit: contain; transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); user-select: none; }
-.main-photo.dragging { transition: none; }
+  .nav-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
 
-/* Carousel */
-.carousel { background: #0f1117; border-top: 1px solid #1e293b; display: flex; gap: 20px; padding: 24px; overflow-x: auto; align-items: center; justify-content: flex-start; min-height: 120px; }
-.carousel img { flex-shrink: 0; height: 76px; width: 76px; object-fit: cover; border-radius: 10px; cursor: grab; border: 3px solid transparent; opacity: 0.5; transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-.carousel img:active { cursor: grabbing; }
-.carousel img:hover { opacity: 0.9; transform: translateY(-3px); }
-.carousel img.active { border-color: #3b82f6; opacity: 1; transform: scale(1.15) translateY(-3px); box-shadow: 0 10px 20px rgba(0,0,0,0.6), 0 0 0 2px rgba(59,130,246,0.3); }
+  .nav-title h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: white;
+  }
 
-/* Loading Overlay */
-#loading-overlay { display: none; position: absolute; inset: 0; background: rgba(15,17,23,.85); z-index: 1000; justify-content: center; align-items: center; flex-direction: column; gap: 16px; backdrop-filter: blur(4px); }
-.spinner { width: 40px; height: 40px; border: 3px solid #2d3748; border-top-color: #3b82f6; border-radius: 50%; animation: spin .8s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
+  .nav-title .nav-count {
+    font-size: 0.72rem;
+    color: #64748b;
+    background: #1e293b;
+    border: 1px solid #2d3748;
+    padding: 2px 7px;
+    border-radius: 10px;
+  }
 
-/* ── Inspector (right panel) ── */
-.inspector {
-  width: 300px; min-width: 300px;
-  background: #161a22; border-left: 1px solid #2d3748;
-  display: flex; flex-direction: column;
-  overflow: hidden;
-}
-.inspector-header {
-  padding: 14px 16px; border-bottom: 1px solid #2d3748;
-  display: flex; align-items: center; justify-content: space-between;
-}
-.inspector-header h4 { margin: 0; font-size: 0.95rem; color: #f8fafc; }
-.state-badge {
-  padding: 3px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
-}
-.state-badge.pendiente  { background: rgba(234,179,8,.15);  color:#fde047; }
-.state-badge.revisado   { background: rgba(59,130,246,.15); color:#93c5fd; }
-.state-badge.aprobado   { background: rgba(34,197,94,.15);  color:#86efac; }
-.state-badge.rechazado  { background: rgba(239,68,68,.15);  color:#fca5a5; }
-.state-badge.duplicado  { background: rgba(168,85,247,.15); color:#d8b4fe; }
-.state-badge.borroso    { background: rgba(107,114,128,.15);color:#9ca3af; }
+  .search-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+  }
 
-.inspector-body { flex: 1; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 14px; }
-.inspector-empty { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; color: #475569; gap: 10px; padding: 24px; text-align: center; }
+  .search-wrapper .search-icon {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #64748b;
+    font-size: 1.15rem;
+    pointer-events: none;
+    user-select: none;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s ease;
+  }
 
-.field-group { display: flex; flex-direction: column; gap: 4px; }
-.field-label { font-size: 0.7rem; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; }
-.field-value { font-size: 0.85rem; color: #e2e8f0; }
-.field-input {
-  background: #0f1117; border: 1px solid #334155; border-radius: 6px;
-  color: #e2e8f0; padding: 7px 10px; font-size: 0.85rem; width: 100%; box-sizing: border-box;
-  outline: none; transition: border-color .15s;
-}
-.field-input:focus { border-color: #3b82f6; }
+  .search-wrapper:focus-within .search-icon {
+    color: #3b82f6;
+  }
 
-.inspector-divider { height: 1px; background: #2d3748; }
+  .search-wrapper input {
+    width: 100%;
+    padding: 8px 30px 8px 34px;
+    border-radius: 6px;
+    border: 1px solid #334155;
+    background: #0f1117;
+    color: white;
+    outline: none;
+    box-sizing: border-box;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    transition: border-color .15s ease, box-shadow .15s ease;
+  }
 
-.btn-action {
-  padding: 8px 14px; border-radius: 6px; border: none; cursor: pointer;
-  font-size: 0.82rem; font-weight: 600; transition: all .15s;
-  width: 100%;
-}
-.btn-approve { background: rgba(34,197,94,.15); color: #86efac; }
-.btn-approve:hover { background: rgba(34,197,94,.3); }
-.btn-reject  { background: rgba(239,68,68,.15);  color: #fca5a5; }
-.btn-reject:hover  { background: rgba(239,68,68,.3); }
-.btn-save    { background: rgba(59,130,246,.15); color: #93c5fd; }
-.btn-save:hover    { background: rgba(59,130,246,.3); }
+  .search-wrapper input:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  }
 
-.save-indicator { font-size: 0.75rem; color: #64748b; text-align: center; height: 16px; }
-.save-indicator.ok   { color: #86efac; }
-.save-indicator.err  { color: #fca5a5; }
+  .search-wrapper .btn-clear-search {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #64748b;
+    cursor: pointer;
+    padding: 2px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    line-height: 1;
+    transition: color 0.15s, background 0.15s;
+  }
 
-.foto-info { background: #0f1117; border-radius: 8px; padding: 10px; font-size: 0.78rem; color: #64748b; }
-.foto-info span { color: #94a3b8; }
+  .search-wrapper .btn-clear-search:hover {
+    color: #f1f5f9;
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  .record-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .record-card {
+    padding: 10px;
+    border-radius: 8px;
+    background: #1e293b;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: all 0.2s;
+    position: relative;
+  }
+
+  .record-card:hover {
+    background: #2d3748;
+  }
+
+  .record-card.active {
+    border-color: #3b82f6;
+    background: #2a374f;
+  }
+
+  .record-card h4 {
+    margin: 0 0 3px 0;
+    font-size: 0.9rem;
+    color: #f8fafc;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .record-card p {
+    margin: 0 0 3px 0;
+    font-size: 0.78rem;
+    color: #94a3b8;
+  }
+
+  .record-card .badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    background: #334155;
+    color: #cbd5e1;
+  }
+
+  .record-card .badge.error {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+  }
+
+  /* Viewer */
+  .viewer {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+    background: #090a0f;
+  }
+
+  .viewer-toolbar {
+    position: absolute;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    display: flex;
+    gap: 12px;
+    background: rgba(15, 17, 23, 0.7);
+    backdrop-filter: blur(8px);
+    padding: 8px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .viewer-toolbar button {
+    background: transparent;
+    border: none;
+    color: #cbd5e1;
+    border-radius: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: background 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .viewer-toolbar button:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+  }
+
+  .main-photo-wrapper {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+    position: relative;
+    cursor: grab;
+  }
+
+  .main-photo-wrapper:active {
+    cursor: grabbing;
+  }
+
+  .main-photo {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    transition: transform 0.15s ease-out;
+    user-select: none;
+  }
+
+  .main-photo.dragging {
+    transition: none !important;
+  }
+
+  /* Carousel */
+  .carousel {
+    background: #0f1117;
+    border-top: 1px solid #1e293b;
+    display: flex;
+    gap: 20px;
+    padding: 24px;
+    overflow-x: auto;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: 120px;
+  }
+
+  .carousel img {
+    flex-shrink: 0;
+    height: 76px;
+    width: 76px;
+    object-fit: cover;
+    border-radius: 10px;
+    cursor: grab;
+    border: 3px solid transparent;
+    opacity: 0.5;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  }
+
+  .carousel img:active {
+    cursor: grabbing;
+  }
+
+  .carousel img:hover {
+    opacity: 0.9;
+    transform: translateY(-3px);
+  }
+
+  .carousel img.active {
+    border-color: #3b82f6;
+    opacity: 1;
+    transform: scale(1.15) translateY(-3px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.6), 0 0 0 2px rgba(59, 130, 246, 0.3);
+  }
+
+  /* Loading Overlay */
+  #loading-overlay {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 17, 23, .85);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    gap: 16px;
+    backdrop-filter: blur(4px);
+  }
+
+  .spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid #2d3748;
+    border-top-color: #3b82f6;
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  /* ── Inspector (right panel) ── */
+  .inspector {
+    width: 300px;
+    min-width: 300px;
+    background: #161a22;
+    border-left: 1px solid #2d3748;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .inspector-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid #2d3748;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .inspector-header h4 {
+    margin: 0;
+    font-size: 0.95rem;
+    color: #f8fafc;
+  }
+
+  .state-badge {
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+  }
+
+  .state-badge.pendiente {
+    background: rgba(234, 179, 8, .15);
+    color: #fde047;
+  }
+
+  .state-badge.revisado {
+    background: rgba(59, 130, 246, .15);
+    color: #93c5fd;
+  }
+
+  .state-badge.aprobado {
+    background: rgba(34, 197, 94, .15);
+    color: #86efac;
+  }
+
+  .state-badge.rechazado {
+    background: rgba(239, 68, 68, .15);
+    color: #fca5a5;
+  }
+
+  .state-badge.duplicado {
+    background: rgba(168, 85, 247, .15);
+    color: #d8b4fe;
+  }
+
+  .state-badge.borroso {
+    background: rgba(107, 114, 128, .15);
+    color: #9ca3af;
+  }
+
+  .inspector-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .inspector-empty {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    color: #475569;
+    gap: 10px;
+    padding: 24px;
+    text-align: center;
+  }
+
+  .field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .field-label {
+    font-size: 0.7rem;
+    color: #64748b;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+  }
+
+  .field-value {
+    font-size: 0.85rem;
+    color: #e2e8f0;
+  }
+
+  .field-input {
+    background: #0f1117;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    color: #e2e8f0;
+    padding: 7px 10px;
+    font-size: 0.85rem;
+    width: 100%;
+    box-sizing: border-box;
+    outline: none;
+    transition: border-color .15s;
+  }
+
+  .field-input:focus {
+    border-color: #3b82f6;
+  }
+
+  .inspector-divider {
+    height: 1px;
+    background: #2d3748;
+  }
+
+  .btn-action {
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-weight: 600;
+    transition: all .15s;
+    width: 100%;
+  }
+
+  .btn-approve {
+    background: rgba(34, 197, 94, .15);
+    color: #86efac;
+  }
+
+  .btn-approve:hover {
+    background: rgba(34, 197, 94, .3);
+  }
+
+  .btn-reject {
+    background: rgba(239, 68, 68, .15);
+    color: #fca5a5;
+  }
+
+  .btn-reject:hover {
+    background: rgba(239, 68, 68, .3);
+  }
+
+  .btn-save {
+    background: rgba(59, 130, 246, .15);
+    color: #93c5fd;
+  }
+
+  .btn-save:hover {
+    background: rgba(59, 130, 246, .3);
+  }
+
+  .save-indicator {
+    font-size: 0.75rem;
+    color: #64748b;
+    text-align: center;
+    height: 16px;
+  }
+
+  .save-indicator.ok {
+    color: #86efac;
+  }
+
+  .save-indicator.err {
+    color: #fca5a5;
+  }
+
+  .foto-info {
+    background: #0f1117;
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 0.78rem;
+    color: #64748b;
+  }
+
+  .foto-info span {
+    color: #94a3b8;
+  }
+
+  /* Aviso de filtro activo en el navegador */
+  .filter-notice {
+    flex-shrink: 0;
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 8px 12px 2px 12px;
+    padding: 6px 10px;
+    background: rgba(234, 179, 8, .1);
+    border: 1px solid rgba(234, 179, 8, .25);
+    border-left: 3px solid #facc15;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    color: #fef08a;
+    line-height: 1.3;
+  }
+
+  .filter-notice.visible {
+    display: flex;
+  }
+
+  .filter-notice .material-symbols-outlined {
+    font-size: 0.95rem;
+    flex-shrink: 0;
+    color: #facc15;
+  }
+
+  .btn-reset-filter {
+    background: none;
+    border: none;
+    color: #facc15;
+    font-size: 0.7rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0;
+    text-decoration: underline;
+    flex-shrink: 0;
+    opacity: 0.85;
+    transition: opacity 0.15s;
+  }
+
+  .btn-reset-filter:hover {
+    opacity: 1;
+  }
+
+  /* Badge para SN auto-exportado */
+  .sn-sync-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.66rem;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 10px;
+    background: rgba(34, 197, 94, 0.12);
+    color: #4ade80;
+    border: 1px solid rgba(34, 197, 94, 0.25);
+    letter-spacing: 0.2px;
+    transition: all 0.2s ease;
+  }
+
+  .sn-sync-badge.active {
+    background: rgba(34, 197, 94, 0.22);
+    box-shadow: 0 0 6px rgba(74, 222, 128, 0.35);
+  }
 </style>
 {% endblock %}
 
@@ -127,11 +614,25 @@ body { overflow: hidden; background: #0f1117; color: #e2e8f0; }
 <div class="app-container">
   <!-- Left Navigator -->
   <div class="navigator">
-    <div class="navigator-header" style="position: relative;">
-      <h3 style="margin: 0; font-size: 1rem; font-weight: 600; color: white;">Registros</h3>
-      <div style="font-size: 0.78rem; color: #64748b; margin-top: 3px;">{{ registros|length }} registros cargados</div>
-      <span class="material-symbols-outlined" style="position: absolute; left: 18px; bottom: 25px; color: var(--text-muted); pointer-events: none;">search</span>
-      <input type="text" id="search-input" style="padding-left: 35px; margin-top: 15px; width: 100%;" placeholder="Buscar modelo, defecto...">
+    <div class="navigator-header">
+      <div class="nav-title">
+        <h3>Registros</h3>
+        <span class="nav-count" id="nav-count-badge">{{ registros|length }}</span>
+      </div>
+      <div class="search-wrapper">
+        <span class="material-symbols-outlined search-icon">search</span>
+        <input type="text" id="search-input" placeholder="Buscar modelo, defecto...">
+        <button type="button" id="btn-clear-search" class="btn-clear-search" title="Limpiar búsqueda">
+          <span class="material-symbols-outlined" style="font-size:1rem;">close</span>
+        </button>
+      </div>
+    </div>
+    <div id="filter-notice" class="filter-notice">
+      <div style="display:flex; align-items:center; gap:6px; min-width:0; overflow:hidden;">
+        <span class="material-symbols-outlined">filter_alt</span>
+        <span id="filter-notice-text" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Filtro activo</span>
+      </div>
+      <button type="button" class="btn-reset-filter" id="btn-reset-filter">Limpiar</button>
     </div>
     <div class="record-list" id="record-list">
       <!-- Inyectado por JS -->
@@ -141,12 +642,13 @@ body { overflow: hidden; background: #0f1117; color: #e2e8f0; }
   <!-- Central Viewer -->
   <div class="viewer">
     <div class="viewer-toolbar">
-      <button onclick="zoomOut()" title="Alejar">➖</button>
-      <button onclick="resetZoom()" title="Ajustar a Pantalla">⛶ Fit</button>
-      <button onclick="zoomIn()" title="Acercar">➕</button>
+      <button onclick="zoomOut()" title="Alejar"><span class="material-symbols-outlined" style="font-size:1.15rem;">zoom_out</span></button>
+      <button onclick="resetZoom()" title="Ajustar a Pantalla"><span class="material-symbols-outlined" style="font-size:1.15rem;">fit_screen</span> Fit</button>
+      <button onclick="zoomIn()" title="Acercar"><span class="material-symbols-outlined" style="font-size:1.15rem;">zoom_in</span></button>
       <div style="width: 1px; background: rgba(255,255,255,0.2); margin: 0 4px;"></div>
-      <button onclick="rotateImage(90)" title="Rotar 90° (Tecla R)">↻ Rotar</button>
-      <button id="btn-excluir" onclick="toggleExcluirFoto()" title="Excluir foto actual" style="color: #ef4444; border-color: #ef4444;">Excluir</button>
+      <button onclick="rotateImage(90)" title="Rotar 90° (Tecla R)"><span class="material-symbols-outlined" style="font-size:1.15rem;">rotate_right</span> Rotar</button>
+      <button id="btn-excluir" onclick="toggleExcluirFoto()" title="Excluir foto actual"
+        style="color: #ef4444; border-color: #ef4444;"><span class="material-symbols-outlined" style="font-size:1.15rem;">visibility_off</span> Excluir</button>
     </div>
     <div class="main-photo-wrapper" id="viewer-wrapper">
       <img src="" class="main-photo" id="main-photo" alt="Sin Imagen Seleccionada">
@@ -166,7 +668,8 @@ body { overflow: hidden; background: #0f1117; color: #e2e8f0; }
 
     <!-- Empty state -->
     <div class="inspector-empty" id="inspector-empty">
-      <div style="color:var(--text-muted);"><span class="material-symbols-outlined" style="font-size:3rem;">swipe_left</span></div>
+      <div style="color:var(--text-muted);"><span class="material-symbols-outlined"
+          style="font-size:3rem;">swipe_left</span></div>
       <p style="font-size:0.82rem; line-height:1.5;">Selecciona un registro para ver y editar sus metadatos.</p>
     </div>
 
@@ -174,7 +677,8 @@ body { overflow: hidden; background: #0f1117; color: #e2e8f0; }
     <div class="inspector-body" id="inspector-body" style="display:none;">
 
       <!-- Info foto activa -->
-      <div class="foto-info" id="foto-info">Foto: <span id="fi-nombre">—</span> &nbsp;|&nbsp; Ángulo: <span id="fi-angulo">0°</span></div>
+      <div class="foto-info" id="foto-info">Foto: <span id="fi-nombre">—</span> &nbsp;|&nbsp; Ángulo: <span
+          id="fi-angulo">0°</span></div>
 
       <div class="inspector-divider"></div>
 
@@ -201,14 +705,25 @@ body { overflow: hidden; background: #0f1117; color: #e2e8f0; }
       </div>
       <div class="field-group">
         <div class="field-label">Defecto / Descripción</div>
-        <textarea class="field-input" id="inp-descripcion" rows="3" placeholder="Descripción del defecto" style="resize:vertical;"></textarea>
+        <textarea class="field-input" id="inp-descripcion" rows="3" placeholder="Descripción del defecto"
+          style="resize:vertical;"></textarea>
       </div>
       <div class="field-group">
-        <div class="field-label">SN on set <span style="color:#64748b;font-weight:400;">(una por línea)</span></div>
-        <textarea class="field-input" id="inp-sn" rows="3" placeholder="SN123456&#10;SN789012&#10;..." style="resize:vertical; font-family:monospace; font-size:0.8rem;"></textarea>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:2px;">
+          <div class="field-label" style="margin:0;">SN on set <span style="color:#64748b; font-weight:400; text-transform:none;">(1 por línea)</span></div>
+          <span id="sn-sync-badge" class="sn-sync-badge" title="Este valor viaja directo al reporte de Excel">
+            <span class="material-symbols-outlined" style="font-size:0.75rem;">bolt</span> Auto-exportado
+          </span>
+        </div>
+        <textarea class="field-input" id="inp-sn" rows="3" placeholder="SN123456&#10;SN789012&#10;..."
+          style="resize:vertical; font-family:monospace; font-size:0.8rem;"></textarea>
+        <div style="font-size:0.69rem; color:#64748b; margin-top:2px;">
+          Viaja directo al reporte de Excel — no requiere guardar en base de datos.
+        </div>
       </div>
 
-      <button class="btn-action btn-save" onclick="guardarMetadatos()"><span class="material-symbols-outlined" style="vertical-align:text-bottom; font-size:1.1rem;">save</span> Guardar Cambios</button>
+      <button class="btn-action btn-save" onclick="guardarMetadatos()"><span class="material-symbols-outlined"
+          style="vertical-align:text-bottom; font-size:1.1rem;">save</span> Guardar Cambios</button>
       <div class="save-indicator" id="save-indicator"></div>
 
       <div class="inspector-divider"></div>
@@ -237,13 +752,14 @@ body { overflow: hidden; background: #0f1117; color: #e2e8f0; }
       const clave = `${reg.user_id}_${num}`;
       if (fotosMap[clave]) fotosAsociadas.push(fotosMap[clave]);
     });
-    
+
     // Find the first valid photo to be the cover
     const validPhotos = fotosAsociadas.filter(f => !f.excluida);
+    const coverPhoto = validPhotos.length > 0 ? validPhotos[0] : (fotosAsociadas.length > 0 ? fotosAsociadas[0] : null);
     return {
       ...reg,
       fotos_obj: fotosAsociadas,
-      portada_url: validPhotos.length > 0 ? validPhotos[0].url : (fotosAsociadas.length > 0 ? fotosAsociadas[0].url : null),
+      portada_url: coverPhoto ? (coverPhoto.thumb_url || coverPhoto.url) : null,
       has_error: validPhotos.length === 0 || !reg.modelo,
     };
   });
@@ -252,29 +768,31 @@ body { overflow: hidden; background: #0f1117; color: #e2e8f0; }
 
   // ── 2. STATE ─────────────────────────────────────────────────────────────
   let activeRecord = null;
-  let activePhoto  = null;
+  let activePhoto = null;
   let zoomLevel = 1, panX = 0, panY = 0;
   let isDragging = false, startX = 0, startY = 0;
   let carouselSortable = null;  // track instance to destroy on re-init
 
-  const recordListEl  = document.getElementById('record-list');
-  const carouselEl    = document.getElementById('carousel');
-  const mainPhotoEl   = document.getElementById('main-photo');
-  const wrapperEl     = document.getElementById('viewer-wrapper');
-  const searchInput   = document.getElementById('search-input');
+  const recordListEl = document.getElementById('record-list');
+  const carouselEl = document.getElementById('carousel');
+  const mainPhotoEl = document.getElementById('main-photo');
+  const wrapperEl = document.getElementById('viewer-wrapper');
+  const searchInput = document.getElementById('search-input');
 
   // Inspector elements
-  const inspEmpty  = document.getElementById('inspector-empty');
-  const inspBody   = document.getElementById('inspector-body');
+  const inspEmpty = document.getElementById('inspector-empty');
+  const inspBody = document.getElementById('inspector-body');
   const stateBadge = document.getElementById('state-badge');
-  const saveInd    = document.getElementById('save-indicator');
+  const saveInd = document.getElementById('save-indicator');
 
   // ── 3. NAVIGATOR ─────────────────────────────────────────────────────────
   function renderNavigator(query = '') {
     recordListEl.innerHTML = '';
-    const q = query.toLowerCase();
+    const q = (query || '').toLowerCase().trim();
+    let count = 0;
     appData.forEach(reg => {
-      if (q && !(reg.modelo||'').toLowerCase().includes(q) && !(reg.descripcion||'').toLowerCase().includes(q)) return;
+      if (q && !(reg.modelo || '').toLowerCase().includes(q) && !(reg.descripcion || '').toLowerCase().includes(q)) return;
+      count++;
       const div = document.createElement('div');
       div.className = `record-card ${activeRecord && activeRecord.id === reg.id ? 'active' : ''}`;
       div.dataset.id = reg.id;
@@ -283,8 +801,10 @@ body { overflow: hidden; background: #0f1117; color: #e2e8f0; }
       const imgUrl = reg.portada_url || fallbackSvg;
       div.innerHTML = `
         <div style="display:flex; gap:10px; align-items:center;">
-          <div class="drag-handle" style="cursor:grab; color:#64748b; font-size:1.2rem; padding:0 4px;" title="Arrastrar para ordenar">☰</div>
-          <img src="${imgUrl}" onerror="this.onerror=null; this.src='${fallbackSvg}';" style="width:48px; height:48px; object-fit:cover; border-radius:6px; background:#0f1117; border: 1px solid #1e293b;">
+          <div class="drag-handle" style="cursor:grab; color:#64748b; padding:0 2px; display:flex; align-items:center;" title="Arrastrar para ordenar">
+            <span class="material-symbols-outlined" style="font-size:1.2rem;">drag_indicator</span>
+          </div>
+          <img src="${imgUrl}" loading="lazy" decoding="async" onerror="this.onerror=null; this.src='${fallbackSvg}';" style="width:48px; height:48px; object-fit:cover; border-radius:6px; background:#0f1117; border: 1px solid #1e293b;">
           <div style="flex:1; min-width:0;">
             <h4>${reg.modelo || 'Sin Modelo'}</h4>
             <p style="color:#cbd5e1; font-weight:500;">${reg.linea || 'Sin Línea'}</p>
@@ -299,11 +819,25 @@ body { overflow: hidden; background: #0f1117; color: #e2e8f0; }
         </div>`;
       recordListEl.appendChild(div);
     });
+
+    if (count === 0 && q) {
+      recordListEl.innerHTML = `
+        <div style="padding:28px 16px; text-align:center; color:#64748b; font-size:0.8rem;">
+          <span class="material-symbols-outlined" style="font-size:2.2rem; color:#475569; display:block; margin-bottom:8px;">search_off</span>
+          <div>Sin coincidencias para "<strong>${q}</strong>"</div>
+        </div>`;
+    }
   }
 
   function selectRecord(reg) {
     activeRecord = reg;
-    renderNavigator(searchInput.value);
+    recordListEl.querySelectorAll('.record-card').forEach(card => {
+      const isAct = parseInt(card.dataset.id) === reg.id;
+      card.classList.toggle('active', isAct);
+      if (isAct) {
+        card.scrollIntoView({ behavior: 'auto', block: 'nearest' });
+      }
+    });
 
     // Carrusel
     carouselEl.innerHTML = '';
@@ -312,9 +846,11 @@ body { overflow: hidden; background: #0f1117; color: #e2e8f0; }
       const fallbackSvg = `data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27%23334155%27%3E%3Cpath%20d%3D%27M21%2019V5c0-1.1-.9-2-2-2H5c-1.1%200-2%20.9-2%202v14c0%201.1.9%202%202%202h14c1.1%200%202-.9%202-2zM8.5%2013.5l2.5%203.01L14.5%2012l4.5%206H5l3.5-4.5z%27%2F%3E%3C%2Fsvg%3E`;
       for (const f of reg.fotos_obj) {
         const thumb = document.createElement('img');
-        thumb.src = f.url;
+        thumb.src = f.thumb_url || f.url;
+        thumb.loading = 'lazy';
+        thumb.decoding = 'async';
         thumb.dataset.clave = f.clave;
-        thumb.onerror = function() { this.onerror=null; this.src=fallbackSvg; };
+        thumb.onerror = function () { this.onerror = null; this.src = fallbackSvg; };
         thumb.onclick = () => selectPhoto(f);
         if (f.excluida) {
           thumb.style.filter = 'grayscale(100%) opacity(50%)';
@@ -322,7 +858,7 @@ body { overflow: hidden; background: #0f1117; color: #e2e8f0; }
         }
         carouselEl.appendChild(thumb);
       }
-      
+
       // Activar Drag & Drop en el carrusel — destruir instancia previa para no acumular handlers
       if (typeof Sortable !== 'undefined') {
         if (carouselSortable) { carouselSortable.destroy(); carouselSortable = null; }
@@ -340,6 +876,9 @@ body { overflow: hidden; background: #0f1117; color: #e2e8f0; }
             });
             // Actualizar fotos_nums
             activeRecord.fotos_nums = activeRecord.fotos_obj.map(f => parseInt(f.clave.split('_')[1]));
+            const validPhotos = activeRecord.fotos_obj.filter(f => !f.excluida);
+            const coverPhoto = validPhotos.length > 0 ? validPhotos[0] : (activeRecord.fotos_obj.length > 0 ? activeRecord.fotos_obj[0] : null);
+            activeRecord.portada_url = coverPhoto ? (coverPhoto.thumb_url || coverPhoto.url) : null;
             // Reflejar en registrosRaw
             const regRaw = registrosRaw.find(r => r.id === activeRecord.id);
             if (regRaw) regRaw.fotos_nums = activeRecord.fotos_nums;
@@ -368,26 +907,26 @@ body { overflow: hidden; background: #0f1117; color: #e2e8f0; }
   // ── 4. INSPECTOR ─────────────────────────────────────────────────────────
   function fillInspector(reg) {
     inspEmpty.style.display = 'none';
-    inspBody.style.display  = 'flex';
+    inspBody.style.display = 'flex';
 
     const estado = reg.estado_revision || 'pendiente';
     stateBadge.className = `state-badge ${estado}`;
     stateBadge.textContent = estado;
 
-    document.getElementById('inp-modelo').value      = reg.modelo || '';
-    document.getElementById('inp-numparte').value    = reg.numero_parte || '';
-    document.getElementById('inp-linea').value       = reg.linea || '';
-    document.getElementById('inp-cantidad').value    = reg.cantidad || '';
+    document.getElementById('inp-modelo').value = reg.modelo || '';
+    document.getElementById('inp-numparte').value = reg.numero_parte || '';
+    document.getElementById('inp-linea').value = reg.linea || '';
+    document.getElementById('inp-cantidad').value = reg.cantidad || '';
     document.getElementById('inp-responsable').value = reg.responsable || '';
     document.getElementById('inp-descripcion').value = reg.descripcion || '';
-    document.getElementById('inp-sn').value          = reg.sn_on_set || '';
+    document.getElementById('inp-sn').value = reg.sn_on_set || '';
     saveInd.textContent = '';
-    saveInd.className   = 'save-indicator';
+    saveInd.className = 'save-indicator';
   }
 
   function updateFotoInfo(foto) {
-    document.getElementById('fi-nombre').textContent  = foto.clave;
-    document.getElementById('fi-angulo').textContent  = `${foto.angulo || 0}°`;
+    document.getElementById('fi-nombre').textContent = foto.clave;
+    document.getElementById('fi-angulo').textContent = `${foto.angulo || 0}°`;
   }
 
   // ── 5. PHOTO VIEWER ──────────────────────────────────────────────────────
@@ -395,15 +934,15 @@ body { overflow: hidden; background: #0f1117; color: #e2e8f0; }
     activePhoto = foto;
     resetZoom();
     mainPhotoEl.style.display = 'block';
-    mainPhotoEl.src = foto.url;
-    
+    mainPhotoEl.src = foto.proxy_url || foto.url;
+
     // Add fallback inline since we can't reliably assign it via HTML attributes on a dynamic element
     const fallbackSvg = `data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27%23334155%27%3E%3Cpath%20d%3D%27M21%2019V5c0-1.1-.9-2-2-2H5c-1.1%200-2%20.9-2%202v14c0%201.1.9%202%202%202h14c1.1%200%202-.9%202-2zM8.5%2013.5l2.5%203.01L14.5%2012l4.5%206H5l3.5-4.5z%27%2F%3E%3C%2Fsvg%3E`;
-    mainPhotoEl.onerror = function() {
-        this.onerror = null;
-        this.src = fallbackSvg;
+    mainPhotoEl.onerror = function () {
+      this.onerror = null;
+      this.src = fallbackSvg;
     };
-    
+
     applyTransform();
     updateFotoInfo(foto);
 
@@ -411,18 +950,18 @@ body { overflow: hidden; background: #0f1117; color: #e2e8f0; }
       const isActive = img.dataset.clave === foto.clave;
       img.classList.toggle('active', isActive);
       if (isActive) {
-        img.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        img.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'center' });
       }
     });
 
     const btnExcluir = document.getElementById('btn-excluir');
     if (btnExcluir) {
       if (foto.excluida) {
-        btnExcluir.textContent = 'Restaurar';
+        btnExcluir.innerHTML = '<span class="material-symbols-outlined" style="font-size:1.15rem;">visibility</span> Restaurar';
         btnExcluir.style.color = '#22c55e'; // Tailwind green-500
         btnExcluir.style.borderColor = '#22c55e';
       } else {
-        btnExcluir.textContent = 'Excluir';
+        btnExcluir.innerHTML = '<span class="material-symbols-outlined" style="font-size:1.15rem;">visibility_off</span> Excluir';
         btnExcluir.style.color = '#ef4444'; // Tailwind red-500
         btnExcluir.style.borderColor = '#ef4444';
       }
@@ -436,8 +975,8 @@ body { overflow: hidden; background: #0f1117; color: #e2e8f0; }
     document.getElementById('fi-angulo').textContent = `${ang}°`;
   }
 
-  function zoomIn()    { zoomLevel = Math.min(zoomLevel * 1.3, 5);   applyTransform(); }
-  function zoomOut()   { zoomLevel = Math.max(zoomLevel / 1.3, 0.3); applyTransform(); }
+  function zoomIn() { zoomLevel = Math.min(zoomLevel * 1.3, 5); applyTransform(); }
+  function zoomOut() { zoomLevel = Math.max(zoomLevel / 1.3, 0.3); applyTransform(); }
   function resetZoom() { zoomLevel = 1; panX = 0; panY = 0; applyTransform(); }
 
   // ── 6. ROTATION + PERSISTENCIA ───────────────────────────────────────────
@@ -450,11 +989,11 @@ body { overflow: hidden; background: #0f1117; color: #e2e8f0; }
 
   async function toggleExcluirFoto() {
     if (!activePhoto || !activePhoto.evidencia_id) return;
-    
+
     const isExcluding = !activePhoto.excluida;
     const method = isExcluding ? 'DELETE' : 'POST';
-    const endpoint = isExcluding 
-      ? `/api/v2/evidencias/${activePhoto.evidencia_id}/` 
+    const endpoint = isExcluding
+      ? `/api/v2/evidencias/${activePhoto.evidencia_id}/`
       : `/api/v2/evidencias/${activePhoto.evidencia_id}/restaurar/`;
 
     try {
@@ -463,11 +1002,11 @@ body { overflow: hidden; background: #0f1117; color: #e2e8f0; }
         headers: { 'X-CSRFToken': getCookie('csrftoken') }
       });
       const data = await res.json();
-      
+
       if (data.status === 'success') {
         // Actualizar el estado local
         activePhoto.excluida = isExcluding;
-        
+
         // Actualizar el estilo del thumbnail
         const imgEl = carouselEl.querySelector(`img[data-clave="${activePhoto.clave}"]`);
         if (imgEl) {
@@ -482,12 +1021,14 @@ body { overflow: hidden; background: #0f1117; color: #e2e8f0; }
 
         // Refrescar el estado del botón y la alerta de "Sin fotos validas"
         selectPhoto(activePhoto);
-        
-        // Recalcular has_error
+
+        // Recalcular has_error y portada_url
         const validPhotos = activeRecord.fotos_obj.filter(f => !f.excluida);
         activeRecord.has_error = validPhotos.length === 0 || !activeRecord.modelo;
+        const coverPhoto = validPhotos.length > 0 ? validPhotos[0] : (activeRecord.fotos_obj.length > 0 ? activeRecord.fotos_obj[0] : null);
+        activeRecord.portada_url = coverPhoto ? (coverPhoto.thumb_url || coverPhoto.url) : null;
         renderNavigator(searchInput.value);
-        
+
       } else {
         alert('Error al modificar el estado de la foto: ' + data.message);
       }
@@ -517,12 +1058,12 @@ body { overflow: hidden; background: #0f1117; color: #e2e8f0; }
     saveInd.className = 'save-indicator';
 
     const payload = {
-      modelo:                document.getElementById('inp-modelo').value.trim(),
-      numero_parte:          document.getElementById('inp-numparte').value.trim(),
-      linea:                 document.getElementById('inp-linea').value.trim(),
-      cantidad:              parseInt(document.getElementById('inp-cantidad').value) || null,
-      responsable:           document.getElementById('inp-responsable').value.trim(),
-      descripcion:           document.getElementById('inp-descripcion').value.trim(),
+      modelo: document.getElementById('inp-modelo').value.trim(),
+      numero_parte: document.getElementById('inp-numparte').value.trim(),
+      linea: document.getElementById('inp-linea').value.trim(),
+      cantidad: parseInt(document.getElementById('inp-cantidad').value) || null,
+      responsable: document.getElementById('inp-responsable').value.trim(),
+      descripcion: document.getElementById('inp-descripcion').value.trim(),
     };
 
     try {
@@ -537,19 +1078,20 @@ body { overflow: hidden; background: #0f1117; color: #e2e8f0; }
         Object.assign(activeRecord, payload);
         // Actualizar nombre en lista
         renderNavigator(searchInput.value);
-        saveInd.textContent = '✅ Guardado';
+        saveInd.innerHTML = '<span class="material-symbols-outlined" style="font-size:0.9rem; vertical-align:middle;">check_circle</span> Guardado';
         saveInd.className = 'save-indicator ok';
       } else {
-        saveInd.textContent = `Error: ${data.message}`;
+        saveInd.innerHTML = `<span class="material-symbols-outlined" style="font-size:0.9rem; vertical-align:middle;">error</span> ${data.message}`;
         saveInd.className = 'save-indicator err';
       }
     } catch (e) {
-      saveInd.textContent = `Error de red`;
+      saveInd.innerHTML = `<span class="material-symbols-outlined" style="font-size:0.9rem; vertical-align:middle;">wifi_off</span> Error de red`;
       saveInd.className = 'save-indicator err';
     }
   }
 
   // ── 8. MOUSE / KEYBOARD ──────────────────────────────────────────────────
+  let wheelTimeout = null;
   wrapperEl.addEventListener('dblclick', () => {
     if (!activePhoto) return;
     if (zoomLevel > 1) resetZoom(); else { zoomLevel = 2.5; applyTransform(); }
@@ -558,8 +1100,15 @@ body { overflow: hidden; background: #0f1117; color: #e2e8f0; }
   wrapperEl.addEventListener('wheel', e => {
     if (!activePhoto) return;
     e.preventDefault();
-    if (e.deltaY < 0) zoomIn(); else zoomOut();
-  });
+    mainPhotoEl.classList.add('dragging');
+    const zoomFactor = e.deltaY < 0 ? 1.15 : (1 / 1.15);
+    zoomLevel = Math.max(0.3, Math.min(zoomLevel * zoomFactor, 8));
+    applyTransform();
+    clearTimeout(wheelTimeout);
+    wheelTimeout = setTimeout(() => {
+      mainPhotoEl.classList.remove('dragging');
+    }, 80);
+  }, { passive: false });
 
   wrapperEl.addEventListener('mousedown', e => {
     if (!activePhoto || zoomLevel <= 1) return;
@@ -583,32 +1132,62 @@ body { overflow: hidden; background: #0f1117; color: #e2e8f0; }
       if (next < 0) next = activeRecord.fotos_obj.length - 1;
       selectPhoto(activeRecord.fotos_obj[next]);
     }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      const visibles = getRegistrosVisibles();
+      if (visibles.length <= 1) return;
+      const idx = visibles.findIndex(r => r.id === activeRecord?.id);
+      let next = e.key === 'ArrowDown' ? idx + 1 : idx - 1;
+      if (next >= visibles.length) next = 0;
+      if (next < 0) next = visibles.length - 1;
+      selectRecord(visibles[next]);
+    }
   });
 
   // ── 9. GENERAR EXCEL ─────────────────────────────────────────────────────
+
+  // Devuelve los registros visibles según el filtro de búsqueda activo
+  function getRegistrosVisibles() {
+    const q = (searchInput.value || '').toLowerCase().trim();
+    if (!q) return appData;
+    return appData.filter(reg =>
+      (reg.modelo || '').toLowerCase().includes(q) ||
+      (reg.descripcion || '').toLowerCase().includes(q)
+    );
+  }
+
+  // Actualizar aviso de filtro activo debajo del buscador
+  function actualizarBtnGenerar() {
+    const notice = document.getElementById('filter-notice');
+    const q = (searchInput.value || '').trim();
+    if (notice) notice.style.display = q ? 'flex' : 'none';
+  }
+
   async function generarExcel() {
     const btn = document.getElementById('btn-generar');
     if (btn.disabled) return; // Prevent double clicks
-    
+
     const overlay = document.getElementById('loading-overlay');
     const msg = document.getElementById('status-msg');
     const btnText = document.getElementById('btn-generar-text');
-    
-    btn.disabled = true; 
+
+    btn.disabled = true;
     btn.style.opacity = '0.7';
     if (btnText) btnText.textContent = 'Generando...';
-    overlay.style.display = 'flex'; 
+    overlay.style.display = 'flex';
     msg.textContent = '';
 
+    // Respetar el filtro de búsqueda activo: exportar solo los registros visibles
+    const registrosParaExportar = getRegistrosVisibles();
+
     const rotaciones = {};
-    appData.forEach(reg => {
+    registrosParaExportar.forEach(reg => {
       reg.fotos_obj.forEach(foto => {
         if (foto.angulo) rotaciones[foto.clave] = foto.angulo;
       });
     });
 
     // Generar un payload limpio filtrando las fotos excluidas
-    const registrosLimpios = appData.map(reg => {
+    const registrosLimpios = registrosParaExportar.map(reg => {
       const validFotos = reg.fotos_obj.filter(f => !f.excluida).map(f => f.numero);
       return {
         ...reg,
@@ -622,41 +1201,41 @@ body { overflow: hidden; background: #0f1117; color: #e2e8f0; }
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
         body: JSON.stringify({ rotaciones, registros: registrosLimpios }),
       });
-        if (!res.ok) {
-          msg.textContent = `Error: ${await res.text()}`; msg.style.color = '#ef4444';
-          resetBtn();
-          return;
-        }
-        const { task_id } = await res.json();
-        const overlayText = document.getElementById('loading-text');
-        const iv = setInterval(async () => {
-          try {
-            const s = await (await fetch(`/api/excel_status/${task_id}/`)).json();
-            if (s.status === 'done') {
-              clearInterval(iv); resetBtn();
-              msg.textContent = 'Excel Generado'; msg.style.color = '#22c55e';
-              window.location.href = `/api/download_excel/${task_id}/`;
-            } else if (s.status === 'error') {
-              throw new Error(s.error || 'Error en la tarea');
-            } else {
-              // Cualquier otro estado (pending, started, processing)
-              overlayText.textContent = s.progress || 'Generando...';
-            }
-          } catch (err) {
+      if (!res.ok) {
+        msg.textContent = `Error: ${await res.text()}`; msg.style.color = '#ef4444';
+        resetBtn();
+        return;
+      }
+      const { task_id } = await res.json();
+      const overlayText = document.getElementById('loading-text');
+      const iv = setInterval(async () => {
+        try {
+          const s = await (await fetch(`/api/excel_status/${task_id}/`)).json();
+          if (s.status === 'done') {
             clearInterval(iv); resetBtn();
-            msg.textContent = `Error: ${err.message}`;
+            msg.textContent = 'Excel Generado'; msg.style.color = '#22c55e';
+            window.location.href = `/api/download_excel/${task_id}/`;
+          } else if (s.status === 'error') {
+            throw new Error(s.error || 'Error en la tarea');
+          } else {
+            // Cualquier otro estado (pending, started, processing)
+            overlayText.textContent = s.progress || 'Generando...';
           }
-        }, 1000);
-      } catch (e) {
-        msg.textContent = `Error de red: ${e}`; resetBtn();
-      }
+        } catch (err) {
+          clearInterval(iv); resetBtn();
+          msg.textContent = `Error: ${err.message}`;
+        }
+      }, 1000);
+    } catch (e) {
+      msg.textContent = `Error de red: ${e}`; resetBtn();
+    }
 
-      function resetBtn() {
-        overlay.style.display = 'none'; 
-        btn.disabled = false;
-        btn.style.opacity = '1';
-        if (btnText) btnText.textContent = 'Generar Excel';
-      }
+    function resetBtn() {
+      overlay.style.display = 'none';
+      btn.disabled = false;
+      btn.style.opacity = '1';
+      if (btnText) btnText.textContent = 'Generar Excel';
+    }
   }
 
   // ── 10. UTILS ────────────────────────────────────────────────────────────
@@ -670,15 +1249,68 @@ body { overflow: hidden; background: #0f1117; color: #e2e8f0; }
   }
 
   // ── 11. INIT ─────────────────────────────────────────────────────────────
-  searchInput.addEventListener('input', e => renderNavigator(e.target.value));
+  const btnClearSearch = document.getElementById('btn-clear-search');
+  const btnResetFilter = document.getElementById('btn-reset-filter');
+  const navCountBadge  = document.getElementById('nav-count-badge');
+  const filterNotice   = document.getElementById('filter-notice');
+  const filterTextEl   = document.getElementById('filter-notice-text');
+  const snBadgeEl      = document.getElementById('sn-sync-badge');
 
-  // SN on set: sincronizar a registrosRaw en tiempo real (no requiere "Guardar")
+  function onSearchChange(val) {
+    const q = (val || '').trim();
+    renderNavigator(q);
+
+    const visibles = getRegistrosVisibles();
+    const isFiltered = !!q;
+
+    if (filterNotice) filterNotice.classList.toggle('visible', isFiltered);
+    if (btnClearSearch) btnClearSearch.style.display = isFiltered ? 'flex' : 'none';
+
+    if (isFiltered) {
+      if (filterTextEl) {
+        filterTextEl.textContent = `Exportando ${visibles.length} de ${appData.length} registros`;
+      }
+      if (navCountBadge) {
+        navCountBadge.textContent = `${visibles.length}/${appData.length}`;
+      }
+    } else {
+      if (navCountBadge) {
+        navCountBadge.textContent = appData.length;
+      }
+    }
+  }
+
+  searchInput.addEventListener('input', e => {
+    onSearchChange(e.target.value);
+  });
+
+  function clearSearch() {
+    searchInput.value = '';
+    onSearchChange('');
+    searchInput.focus();
+  }
+
+  if (btnClearSearch) btnClearSearch.addEventListener('click', clearSearch);
+  if (btnResetFilter) btnResetFilter.addEventListener('click', clearSearch);
+
+  // SN on set: sync en memoria + feedback visual reactivo
+  let snFeedbackTimer = null;
   document.getElementById('inp-sn').addEventListener('input', function () {
     if (!activeRecord) return;
     const val = this.value;
     activeRecord.sn_on_set = val;
     const regRaw = registrosRaw.find(r => r.id === activeRecord.id);
     if (regRaw) regRaw.sn_on_set = val;
+
+    if (snBadgeEl) {
+      snBadgeEl.innerHTML = '<span class="material-symbols-outlined" style="font-size:0.75rem;">check</span> En sesión';
+      snBadgeEl.classList.add('active');
+      clearTimeout(snFeedbackTimer);
+      snFeedbackTimer = setTimeout(() => {
+        snBadgeEl.innerHTML = '<span class="material-symbols-outlined" style="font-size:0.75rem;">bolt</span> Auto-exportado';
+        snBadgeEl.classList.remove('active');
+      }, 1500);
+    }
   });
 
   if (appData.length > 0) {
@@ -695,7 +1327,7 @@ body { overflow: hidden; background: #0f1117; color: #e2e8f0; }
       handle: '.drag-handle',
       onEnd: function (evt) {
         const currentIds = Array.from(recordListEl.children).map(c => c.dataset.id);
-        
+
         const sortByDom = (a, b) => {
           let idxA = currentIds.indexOf(String(a.id));
           let idxB = currentIds.indexOf(String(b.id));

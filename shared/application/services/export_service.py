@@ -1,8 +1,9 @@
 import os
-import zipfile
+import re
 import tempfile
-from pathlib import Path
+import zipfile
 from datetime import datetime
+from pathlib import Path
 
 from django.core.exceptions import PermissionDenied
 
@@ -33,33 +34,40 @@ class ExportService:
 
     def get_evidence_info(self, requester_id: int) -> dict:
         """Devuelve metadata sobre las fotos de un usuario."""
-        import re
         p = self._get_perfil(requester_id)
         user_folder = Path(FOTOS_PATH) / str(requester_id)
         
         if not user_folder.exists():
             return {"total": 0, "jpgs": 0, "pngs": 0, "rango_min": 0, "rango_max": 0, "size_mb": 0.0}
 
-        def _extraer_numero(nombre: str) -> int:
-            m = re.match(r"^(\d+)", nombre)
-            return int(m.group(1)) if m else -1
+        jpgs = 0
+        pngs = 0
+        total_size = 0
+        numeros = []
 
-        imgs = [f for f in user_folder.iterdir() if f.is_file() and f.suffix.lower() in ('.jpg', '.png')]
-        jpgs = sum(1 for f in imgs if f.suffix.lower() == '.jpg')
-        pngs = sum(1 for f in imgs if f.suffix.lower() == '.png')
-        size_mb = sum(f.stat().st_size for f in imgs) / (1024 * 1024)
+        for f in user_folder.iterdir():
+            if not f.is_file():
+                continue
+            ext = f.suffix.lower()
+            if ext == '.jpg':
+                jpgs += 1
+            elif ext == '.png':
+                pngs += 1
+            else:
+                continue
 
-        numeros = [_extraer_numero(f.name) for f in imgs if _extraer_numero(f.name) != -1]
-        rango_min = min(numeros) if numeros else 0
-        rango_max = max(numeros) if numeros else 0
+            total_size += f.stat().st_size
+            m = re.match(r"^(\d+)", f.name)
+            if m:
+                numeros.append(int(m.group(1)))
 
         return {
-            "total": len(imgs),
+            "total": jpgs + pngs,
             "jpgs": jpgs,
             "pngs": pngs,
-            "rango_min": rango_min,
-            "rango_max": rango_max,
-            "size_mb": size_mb
+            "rango_min": min(numeros) if numeros else 0,
+            "rango_max": max(numeros) if numeros else 0,
+            "size_mb": total_size / (1024 * 1024)
         }
 
     def obtener_operadores(self, turno: str, requester_id: int) -> list[dict]:
@@ -79,8 +87,6 @@ class ExportService:
 
     def _zip_worker(self, ordered_fotos: list[tuple[int, int]], zip_path: str, inicio: int = None, fin: int = None):
         """Worker síncrono para generar el ZIP. Se ejecutará en un thread."""
-        import re
-        
         archivos_validos = []
         user_dirs_cache = {}
         

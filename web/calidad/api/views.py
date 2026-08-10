@@ -582,21 +582,12 @@ class DefectoResponderView(APIView):
             response_data['context_data']['responsables_validos'] = Responsable.values
         elif result.nuevo_estado and result.nuevo_estado.value == "ESPERANDO_MODELO":
             from calidad.models import RegistroDefecto
-            # Extraemos los últimos 20 para garantizar encontrar 3 únicos recientes
             historial = list(RegistroDefecto.objects.filter(
                 user_id=telegram_id
             ).exclude(modelo='').order_by('-id').values_list('modelo', flat=True)[:20])
-            
-            unicos = []
-            for m in historial:
-                if m not in unicos:
-                    unicos.append(m)
-                if len(unicos) == 3:
-                    break
-                    
             if 'context_data' not in response_data:
                 response_data['context_data'] = {}
-            response_data['context_data']['historial_modelos'] = unicos
+            response_data['context_data']['historial_modelos'] = list(dict.fromkeys(historial))[:3]
         elif result.nuevo_estado and result.nuevo_estado.value == "ESPERANDO_LINEA":
             from calidad.models import Linea
             if 'context_data' not in response_data:

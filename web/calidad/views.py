@@ -227,24 +227,24 @@ def _parse_aware_dt(dt_str: str, end: bool = False):
         return None
 
 
-# ============================================================
-# REPORTES (LISTA DE DEFECTOS)
-# ============================================================
-
-@login_required
-def reportes(request):
-    """Lista completa de registros filtrados por turno y presets temporales."""
-
-    registros = get_registros_permitidos(request.user)
+def _filter_registros_from_request(request, base_qs=None):
+    """
+    Aplica filtros de request (linea, responsable, modelo, turno, depto,
+    datetime-local o presets como h1, h4, h8, h24, d0, d1, d7, etc.)
+    de forma unificada para vistas y exportaciones.
+    """
+    if base_qs is None:
+        registros = get_registros_permitidos(request.user)
+    else:
+        registros = base_qs
 
     linea       = request.GET.get('linea', '')
     responsable = request.GET.get('responsable', '')
     modelo      = request.GET.get('modelo', '')
-    
     fecha_desde = request.GET.get('fecha_desde', '')
     fecha_hasta = request.GET.get('fecha_hasta', '')
     preset      = request.GET.get('preset', '')
-    
+
     # Primera carga sin parámetros: por defecto Hoy (d0)
     if not request.GET:
         preset = 'd0'
@@ -292,6 +292,21 @@ def reportes(request):
             registros = registros.filter(fecha_registro__gte=dt_desde)
 
     rango_activo = 'custom' if (preset == 'custom' or (not preset and (fecha_desde or fecha_hasta))) else (preset or 'd0')
+    return registros, fecha_desde, fecha_hasta, preset, rango_activo
+
+
+# ============================================================
+# REPORTES (LISTA DE DEFECTOS)
+# ============================================================
+
+@login_required
+def reportes(request):
+    """Lista completa de registros filtrados por turno y presets temporales."""
+    registros, fecha_desde, fecha_hasta, preset, rango_activo = _filter_registros_from_request(request)
+
+    linea       = request.GET.get('linea', '')
+    responsable = request.GET.get('responsable', '')
+    modelo      = request.GET.get('modelo', '')
 
     # Opciones para los selects de filtro (basadas solo en lo que pueden ver)
     base_qs = get_registros_permitidos(request.user)
@@ -740,15 +755,7 @@ def _get_orientacion_registros(request):
         except json.JSONDecodeError:
             pass
     else:
-        registros_qs = get_registros_permitidos(request.user)
-
-        fecha_desde = request.GET.get('fecha_desde', '')
-        fecha_hasta = request.GET.get('fecha_hasta', '')
-        if fecha_desde:
-            registros_qs = registros_qs.filter(fecha_registro__date__gte=fecha_desde)
-        if fecha_hasta:
-            registros_qs = registros_qs.filter(fecha_registro__date__lte=fecha_hasta)
-
+        registros_qs, fecha_desde, fecha_hasta, preset, _ = _filter_registros_from_request(request)
         registros_data = _parse_fotos_nums(registros_qs)
         
     return registros_data, fecha_desde, fecha_hasta
@@ -830,36 +837,62 @@ def _build_fotos_preview(fotos_en_disco, evidencias_qs):
     for ev in evidencias_qs:
         ev_by_path[ev.ruta_archivo] = ev
 
+    thumbs_root = Path(settings.THUMBS_ROOT)
+    proxies_root = Path(settings.MEDIA_ROOT) / 'proxies'
+    thumbs_url  = settings.THUMBS_URL
+    proxies_url = settings.MEDIA_URL + 'proxies/'
+
+    # Pre-indexar thumbs y proxies por usuario para verificación O(1) en memoria
+    user_ids = {data['user_id'] for data in fotos_en_disco.values() if data.get('user_id')}
+    user_thumbs = {}
+    user_proxies = {}
+    for uid in user_ids:
+        t_dir = thumbs_root / str(uid)
+        user_thumbs[uid] = {entry.name for entry in os.scandir(t_dir) if entry.is_file()} if t_dir.is_dir() else set()
+        p_dir = proxies_root / str(uid)
+        user_proxies[uid] = {entry.name for entry in os.scandir(p_dir) if entry.is_file()} if p_dir.is_dir() else set()
+
     fotos_preview = []
     for clave, data in fotos_en_disco.items():
         real_path = data['path']
+        filename = real_path.name
+        user_id = data['user_id']
+
+        has_thumb = filename in user_thumbs.get(user_id, set())
+        has_proxy = filename in user_proxies.get(user_id, set())
+
         if data['es_legacy']:
             try:
                 ruta_rel = str(real_path.relative_to(settings.MEDIA_ROOT))
             except ValueError:
                 ruta_rel = str(real_path)
 
+            orig_url = f"/media/{ruta_rel}"
             ev = ev_by_path.get(ruta_rel)
-            fotos_preview.append({
-                'clave':        clave.split('_v2_')[0],
-                'numero':       data['numero'],
-                'user_id':      data['user_id'],
-                'url':          f"/media/{ruta_rel}",
-                'angulo':       ev.angulo_rotacion if ev else 0,
-                'evidencia_id': ev.id if ev else None,
-                'excluida':     bool(ev.metadatos.get('excluida')) if ev and isinstance(ev.metadatos, dict) else False,
-            })
+            angulo = ev.angulo_rotacion if ev else 0
+            ev_id = ev.id if ev else None
+            excluida = bool(ev.metadatos.get('excluida')) if ev and isinstance(ev.metadatos, dict) else False
         else:
             ev = data['evidencia']
-            fotos_preview.append({
-                'clave':        clave.split('_v2_')[0],
-                'numero':       data['numero'],
-                'user_id':      data['user_id'],
-                'url':          f"/media/{data['ruta_rel']}",
-                'angulo':       ev.angulo_rotacion,
-                'evidencia_id': ev.id,
-                'excluida':     bool(ev.metadatos.get('excluida')) if isinstance(ev.metadatos, dict) else False,
-            })
+            orig_url = f"/media/{data['ruta_rel']}"
+            angulo = ev.angulo_rotacion
+            ev_id = ev.id
+            excluida = bool(ev.metadatos.get('excluida')) if isinstance(ev.metadatos, dict) else False
+
+        thumb_src = f"{thumbs_url}{user_id}/{filename}" if has_thumb else (f"{proxies_url}{user_id}/{filename}" if has_proxy else orig_url)
+        proxy_src = f"{proxies_url}{user_id}/{filename}" if has_proxy else orig_url
+
+        fotos_preview.append({
+            'clave':        clave.split('_v2_')[0],
+            'numero':       data['numero'],
+            'user_id':      user_id,
+            'url':          orig_url,
+            'thumb_url':    thumb_src,
+            'proxy_url':    proxy_src,
+            'angulo':       angulo,
+            'evidencia_id': ev_id,
+            'excluida':     excluida,
+        })
 
     fotos_preview.sort(key=lambda x: (x['user_id'], x['numero']))
     return fotos_preview
@@ -1251,17 +1284,7 @@ def api_guardar_diccionario(request):
 @login_required
 def descargar_txt(request):
     """Genera y descarga un .txt con los registros del usuario/turno."""
-    registros_qs = get_registros_permitidos(request.user)
-    
-    fecha_desde = request.GET.get('fecha_desde')
-    fecha_hasta = request.GET.get('fecha_hasta')
-
-    dt_desde = _parse_aware_dt(fecha_desde, end=False)
-    dt_hasta = _parse_aware_dt(fecha_hasta, end=True)
-    if dt_desde:
-        registros_qs = registros_qs.filter(fecha_registro__gte=dt_desde)
-    if dt_hasta:
-        registros_qs = registros_qs.filter(fecha_registro__lte=dt_hasta)
+    registros_qs, _, _, _, _ = _filter_registros_from_request(request)
 
     perfil = getattr(request.user, 'perfil', None)
     turno = perfil.turno if perfil else '?'
@@ -1326,17 +1349,7 @@ def descargar_zip(request):
     import tempfile
     from django.http import FileResponse
 
-    registros_qs = get_registros_permitidos(request.user)
-    
-    fecha_desde = request.GET.get('fecha_desde')
-    fecha_hasta = request.GET.get('fecha_hasta')
-
-    dt_desde = _parse_aware_dt(fecha_desde, end=False)
-    dt_hasta = _parse_aware_dt(fecha_hasta, end=True)
-    if dt_desde:
-        registros_qs = registros_qs.filter(fecha_registro__gte=dt_desde)
-    if dt_hasta:
-        registros_qs = registros_qs.filter(fecha_registro__lte=dt_hasta)
+    registros_qs, _, _, _, _ = _filter_registros_from_request(request)
         
     # Mismo orden y agrupación que el TXT
     registros_sorted = sorted(registros_qs, key=_sort_by_foto)

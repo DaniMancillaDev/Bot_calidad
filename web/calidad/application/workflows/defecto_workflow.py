@@ -1,7 +1,7 @@
 import os
 import logging
 import time
-from typing import Dict, Any, List, Optional
+from typing import Dict, List
 
 from calidad.domain.defectos.entities import EstadoConversacion, FSMContext, FSMResult
 from calidad.domain.defectos.state_machine import RegistroFSM
@@ -10,7 +10,6 @@ from shared.infrastructure.database.django_registro_repository import DjangoRegi
 from shared.infrastructure.database.django_usuario_repository import DjangoUsuarioRepository
 from shared.infrastructure.database.django_contador_repository import DjangoContadorRepository
 from shared.infrastructure.storage.foto_storage import LocalFotoStorage
-from shared.utils.format_utils import formatear_rango_fotos
 
 logger = logging.getLogger(__name__)
 
@@ -29,12 +28,6 @@ class DefectoWorkflow:
         self._contador_repo = DjangoContadorRepository()
         # Etapa 5: storage inyectado — default LocalFotoStorage para backward compat
         self._storage = foto_storage or LocalFotoStorage()
-
-        try:
-            from shared.infrastructure.ai.deepseek_extractor import DeepSeekExtractor
-            self._extractor_ia = DeepSeekExtractor()
-        except ImportError:
-            self._extractor_ia = None
 
     def iniciar(self, user_id: int) -> FSMResult:
         """Inicia una nueva sesión de reporte."""
@@ -96,9 +89,8 @@ class DefectoWorkflow:
         estado_dict['fotos'] = list(set(estado_dict.get('fotos', []) + nuevos_contadores))
         estado_dict['fotos_sin_asignar'] = list(set(estado_dict.get('fotos_sin_asignar', []) + nuevos_contadores))
 
-        estado_actual = EstadoConversacion.parse(estado_dict.get('estado'))
-
-        mensaje = f"<b>¡{len(nuevos_contadores)} foto(s) recibidas!</b>\n\n¿Deseas enviar más fotos o prefieres continuar con el registro?"
+        total_fotos = len(estado_dict['fotos'])
+        mensaje = f"<b>Fotos recibidas: {total_fotos}</b>\n\nPresiona <b>TERMINAR</b> para continuar con el registro."
 
         self._state_repo.guardar(user_id, estado_dict)
 
@@ -156,28 +148,10 @@ class DefectoWorkflow:
 
         datos = estado_dict.get('datos', {})
 
-        # 1. Interceptar estado de confirmación IA
-        if datos.get('confirmando_extraccion'):
-            return self._handle_confirmacion(user_id, texto, estado_dict, datos)
-
-        # 2. Interceptar selección de campo a corregir
-        if datos.get('eligiendo_campo_correccion'):
-            return self._handle_eleccion_correccion(user_id, texto, estado_dict, datos)
-
-        # 3. Intentar extracción IA en ESPERANDO_MODELO
-        if estado_actual == EstadoConversacion.ESPERANDO_MODELO and self._extractor_ia:
-            # Solo usar IA si parece una oración (más de 3 palabras o más de 40 caracteres)
-            # Evita falsos positivos con modelos largos como "NS-55F501NA26 AUO"
-            if len(texto.split()) > 3 or len(texto) > 40:
-                result_ia = self._intentar_extraccion_ia(texto, estado_dict, datos)
-                if result_ia:
-                    self._state_repo.guardar(user_id, estado_dict)
-                    return result_ia
-
         context = FSMContext(
             telegram_id=user_id,
             estado=estado_actual,
-            datos=estado_dict.get('datos', {})
+            datos=datos
         )
 
         result = self._fsm.procesar_evento(context, texto.upper())
@@ -261,7 +235,6 @@ class DefectoWorkflow:
     def _generar_resumen(self, conv: Dict) -> str:
         """Genera el texto de resumen para el usuario."""
         datos = conv.get('datos', {})
-        fotos_str = formatear_rango_fotos(conv.get('fotos', []))
         num_parte = datos.get('numero_parte')
         part_str = f"<b>Num Parte:</b> {num_parte}\n" if num_parte and num_parte != "_OMITIR_" else ""
         
@@ -273,136 +246,3 @@ class DefectoWorkflow:
             f"<b>Responsable:</b> {datos.get('responsable')}\n"
             f"<b>Descripción:</b> {datos.get('descripcion')}"
         )
-
-            
-        return ", ".join(rangos)
-
-    def _intentar_extraccion_ia(self, texto_original: str, conv: dict, datos: dict) -> Optional[FSMResult]:
-        logger.info("Intentando extracción con IA...")
-        t0 = time.time()
-        
-        datos['ia_raw_request'] = texto_original
-        extraido = self._extractor_ia.extraer(texto_original)
-        
-        t1 = time.time()
-        logger.info(f"IA respondió en {t1-t0:.2f}s. Resultado: {extraido}")
-
-        if not extraido:
-            logger.warning("IA falló al extraer datos. Haciendo fallback a flujo normal.")
-            import os
-            enable_part_number = os.getenv("ENABLE_PART_NUMBER", "false").lower() in ("true", "1", "yes")
-            total_steps = 6 if enable_part_number else 5
-            
-            return FSMResult(
-                exito=True,
-                mensaje="⚠️ La IA no pudo procesar tu mensaje completo (Posible falla de red).\n"
-                        "Vamos a ingresar los datos paso a paso:\n\n"
-                        f"<b>[1/{total_steps}] Modelo</b>\n¿De qué modelo es el producto?",
-                nuevo_estado=EstadoConversacion.ESPERANDO_MODELO
-            )
-
-        import json
-        from calidad.domain.defectos.validators import validar_modelo, validar_linea, validar_cantidad
-
-        datos['ia_raw_response'] = json.dumps(extraido)
-
-        if extraido.get("modelo") and validar_modelo(str(extraido["modelo"]).upper()):
-            datos["modelo"] = str(extraido["modelo"]).upper()
-        if extraido.get("linea") and validar_linea(str(extraido["linea"]).upper()):
-            datos["linea"] = str(extraido["linea"]).upper()
-        if extraido.get("cantidad") and validar_cantidad(str(extraido["cantidad"])):
-            datos["cantidad"] = int(extraido["cantidad"])
-        if extraido.get("responsable"):
-            datos["responsable"] = str(extraido["responsable"]).upper()
-        if extraido.get("descripcion"):
-            datos["descripcion"] = str(extraido["descripcion"]).upper()
-
-        resultado = self._avanzar_siguiente_campo_vacio(conv, datos)
-        
-        if not datos.get('confirmando_extraccion'):
-            resultado.mensaje = f"🤖 <i>IA procesó parte de tu mensaje. Continuemos:</i>\n\n{resultado.mensaje}"
-            
-        return resultado
-
-    def _avanzar_siguiente_campo_vacio(self, conv: dict, datos: dict) -> FSMResult:
-        import os
-        enable_part_number = os.getenv("ENABLE_PART_NUMBER", "false").lower() in ("true", "1", "yes")
-        total_steps = 6 if enable_part_number else 5
-
-        if not datos.get("modelo"):
-            conv['estado'] = EstadoConversacion.ESPERANDO_MODELO.value
-            return FSMResult(exito=True, mensaje=f"<b>[1/{total_steps}] Modelo</b>\n¿De qué modelo es el producto?", nuevo_estado=EstadoConversacion.ESPERANDO_MODELO)
-        
-        if enable_part_number and "numero_parte" not in datos:
-            conv['estado'] = EstadoConversacion.ESPERANDO_NUMERO_PARTE.value
-            return FSMResult(exito=True, mensaje="<b>[2/6] Número de Parte (Opcional)</b>\nIngresa el número de parte.\n\nSi no aplica, presiona OMITIR.", nuevo_estado=EstadoConversacion.ESPERANDO_NUMERO_PARTE)
-            
-        if not datos.get("linea"):
-            conv['estado'] = EstadoConversacion.ESPERANDO_LINEA.value
-            return FSMResult(exito=True, mensaje=f"<b>[{'3/6' if enable_part_number else '2/5'}] Línea de Producción</b>\n¿En qué línea ocurrió?", nuevo_estado=EstadoConversacion.ESPERANDO_LINEA)
-        if not datos.get("cantidad"):
-            conv['estado'] = EstadoConversacion.ESPERANDO_CANTIDAD.value
-            return FSMResult(exito=True, mensaje=f"<b>[{'4/6' if enable_part_number else '3/5'}] Cantidad</b>\n¿Cuántos defectos encontraste? (Solo números)", nuevo_estado=EstadoConversacion.ESPERANDO_CANTIDAD)
-        if not datos.get("responsable"):
-            conv['estado'] = EstadoConversacion.ESPERANDO_RESPONSABLE.value
-            return FSMResult(exito=True, mensaje=f"<b>[{'5/6' if enable_part_number else '4/5'}] Responsable</b>\n¿Quién es el responsable? (Ej: XM)", nuevo_estado=EstadoConversacion.ESPERANDO_RESPONSABLE)
-        if not datos.get("descripcion"):
-            conv['estado'] = EstadoConversacion.ESPERANDO_DESCRIPCION.value
-            return FSMResult(exito=True, mensaje=f"<b>[{'6/6' if enable_part_number else '5/5'}] Descripción</b>\nPor último, descríbeme el defecto:", nuevo_estado=EstadoConversacion.ESPERANDO_DESCRIPCION)
-
-        datos['confirmando_extraccion'] = True
-        
-        from html import escape
-        resumen = (
-            f"🤖 <b>Extracción Inteligente:</b>\n\n"
-            f"1. <b>Modelo:</b> {escape(datos['modelo'])}\n"
-            f"2. <b>Línea:</b> {escape(datos['linea'])}\n"
-            f"3. <b>Cantidad:</b> {datos['cantidad']}\n"
-            f"4. <b>Resp:</b> {escape(datos['responsable'])}\n"
-            f"5. <b>Detalles:</b> {escape(datos['descripcion'])}\n\n"
-            f"¿Los datos son correctos? (Responde <b>SI</b> o <b>NO</b>)"
-        )
-        return FSMResult(exito=True, mensaje=resumen, nuevo_estado=None)
-
-    def _handle_confirmacion(self, user_id: int, mensaje: str, conv: dict, datos: dict) -> FSMResult:
-        if mensaje.upper() in ['SI', 'SÍ']:
-            datos['confirmando_extraccion'] = False
-            
-            guardado = self._guardar_registro(user_id, conv)
-            if guardado:
-                resumen = self._generar_resumen(conv)
-                try:
-                    self._state_repo.finalizar(user_id)
-                except Exception as redis_exc:
-                    # DB guardado OK; Redis falló → estado huérfano en Redis.
-                    # Se requiere reconciliación manual o tarea de limpieza.
-                    logger.error(
-                        "RECONCILE_NEEDED | user_id=%s DB=OK Redis.finalizar FAILED: %s",
-                        user_id, redis_exc
-                    )
-                return FSMResult(exito=True, finalizado=True, mensaje=f"<b>¡Reporte guardado con éxito!</b>\n\n{resumen}\n\n<i>Para reportar otro defecto, simplemente envíame fotos nuevas.</i>")
-            else:
-                return FSMResult(exito=False, finalizado=True, mensaje="Error al guardar el registro en base de datos.")
-                
-        elif mensaje.upper() == 'NO':
-            datos['confirmando_extraccion'] = False
-            datos['eligiendo_campo_correccion'] = True
-            self._state_repo.guardar(user_id, conv)
-            return FSMResult(exito=True, mensaje="De acuerdo. ¿Qué número de dato deseas corregir? (1 al 5)")
-        else:
-            return FSMResult(exito=False, mensaje="⚠️ Por favor responde <b>SI</b> o <b>NO</b>.")
-
-    def _handle_eleccion_correccion(self, user_id: int, mensaje: str, conv: dict, datos: dict) -> FSMResult:
-        if mensaje not in ['1', '2', '3', '4', '5']:
-            return FSMResult(exito=False, mensaje="⚠️ Por favor responde con un número del 1 al 5.")
-        
-        datos['eligiendo_campo_correccion'] = False
-        if mensaje == '1': datos['modelo'] = None
-        elif mensaje == '2': datos['linea'] = None
-        elif mensaje == '3': datos['cantidad'] = None
-        elif mensaje == '4': datos['responsable'] = None
-        elif mensaje == '5': datos['descripcion'] = None
-
-        result = self._avanzar_siguiente_campo_vacio(conv, datos)
-        self._state_repo.guardar(user_id, conv)
-        return result

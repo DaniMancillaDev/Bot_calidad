@@ -139,6 +139,10 @@ services:
       - static_data:/usr/share/nginx/html/static:ro
     depends_on:
       - web
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
     networks:
       - internal
 

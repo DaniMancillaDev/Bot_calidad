@@ -39,7 +39,7 @@ def api_patch_registro(request, registro_id):
         registro = RegistroDefecto.objects.get(id=registro_id)
 
         # Campos editables directos
-        CAMPOS_DIRECTOS = ["numero_parte", "linea", "cantidad", "descripcion", "responsable", "comentarios_supervisor"]
+        CAMPOS_DIRECTOS = ["modelo", "numero_parte", "linea", "cantidad", "descripcion", "responsable", "comentarios_supervisor"]
         update_fields = []
         for campo in CAMPOS_DIRECTOS:
             if campo in data:

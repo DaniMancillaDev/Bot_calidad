@@ -1,19 +1,29 @@
+import asyncio
 import logging
+import time
+
 import httpx
 from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
 
 logger = logging.getLogger(__name__)
 
+
 class ApiException(Exception):
     pass
 
-import time
-import asyncio
 
 # Caché técnica en memoria para perfiles (evita ráfagas de logs)
-_CACHE_PERFIL = {}
-_CACHE_LOCK = asyncio.Lock()
-TTL_PERFIL = 300 # 5 minutos
+_CACHE_PERFIL: dict = {}
+_CACHE_LOCKS: dict[int, asyncio.Lock] = {}  # ponytail: per-user locks; global lock serializa todos los usuarios
+TTL_PERFIL = 300  # 5 minutos
+
+# Política de retry compartida
+_retry_policy = retry(
+    wait=wait_exponential(multiplier=1, min=0.5, max=10),
+    stop=stop_after_attempt(3),
+    retry=retry_if_exception_type((httpx.NetworkError, httpx.TimeoutException)),
+    reraise=True,
+)
 
 class BotApiClient:
     """
@@ -30,18 +40,14 @@ class BotApiClient:
         self.client = httpx.AsyncClient(
             base_url=self.base_url,
             headers=headers,
-            timeout=httpx.Timeout(10.0, connect=3.0)
+            timeout=httpx.Timeout(10.0, connect=3.0),
+            limits=httpx.Limits(max_keepalive_connections=20, max_connections=50)
         )
 
     async def close(self):
         await self.client.aclose()
 
-    @retry(
-        wait=wait_exponential(multiplier=1, min=2, max=10),
-        stop=stop_after_attempt(3),
-        retry=retry_if_exception_type((httpx.NetworkError, httpx.TimeoutException)),
-        reraise=True
-    )
+    @_retry_policy
     async def _get(self, endpoint: str, params: dict = None) -> dict:
         try:
             response = await self.client.get(endpoint, params=params)
@@ -54,12 +60,7 @@ class BotApiClient:
             logger.error(f"Network Error at {endpoint}: {str(e)}")
             raise
 
-    @retry(
-        wait=wait_exponential(multiplier=1, min=2, max=10),
-        stop=stop_after_attempt(3),
-        retry=retry_if_exception_type((httpx.NetworkError, httpx.TimeoutException)),
-        reraise=True
-    )
+    @_retry_policy
     async def _post(self, endpoint: str, json: dict = None, data: dict = None, files: dict = None) -> dict:
         try:
             response = await self.client.post(endpoint, json=json, data=data, files=files)
@@ -95,19 +96,6 @@ class BotApiClient:
     async def iniciar_defecto(self, telegram_id: int) -> dict:
         return await self._post("/api/v1/workflows/defecto/iniciar/", json={"telegram_id": telegram_id})
 
-    async def adjuntar_evidencia(self, telegram_id: int, file_bytes: bytes, session_id: str) -> dict:
-        # Para uploads de fotos, damos más tiempo de timeout local
-        files = {'file': ('foto.jpg', file_bytes, 'image/jpeg')}
-        data = {'telegram_id': str(telegram_id), 'session_id': session_id}
-        
-        try:
-            response = await self.client.post("/api/v1/workflows/defecto/adjuntar-evidencia/", data=data, files=files, timeout=20.0)
-            response.raise_for_status()
-            return response.json()
-        except httpx.HTTPStatusError as e:
-            logger.error(f"API Error {e.response.status_code}: {e.response.text}")
-            raise ApiException(f"HTTP {e.response.status_code}")
-
     async def adjuntar_evidencia_lote(self, telegram_id: int, fotos_ids: list[int]) -> dict:
         """Avanza la máquina de estados con las fotos agrupadas y descargadas."""
         return await self._post(
@@ -126,17 +114,21 @@ class BotApiClient:
     # WORKFLOW: USUARIO
     # ==========================
     async def obtener_perfil(self, telegram_id: int) -> dict:
-        """Retorna perfil del usuario (turno, depto, rol, nombre). 404 → None. Usa caché técnica con Lock."""
+        """Retorna perfil del usuario (turno, depto, rol, nombre). 404 → None. Caché con lock por usuario."""
         ahora = time.time()
-        
-        async with _CACHE_LOCK:
-            # 1. Intentar desde caché
-            if telegram_id in _CACHE_PERFIL:
-                ts, data = _CACHE_PERFIL[telegram_id]
-                if ahora - ts < TTL_PERFIL:
-                    return data
 
-            # 2. Si no hay caché o expiró, pedir a la API
+        # Check sin lock — race benigno: lo peor es una llamada extra al API
+        cached = _CACHE_PERFIL.get(telegram_id)
+        if cached and ahora - cached[0] < TTL_PERFIL:
+            return cached[1]
+
+        lock = _CACHE_LOCKS.setdefault(telegram_id, asyncio.Lock())
+        async with lock:
+            # Re-check dentro del lock
+            cached = _CACHE_PERFIL.get(telegram_id)
+            if cached and ahora - cached[0] < TTL_PERFIL:
+                return cached[1]
+
             try:
                 response = await self.client.get(
                     "/api/v1/workflows/usuario/perfil/",
@@ -145,9 +137,8 @@ class BotApiClient:
                 if response.status_code == 404:
                     return None
                 response.raise_for_status()
-                
+
                 perfil = response.json()
-                # Guardar en caché
                 _CACHE_PERFIL[telegram_id] = (ahora, perfil)
                 return perfil
             except Exception as e:
@@ -156,57 +147,17 @@ class BotApiClient:
 
     async def obtener_estadisticas(self, telegram_id: int) -> dict:
         """Obtiene las estadísticas de registros y estado actual del usuario."""
-        try:
-            response = await self.client.get(
-                "/api/v1/workflows/usuario/estadisticas/",
-                params={'telegram_id': telegram_id}
-            )
-            response.raise_for_status()
-            return response.json()
-        except httpx.HTTPStatusError as e:
-            logger.error(f"Error HTTP {e.response.status_code} obteniendo estadísticas: {e.response.text}")
-            raise ApiException(f"HTTP {e.response.status_code}")
-        except Exception as e:
-            logger.error(f"Error obteniendo estadísticas para {telegram_id}: {str(e)}")
-            raise ApiException("No se pudo obtener las estadísticas del usuario.")
-
-    async def obtener_info_evidencia(self, telegram_id: int) -> dict:
-        """Obtiene la información de las evidencias fotográficas del usuario."""
-        try:
-            response = await self.client.get(
-                "/api/v1/export/evidencia/info/",
-                params={'telegram_id': telegram_id}
-            )
-            response.raise_for_status()
-            return response.json()
-        except httpx.HTTPStatusError as e:
-            logger.error(f"Error HTTP {e.response.status_code} obteniendo info de evidencia: {e.response.text}")
-            raise ApiException(f"HTTP {e.response.status_code}")
-        except Exception as e:
-            logger.error(f"Error obteniendo info de evidencia para {telegram_id}: {str(e)}")
-            raise ApiException("No se pudo obtener la info de evidencia del usuario.")
+        return await self._get(
+            "/api/v1/workflows/usuario/estadisticas/",
+            params={'telegram_id': telegram_id}
+        )
 
     # ==========================
     # WORKFLOW: SESION
     # ==========================
     async def cancelar_sesion(self, telegram_id: int) -> dict:
         """Rollback contador + limpieza backend. Borrado físico de fotos lo hace el bot."""
-    async def limpiar_sesion(self, telegram_id: int) -> dict:
-        """Borra registros BD del usuario + reinicia contador."""
-        return await self._post(
-            "/api/v1/workflows/sesion/limpiar/",
-            json={"telegram_id": telegram_id}
-        )
-        
-    async def cancelar_sesion(self, telegram_id: int) -> dict:
         return await self._post(
             "/api/v1/workflows/sesion/cancelar/",
-            json={"telegram_id": telegram_id}
-        )
-
-    async def limpiar_fotos_sesion(self, telegram_id: int) -> dict:
-        """Reinicia contador del usuario. Borrado físico lo hace el bot."""
-        return await self._post(
-            "/api/v1/workflows/sesion/limpiar-fotos/",
             json={"telegram_id": telegram_id}
         )

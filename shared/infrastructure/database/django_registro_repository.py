@@ -1,10 +1,10 @@
-"""
-DjangoRegistroRepository — implementa RegistroRepository usando el ORM de Django.
-Reemplaza sqlite_registro_repository.py.
-"""
+import logging
 import os
-import django
+import time
 from typing import List, Dict, Optional
+import django
+
+logger = logging.getLogger(__name__)
 
 # Configurar Django ORM si no está inicializado (para el bot)
 if not os.environ.get('DJANGO_SETTINGS_MODULE'):
@@ -23,7 +23,6 @@ class DjangoRegistroRepository:
                 departamento: Optional[str] = None,
                 numero_parte: Optional[str] = None) -> bool:
         from calidad.models import RegistroDefecto
-        import time
         try:
             # Normalizar: asegurar lista de ints
             fotos_list = list(fotos) if isinstance(fotos, list) else []
@@ -56,13 +55,12 @@ class DjangoRegistroRepository:
             sync_fotos_to_evidencias(registro)
             
             elapsed = (time.monotonic() - t0) * 1000
-            import logging
-            logging.getLogger(__name__).info(
+            logger.info(
                 "RegistroDefecto guardado | user_id=%s fotos=%s elapsed=%.1fms",
                 user_id, fotos_list, elapsed
             )
             return True
         except Exception as e:
-            import logging
-            logging.getLogger(__name__).error("Error guardando RegistroDefecto: %s", e)
+            logger.error("Error guardando RegistroDefecto: %s", e)
             return False
+

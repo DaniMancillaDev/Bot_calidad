@@ -13,6 +13,7 @@ ISP : usa solo metodos de api_client.
 import asyncio
 import logging
 import os
+import time
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import ContextTypes
@@ -20,26 +21,23 @@ from bot.handlers.lock_utils import prevent_double_tap
 
 logger = logging.getLogger(__name__)
 
-import os
 FOTOS_PATH = os.getenv("FOTOS_PATH", "media_files/fotos")
 
 # Tiempo de debounce POR USUARIO para agrupar fotos.
 # Telegram divide álbumes grandes (>10 fotos) en múltiples media_group_ids.
 # Ej: 27 fotos → 3 albums con IDs distintos, enviados en ráfaga.
-# 2.0s es suficiente para capturar la pausa entre albums consecutivos
-# sin añadir latencia excesiva al usuario.
-_DEBOUNCE_SECONDS = 2.0
+# 0.8s es suficiente para capturar la pausa entre albums consecutivos
+# sin añadir latencia excesiva.
+_DEBOUNCE_SECONDS = 0.8
 
 
 # ─────────────────────────────────────────
-# /start
+# Handlers del flujo de registro
 # ─────────────────────────────────────────
 def create_start(api_client):
     """
-    Factory para /start.
-
-    Args:
-        api_client: BotApiClient
+    Factory para el handler /start.
+    Inicia una nueva sesión FSM en el backend (Redis) y muestra mensaje de bienvenida.
     """
     async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not update.message or not update.effective_user:
@@ -49,6 +47,8 @@ def create_start(api_client):
         
         try:
             # Cancelamos la sesión anterior (FSM) sin borrar registros de BD
+            context.user_data.pop("photo_status_msg_id", None)
+            context.user_data.pop("photo_batch", None)
             await api_client.cancelar_sesion(user_id)
             await api_client.iniciar_defecto(user_id)
 
@@ -78,49 +78,27 @@ def create_start(api_client):
 # ─────────────────────────────────────────
 def create_guardar_foto(api_client):
     """
-    Factory para el handler de fotos entrantes.
-
-    Debounce a NIVEL DE USUARIO (no por media_group_id).
-    Agrupa TODAS las fotos en una ventana y las descarga temporalmente.
-    Luego delega al backend la transición de FSM y renombrado.
-
-    Args:
-        api_client: BotApiClient
+    Factory para el handler de fotos.
+    Descarga en pipeline concurrente y procesa con debounce ultra rápido.
     """
     async def guardar_foto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        if not update.message or not update.effective_user:
+        if not update.message or not update.message.photo:
             return
 
         user_id = update.effective_user.id if update.effective_user else None
-        
-        try:
-            perfil = await api_client.obtener_perfil(user_id)
-            if not perfil:
-                await update.message.reply_text(
-                    "<b>Usuario no registrado.</b>\n"
-                    "Contacta al administrador con tu ID de Telegram.\n"
-                    f"Tu ID es: <code>{user_id}</code>",
-                    parse_mode="HTML",
-                )
-                return
-        except Exception as e:
-            logger.error("Error verificando usuario para fotos: %s", e)
+        if not user_id:
             return
+
+        user_folder = os.path.join(FOTOS_PATH, str(user_id))
+        os.makedirs(user_folder, exist_ok=True)
 
         # ===== FUNCIÓN INTERNA DE DESCARGA TEMPORAL =====
         async def _descargar_foto_temporal(msg) -> int:
-            import time
             t0 = time.monotonic()
             try:
                 photo = msg.photo[-1]
                 file = await photo.get_file(read_timeout=30)
-
-                nombre_archivo = f"tmp_{msg.message_id}.jpg"
-
-                user_folder = os.path.join(FOTOS_PATH, str(user_id))
-                os.makedirs(user_folder, exist_ok=True)
-                ruta = os.path.join(user_folder, nombre_archivo)
-
+                ruta = os.path.join(user_folder, f"tmp_{msg.message_id}.jpg")
                 await file.download_to_drive(ruta)
                 elapsed = (time.monotonic() - t0) * 1000
                 logger.info("Descarga foto individual | user_id=%s msg_id=%s elapsed=%.1fms", user_id, msg.message_id, elapsed)
@@ -130,90 +108,64 @@ def create_guardar_foto(api_client):
                 logger.error("Error descargando foto %s | elapsed=%.1fms error=%s", msg.message_id, elapsed, e)
                 return -1
 
-        # ===== DEBOUNCE A NIVEL DE USUARIO (NO POR MEDIA GROUP) =====
-        #
-        # Estructura en context.user_data:
-        #   "photo_batch": {
-        #       "messages": [msg1, msg2, ...],   ← TODAS las fotos pendientes
-        #       "timer_task": Task | None,        ← un solo timer por usuario
-        #       "wait_msg_id": int | None,        ← un solo mensaje de espera
-        #   }
-        #   "batch_lock": asyncio.Lock()          ← protege acceso concurrente
-
         if "batch_lock" not in context.user_data:
             context.user_data["batch_lock"] = asyncio.Lock()
 
         # ── Sección crítica: un solo lock por usuario ──
         async with context.user_data["batch_lock"]:
-            is_first = "photo_batch" not in context.user_data
-
-            if is_first:
+            if "photo_batch" not in context.user_data:
                 context.user_data["photo_batch"] = {
-                    "messages": [],
+                    "download_tasks": [],
                     "timer_task": None,
-                    "wait_msg_id": None,
                 }
 
             batch = context.user_data["photo_batch"]
-            batch["messages"].append(update.message)
 
-            # Solo la primera foto de todo el lote envía "Recibiendo..."
-            if is_first:
+            # Iniciar descarga inmediatamente en background (Pipelining)
+            task = asyncio.create_task(_descargar_foto_temporal(update.message))
+            batch["download_tasks"].append(task)
+
+            # Si aún no existe mensaje de estado para este álbum, crearlo una sola vez
+            if not context.user_data.get("photo_status_msg_id"):
                 wait_msg = await update.message.reply_text(
                     "<i>Recibiendo y ordenando fotos, por favor espera...</i>",
                     parse_mode="HTML",
                 )
-                batch["wait_msg_id"] = wait_msg.message_id
+                context.user_data["photo_status_msg_id"] = wait_msg.message_id
 
             # Cancelar timer anterior (cada foto nueva reinicia el debounce)
             if batch["timer_task"] is not None:
                 batch["timer_task"].cancel()
 
-            # Nuevo timer: cuando pasen _DEBOUNCE_SECONDS sin fotos nuevas, procesar todo
+            # Nuevo timer ultra-rápido: procesa cuando pasen _DEBOUNCE_SECONDS
             batch["timer_task"] = asyncio.create_task(
                 _process_user_batch(
                     context, update.effective_chat.id,
-                    user_id, _descargar_foto_temporal, api_client
+                    user_id, api_client
                 )
             )
         # ── Fin sección crítica ──
 
     async def _process_user_batch(
-        context, chat_id, user_id, descargar_fn, api_client
+        context, chat_id, user_id, api_client
     ):
         """
         Se ejecuta tras _DEBOUNCE_SECONDS sin fotos nuevas del usuario.
         """
-        import time
-        import asyncio
         t_batch = time.monotonic()
-        logger.info("DEBUG: Entrando a _process_user_batch, a punto de hacer sleep 2s")
         try:
             await asyncio.sleep(_DEBOUNCE_SECONDS)
 
-            logger.info("DEBUG: Sleep terminado, sacando photo_batch")
             batch = context.user_data.pop("photo_batch", None)
             if not batch:
-                logger.info("DEBUG: photo_batch ya fue poppeado o es None")
                 return
 
-            mensajes = batch["messages"]
-            mensajes.sort(key=lambda m: m.message_id)
+            tasks = batch["download_tasks"]
+            logger.info("Esperando pipeline de %d foto(s) para user %s", len(tasks), user_id)
 
-            logger.info("Descargando lote de %d foto(s) temporalmente para user %s", len(mensajes), user_id)
-
-            sem = asyncio.Semaphore(5)
-
-            async def _download_with_sem(m):
-                async with sem:
-                    return await descargar_fn(m)
-
-            resultados = await asyncio.gather(
-                *[_download_with_sem(msg) for msg in mensajes],
-                return_exceptions=True
-            )
+            # Esperar las tareas que ya venían descargándose en paralelo
+            resultados = await asyncio.gather(*tasks, return_exceptions=True)
         except asyncio.CancelledError:
-            logger.warning("DEBUG: _process_user_batch CANCELADO")
             raise
         except Exception as e:
             logger.error("DEBUG: EXCEPCION CRITICA EN _process_user_batch: %s", e, exc_info=True)
@@ -228,22 +180,16 @@ def create_guardar_foto(api_client):
                     fotos_ids.append(res)
 
             if not fotos_ids:
-                await context.bot.send_message(
-                    chat_id,
-                    "<b>Error interno al descargar las fotos.</b>",
-                    parse_mode="HTML",
-                )
                 return
 
+            fotos_ids.sort()
             elapsed_descarga_lote = (time.monotonic() - t_batch - _DEBOUNCE_SECONDS) * 1000
-            logger.info("Descarga total lote | user_id=%s cantidad=%d elapsed=%.1fms", user_id, len(mensajes), elapsed_descarga_lote)
+            logger.info("Pipeline completado | user_id=%s cantidad=%d post_sleep_elapsed=%.1fms", user_id, len(fotos_ids), elapsed_descarga_lote)
 
             # Delegar FSM al backend
             try:
                 result = await api_client.adjuntar_evidencia_lote(user_id, fotos_ids)
-                
                 texto_estado = result.get('mensaje', f"Se agregaron {len(fotos_ids)} foto(s).")
-                
                 reply_markup = InlineKeyboardMarkup(
                     [[InlineKeyboardButton("TERMINAR", callback_data="terminar_fotos")]]
                 )
@@ -252,38 +198,25 @@ def create_guardar_foto(api_client):
                 texto_estado = "<b>Error al procesar lote en el servidor.</b>"
                 reply_markup = None
 
-            # Borrar mensaje temporal de "Recibiendo..."
-            wait_msg_id = batch.get("wait_msg_id")
-            if wait_msg_id:
+            # Actualizar SIEMPRE el mismo mensaje de estado persistente
+            status_msg_id = context.user_data.get("photo_status_msg_id")
+            if status_msg_id:
                 try:
-                    await context.bot.delete_message(
-                        chat_id=chat_id, message_id=wait_msg_id,
+                    await context.bot.edit_message_text(
+                        chat_id=chat_id,
+                        message_id=status_msg_id,
+                        text=texto_estado,
+                        reply_markup=reply_markup,
+                        parse_mode="HTML"
                     )
+                    if reply_markup:
+                        context.user_data.setdefault("inline_msg_ids", []).append(status_msg_id)
                 except Exception:
-                    pass
-
-            # Quitar botones de mensajes anteriores (si hay)
-            inline_msg_ids = context.user_data.get("inline_msg_ids", [])
-            for old_msg_id in inline_msg_ids:
-                try:
-                    await context.bot.edit_message_reply_markup(
-                        chat_id=chat_id, message_id=old_msg_id, reply_markup=None
-                    )
-                except Exception:
-                    pass
-
-            sent_msg = await context.bot.send_message(
-                chat_id=chat_id,
-                text=texto_estado,
-                parse_mode="HTML",
-                reply_markup=reply_markup,
-            )
-
-            # Rastrear ID del mensaje con botón para limpiarlo después
-            if reply_markup:
-                if "inline_msg_ids" not in context.user_data:
-                    context.user_data["inline_msg_ids"] = []
-                context.user_data["inline_msg_ids"].append(sent_msg.message_id)
+                    sent = await _send_and_track(context, chat_id, texto_estado, reply_markup)
+                    context.user_data["photo_status_msg_id"] = sent.message_id
+            else:
+                sent = await _send_and_track(context, chat_id, texto_estado, reply_markup)
+                context.user_data["photo_status_msg_id"] = sent.message_id
 
         except asyncio.CancelledError:
             # Esperado: llegó otra foto antes del debounce
@@ -292,6 +225,24 @@ def create_guardar_foto(api_client):
             logger.error("Error procesando lote de fotos para user %s: %s", user_id, e)
 
     return guardar_foto
+
+
+async def _clear_inline_buttons(bot, chat_id: int, msg_ids: list) -> None:
+    """Limpia teclados inline de mensajes previos en paralelo."""
+    if not msg_ids:
+        return
+    await asyncio.gather(
+        *[bot.edit_message_reply_markup(chat_id=chat_id, message_id=mid, reply_markup=None) for mid in msg_ids],
+        return_exceptions=True
+    )
+
+
+async def _send_and_track(context, chat_id: int, text: str, reply_markup, parse_mode="HTML"):
+    """Envia mensaje y rastrea su ID si tiene InlineKeyboard."""
+    sent = await context.bot.send_message(chat_id=chat_id, text=text, parse_mode=parse_mode, reply_markup=reply_markup)
+    if reply_markup and isinstance(reply_markup, InlineKeyboardMarkup):
+        context.user_data.setdefault("inline_msg_ids", []).append(sent.message_id)
+    return sent
 
 
 # ─────────────────────────────────────────
@@ -323,32 +274,20 @@ def create_terminar_callback(api_client):
             exito = False
             mensaje = "Error al procesar la terminación del álbum."
 
-        # Quitar TODOS los botones inline de mensajes previos
-        inline_msg_ids = context.user_data.pop("inline_msg_ids", [])
-        for msg_id in inline_msg_ids:
-            try:
-                await context.bot.edit_message_reply_markup(
-                    chat_id=update.effective_chat.id, message_id=msg_id, reply_markup=None
-                )
-            except Exception:
-                pass
+        # Liberar el tracking del mensaje de estado de fotos
+        context.user_data.pop("photo_status_msg_id", None)
+        await _clear_inline_buttons(context.bot, update.effective_chat.id, context.user_data.pop("inline_msg_ids", []))
 
-        # Solo enviar mensaje si TERMINAR fue exitoso (álbum cerrado)
+        # Reemplazar in-place el mensaje con la pregunta [1/5] Modelo
         if exito and mensaje:
             reply_markup = _get_reply_markup_for_mensaje(mensaje, estado, context_data)
-
-            sent_msg = await context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text=mensaje,
-                parse_mode="HTML",
-                reply_markup=reply_markup,
-            )
-            if reply_markup and isinstance(reply_markup, InlineKeyboardMarkup):
-                if "inline_msg_ids" not in context.user_data:
-                    context.user_data["inline_msg_ids"] = []
-                context.user_data["inline_msg_ids"].append(sent_msg.message_id)
+            try:
+                await query.edit_message_text(text=mensaje, parse_mode="HTML", reply_markup=reply_markup)
+                if reply_markup and isinstance(reply_markup, InlineKeyboardMarkup):
+                    context.user_data.setdefault("inline_msg_ids", []).append(query.message.message_id)
+            except Exception:
+                await _send_and_track(context, update.effective_chat.id, mensaje, reply_markup)
         elif not exito and mensaje:
-            # TERMINAR rechazado (ya no en ESPERANDO_FOTOS) — feedback breve
             await query.answer(text=mensaje, show_alert=True)
 
     return terminar_callback
@@ -380,33 +319,15 @@ def create_omitir_callback(api_client):
             logger.error("Error omitiendo numero_parte para %s: %s", user_id, e)
             mensaje = "Error al procesar la respuesta."
 
-        # Quitar TODOS los botones inline de mensajes previos
-        inline_msg_ids = context.user_data.pop("inline_msg_ids", [])
-        if update.effective_message.id not in inline_msg_ids:
-            inline_msg_ids.append(update.effective_message.id)
-            
-        for msg_id in inline_msg_ids:
-            try:
-                await context.bot.edit_message_reply_markup(
-                    chat_id=update.effective_chat.id, message_id=msg_id, reply_markup=None
-                )
-            except Exception:
-                pass
+        # Quitar TODOS los botones inline de mensajes previos (incluido el actual)
+        ids = context.user_data.pop("inline_msg_ids", [])
+        if update.effective_message.id not in ids:
+            ids.append(update.effective_message.id)
+        await _clear_inline_buttons(context.bot, update.effective_chat.id, ids)
 
         if mensaje:
-            # Check if next step needs OMITIR button (unlikely, but just in case)
             reply_markup = _get_reply_markup_for_mensaje(mensaje, estado, context_data)
-
-            sent_msg = await context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text=mensaje,
-                parse_mode="HTML",
-                reply_markup=reply_markup,
-            )
-            if reply_markup and isinstance(reply_markup, InlineKeyboardMarkup):
-                if "inline_msg_ids" not in context.user_data:
-                    context.user_data["inline_msg_ids"] = []
-                context.user_data["inline_msg_ids"].append(sent_msg.message_id)
+            await _send_and_track(context, update.effective_chat.id, mensaje, reply_markup)
 
     return omitir_callback
 
@@ -434,28 +355,13 @@ def create_procesar_respuesta(api_client):
             mensaje = "Error al procesar tu respuesta."
 
         # Quitar teclados inline anteriores si el usuario responde con texto libre
-        inline_msg_ids = context.user_data.pop("inline_msg_ids", [])
-        for msg_id in inline_msg_ids:
-            try:
-                await context.bot.edit_message_reply_markup(
-                    chat_id=update.effective_chat.id, message_id=msg_id, reply_markup=None
-                )
-            except Exception:
-                pass
+        await _clear_inline_buttons(context.bot, update.effective_chat.id, context.user_data.pop("inline_msg_ids", []))
 
         if mensaje:
             reply_markup = _get_reply_markup_for_mensaje(mensaje, estado, context_data)
-                
-            sent_msg = await update.message.reply_text(
-                mensaje,
-                reply_markup=reply_markup,
-                parse_mode="HTML"
-            )
-            
+            sent = await update.message.reply_text(mensaje, reply_markup=reply_markup, parse_mode="HTML")
             if reply_markup and isinstance(reply_markup, InlineKeyboardMarkup):
-                if "inline_msg_ids" not in context.user_data:
-                    context.user_data["inline_msg_ids"] = []
-                context.user_data["inline_msg_ids"].append(sent_msg.message_id)
+                context.user_data.setdefault("inline_msg_ids", []).append(sent.message_id)
 
     return procesar_respuesta
 
@@ -479,17 +385,10 @@ def create_opcion_callback(api_client):
         opcion = query.data.split(":", 1)[1]
 
         # Quitar el teclado inline del mensaje actual y anteriores
-        inline_msg_ids = context.user_data.pop("inline_msg_ids", [])
-        if update.effective_message.id not in inline_msg_ids:
-            inline_msg_ids.append(update.effective_message.id)
-            
-        for msg_id in inline_msg_ids:
-            try:
-                await context.bot.edit_message_reply_markup(
-                    chat_id=update.effective_chat.id, message_id=msg_id, reply_markup=None
-                )
-            except Exception:
-                pass
+        ids = context.user_data.pop("inline_msg_ids", [])
+        if update.effective_message.id not in ids:
+            ids.append(update.effective_message.id)
+        await _clear_inline_buttons(context.bot, update.effective_chat.id, ids)
 
         if opcion in ["Otra", "Otro"]:
             await context.bot.send_message(
@@ -510,17 +409,7 @@ def create_opcion_callback(api_client):
 
         if mensaje:
             reply_markup = _get_reply_markup_for_mensaje(mensaje, estado, context_data)
-
-            sent_msg = await context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text=mensaje,
-                parse_mode="HTML",
-                reply_markup=reply_markup,
-            )
-            if reply_markup and isinstance(reply_markup, InlineKeyboardMarkup):
-                if "inline_msg_ids" not in context.user_data:
-                    context.user_data["inline_msg_ids"] = []
-                context.user_data["inline_msg_ids"].append(sent_msg.message_id)
+            await _send_and_track(context, update.effective_chat.id, mensaje, reply_markup)
 
     return opcion_callback
 
