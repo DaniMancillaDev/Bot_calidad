@@ -207,35 +207,14 @@
   color: #fff;
   border-color: var(--danger);
 }
-
-
-    .modal-overlay {
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0, 0, 0, 0.7);
-      backdrop-filter: blur(4px);
-      z-index: 2500;
-      display: none;
-      align-items: center;
-      justify-content: center;
-    }
-    .modal-content {
-      background: var(--surface);
-      padding: 24px 28px;
-      border-radius: 14px;
-      width: 90%;
-      max-width: 440px;
-      border: 1px solid var(--border);
-      box-shadow: 0 24px 38px rgba(0, 0, 0, 0.35);
-    }
 </style>
 {% endblock %}
 
 {% block topbar_actions %}
 <div style="display: flex; gap: 10px;">
-    <form action="{% url 'importacion_cancelar' %}" method="POST" onsubmit="return confirm('¿Estás seguro de cancelar? Se borrarán las fotos temporales y perderás el progreso.');">
+    <form id="form-cancelar-importacion" action="{% url 'importacion_cancelar' %}" method="POST">
         {% csrf_token %}
-        <button type="submit" class="btn btn-ghost" style="color: var(--danger-color);">
+        <button type="button" class="btn btn-ghost" style="color: var(--danger);" onclick="showConfirmModal('¿Cancelar Importación?', '¿Estás seguro de cancelar? Se borrarán las fotos temporales y perderás el progreso.', 'Sí, cancelar', 'var(--danger)', () => document.getElementById('form-cancelar-importacion').submit())">
             <span class="material-symbols-outlined icon" style="vertical-align: middle;">cancel</span> Cancelar
         </button>
     </form>
@@ -287,7 +266,7 @@
     let state = JSON.parse(document.getElementById('init-data').textContent);
     
     if (!state || !state.registros) {
-        alert("No hay sesión activa de importación.");
+        showConfirmModal('Aviso', 'No hay sesión activa de importación.', 'Entendido', 'var(--primary)', () => {});
         window.location.href = "{% url 'importacion_iniciar' %}";
     }
 
@@ -338,23 +317,6 @@
         div.appendChild(badge);
         
         return div;
-    }
-
-    
-
-
-
-    let confirmAction = null;
-    function showConfirmModal(title, text, btnText, btnColor, callback) {
-        document.getElementById('confirm-modal-title').textContent = title;
-        document.getElementById('confirm-modal-text').textContent = text;
-        const btnOk = document.getElementById('btn-confirm-ok');
-        btnOk.textContent = btnText;
-        btnOk.style.background = btnColor;
-        btnOk.style.borderColor = btnColor;
-        
-        confirmAction = callback;
-        document.getElementById('confirm-modal').style.display = 'flex';
     }
 
     function renderWorkspace() {
@@ -564,13 +526,13 @@
         })
         .then(data => {
             if (data.error) {
-                alert("Error al guardar: " + data.error + "\nRecargando página...");
+                showConfirmModal('Error al guardar', "Error al guardar: " + data.error + ". Recargando página...", 'Entendido', 'var(--danger)', () => {});
                 window.location.reload();
             }
         })
         .catch(error => {
             console.error("Error AJAX:", error);
-            alert("Error de conexión al guardar los cambios. Recargando para mantener sincronización...");
+            showConfirmModal('Error de conexión', 'Error de conexión al guardar los cambios. Recargando para mantener sincronización...', 'Entendido', 'var(--danger)', () => {});
             window.location.reload();
         });
     }
@@ -603,13 +565,13 @@
             if (data.redirect) {
                 window.location.href = data.redirect;
             } else if (data.error) {
-                alert("Error: " + data.error);
+                showConfirmModal('Error', "Error: " + data.error, 'Entendido', 'var(--danger)', () => {});
                 btn.disabled = false;
                 btn.innerHTML = '<span class="material-symbols-outlined icon" style="vertical-align: middle;">check_circle</span> Confirmar Importación';
             }
         })
         .catch(error => {
-            alert("Ocurrió un error al confirmar. Inténtalo de nuevo.");
+            showConfirmModal('Error', 'Ocurrió un error al confirmar. Inténtalo de nuevo.', 'Entendido', 'var(--danger)', () => {});
             console.error(error);
             btn.disabled = false;
             btn.innerHTML = '<span class="material-symbols-outlined icon" style="vertical-align: middle;">check_circle</span> Confirmar Importación';
@@ -619,14 +581,7 @@
     }
 
         // Bootstrap
-    document.addEventListener('DOMContentLoaded', () => {
-        
-        document.getElementById('btn-confirm-cancel').addEventListener('click', () => {
-            document.getElementById('confirm-modal').style.display = 'none';
-            confirmAction = null;
-        });
-        
-        document.getElementById('btn-confirm-ok').addEventListener('click', () => {
+    document.addEventListener('DOMContentLoaded', () => {document.getElementById('btn-confirm-ok').addEventListener('click', () => {
             document.getElementById('confirm-modal').style.display = 'none';
             if (confirmAction) {
                 confirmAction();
@@ -649,15 +604,7 @@
 
 
 
-<div class="modal-overlay" id="confirm-modal" style="z-index: 9999;">
-  <div class="modal-content">
-    <h3 id="confirm-modal-title" style="margin-top: 0; color: var(--text); font-size: 1.2rem; font-weight: 600; margin-bottom: 15px;">¿Excluir registro?</h3>
-    <p id="confirm-modal-text" style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 25px; line-height: 1.5;">¿Seguro que quieres excluir este registro de la importación?</p>
-    <div style="display: flex; justify-content: flex-end; gap: 12px;">
-      <button id="btn-confirm-cancel" class="btn btn-ghost" style="padding: 8px 18px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer;">Cancelar</button>
-      <button id="btn-confirm-ok" class="btn btn-primary" style="padding: 8px 18px; background: var(--danger); border-color: var(--danger); border-radius: 6px; cursor: pointer; border: none; color: white;">Sí, excluir</button>
-    </div>
-  </div>
+
 </div>
 
 <div id="foto-modal" role="dialog" aria-modal="true" aria-label="Visor de Evidencia Fotográfica">

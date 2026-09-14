@@ -532,6 +532,27 @@
         padding: 16px;
       }
     }
+
+    /* MODAL GLOBAL */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
+      z-index: 2500;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-content {
+      background: var(--surface);
+      padding: 24px 28px;
+      border-radius: 14px;
+      width: 90%;
+      max-width: 440px;
+      border: 1px solid var(--border);
+      box-shadow: 0 24px 38px rgba(0, 0, 0, 0.35);
+    }
   </style>
   {% block extra_head %}{% endblock %}
 </head>
@@ -657,6 +678,44 @@
         window.history.replaceState({}, document.title, newUrl);
       }
     }
+  </script>
+
+  <!-- GLOBAL CONFIRM MODAL -->
+  <div class="modal-overlay" id="global-confirm-modal" style="z-index: 9999;">
+    <div class="modal-content">
+      <h3 id="global-confirm-title" style="margin-top: 0; color: var(--text); font-size: 1.2rem; font-weight: 600; margin-bottom: 15px;"></h3>
+      <p id="global-confirm-text" style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 25px; line-height: 1.5;"></p>
+      <div style="display: flex; justify-content: flex-end; gap: 12px;">
+        <button id="btn-global-confirm-cancel" class="btn btn-ghost" style="padding: 8px 18px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer;">Cancelar</button>
+        <button id="btn-global-confirm-ok" class="btn btn-primary" style="padding: 8px 18px; border-radius: 6px; cursor: pointer; border: none; color: white;"></button>
+      </div>
+    </div>
+  </div>
+  <script>
+    let globalConfirmAction = null;
+    window.showConfirmModal = function(title, text, btnText, btnColor, callback) {
+        document.getElementById('global-confirm-title').textContent = title;
+        document.getElementById('global-confirm-text').textContent = text;
+        const btnOk = document.getElementById('btn-global-confirm-ok');
+        btnOk.textContent = btnText;
+        btnOk.style.background = btnColor;
+        btnOk.style.borderColor = btnColor;
+        globalConfirmAction = callback;
+        document.getElementById('global-confirm-modal').style.display = 'flex';
+    };
+    document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('btn-global-confirm-cancel').addEventListener('click', () => {
+            document.getElementById('global-confirm-modal').style.display = 'none';
+            globalConfirmAction = null;
+        });
+        document.getElementById('btn-global-confirm-ok').addEventListener('click', () => {
+            document.getElementById('global-confirm-modal').style.display = 'none';
+            if (globalConfirmAction) {
+                globalConfirmAction();
+                globalConfirmAction = null;
+            }
+        });
+    });
   </script>
 </body>
 </html>

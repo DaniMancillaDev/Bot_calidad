@@ -1056,11 +1056,11 @@
         renderNavigator(searchInput.value);
 
       } else {
-        alert('Error al modificar el estado de la foto: ' + data.message);
+        showConfirmModal('Error', 'Error al modificar el estado de la foto: ' + data.message, 'Entendido', 'var(--danger)', () => {});
       }
     } catch (e) {
       console.error('Error:', e);
-      alert('Error de red al intentar modificar el estado de la foto.');
+      showConfirmModal('Error', 'Error de red al intentar modificar el estado de la foto.', 'Entendido', 'var(--danger)', () => {});
     }
   }
 
