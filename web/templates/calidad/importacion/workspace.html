@@ -271,7 +271,7 @@
     if (!state || !state.registros) {
         state = { fotos: {}, registros: [], fotos_huerfanas: [] };
         document.addEventListener('DOMContentLoaded', () => {
-            showConfirmModal('Aviso', 'No hay sesión activa de importación.', 'Entendido', 'var(--primary)', () => {
+            showConfirmModal('Aviso', 'No hay sesión activa de importación.', 'Entendido', 'var(--accent)', () => {
                 window.location.href = "{% url 'importacion_iniciar' %}";
             }, false);
         });
@@ -551,7 +551,7 @@
             '¿Finalizar Importación?',
             '¿Estás seguro de procesar y finalizar la importación? Se crearán los registros definitivos en la base de datos y esta acción no se podrá deshacer.',
             'Confirmar Importación',
-            'var(--primary)',
+            'var(--accent)',
             () => {
                 const btn = document.getElementById('btn-confirmar');
         btn.disabled = true;
