@@ -10,6 +10,8 @@ Backend hace: rollback del contador (vía API).
 import logging
 import os
 
+from contextlib import suppress
+
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -35,19 +37,15 @@ def create_cancelar(api_client):
             user_id = update.effective_user.id if update.effective_user else None
 
             # Cancelar buffers temporales (fotos en debounce)
+            context.user_data["is_cancelled"] = True
+            processing_msg_id = context.user_data.pop("processing_msg_id", None)
+            if processing_msg_id:
+                with suppress(Exception):
+                    await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=processing_msg_id)
             context.user_data.pop("photo_status_msg_id", None)
             batch = context.user_data.pop("photo_batch", None)
-            if batch:
-                if batch.get("timer_task"):
-                    batch["timer_task"].cancel()
-                wait_msg_id = batch.get("wait_msg_id")
-                if wait_msg_id:
-                    try:
-                        await context.bot.delete_message(
-                            chat_id=update.effective_chat.id, message_id=wait_msg_id
-                        )
-                    except Exception:
-                        pass
+            if batch and batch.get("timer_task"):
+                batch["timer_task"].cancel()
 
             # Rollback de contador + limpieza backend vía API
             try:

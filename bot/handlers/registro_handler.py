@@ -14,8 +14,10 @@ import asyncio
 import logging
 import os
 import time
+import telegram
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove
+from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from bot.handlers.lock_utils import prevent_double_tap
 
@@ -47,8 +49,11 @@ def create_start(api_client):
         
         try:
             # Cancelamos la sesión anterior (FSM) sin borrar registros de BD
+            context.user_data.pop("is_cancelled", None)
+            context.user_data.pop("processing_msg_id", None)
             context.user_data.pop("photo_status_msg_id", None)
             context.user_data.pop("photo_batch", None)
+            context.user_data["total_fotos_sesion"] = 0
             await api_client.cancelar_sesion(user_id)
             await api_client.iniciar_defecto(user_id)
 
@@ -114,6 +119,7 @@ def create_guardar_foto(api_client):
         # ── Sección crítica: un solo lock por usuario ──
         async with context.user_data["batch_lock"]:
             if "photo_batch" not in context.user_data:
+                context.user_data.pop("is_cancelled", None)
                 context.user_data["photo_batch"] = {
                     "download_tasks": [],
                     "timer_task": None,
@@ -126,12 +132,12 @@ def create_guardar_foto(api_client):
             batch["download_tasks"].append(task)
 
             # Si aún no existe mensaje de estado para este álbum, crearlo una sola vez
-            if not context.user_data.get("photo_status_msg_id"):
+            if not context.user_data.get("processing_msg_id"):
                 wait_msg = await update.message.reply_text(
                     "<i>Recibiendo y ordenando fotos, por favor espera...</i>",
                     parse_mode="HTML",
                 )
-                context.user_data["photo_status_msg_id"] = wait_msg.message_id
+                context.user_data["processing_msg_id"] = wait_msg.message_id
 
             # Cancelar timer anterior (cada foto nueva reinicia el debounce)
             if batch["timer_task"] is not None:
@@ -182,6 +188,15 @@ def create_guardar_foto(api_client):
             if not fotos_ids:
                 return
 
+            if context.user_data.pop('is_cancelled', None):
+                user_folder = os.path.join(FOTOS_PATH, str(user_id))
+                for fid in fotos_ids:
+                    try:
+                        os.remove(os.path.join(user_folder, f"tmp_{fid}.jpg"))
+                    except OSError:
+                        pass
+                return
+
             fotos_ids.sort()
             elapsed_descarga_lote = (time.monotonic() - t_batch - _DEBOUNCE_SECONDS) * 1000
             logger.info("Pipeline completado | user_id=%s cantidad=%d post_sleep_elapsed=%.1fms", user_id, len(fotos_ids), elapsed_descarga_lote)
@@ -189,7 +204,9 @@ def create_guardar_foto(api_client):
             # Delegar FSM al backend
             try:
                 result = await api_client.adjuntar_evidencia_lote(user_id, fotos_ids)
-                texto_estado = result.get('mensaje', f"Se agregaron {len(fotos_ids)} foto(s).")
+                total = context.user_data.get("total_fotos_sesion", 0) + len(fotos_ids)
+                context.user_data["total_fotos_sesion"] = total
+                texto_estado = f"Se han procesado {total} foto(s) hasta ahora."
                 reply_markup = InlineKeyboardMarkup(
                     [[InlineKeyboardButton("TERMINAR", callback_data="terminar_fotos")]]
                 )
@@ -198,25 +215,26 @@ def create_guardar_foto(api_client):
                 texto_estado = "<b>Error al procesar lote en el servidor.</b>"
                 reply_markup = None
 
-            # Actualizar SIEMPRE el mismo mensaje de estado persistente
-            status_msg_id = context.user_data.get("photo_status_msg_id")
-            if status_msg_id:
-                try:
-                    await context.bot.edit_message_text(
-                        chat_id=chat_id,
-                        message_id=status_msg_id,
-                        text=texto_estado,
-                        reply_markup=reply_markup,
-                        parse_mode="HTML"
-                    )
-                    if reply_markup:
-                        context.user_data.setdefault("inline_msg_ids", []).append(status_msg_id)
-                except Exception:
-                    sent = await _send_and_track(context, chat_id, texto_estado, reply_markup)
-                    context.user_data["photo_status_msg_id"] = sent.message_id
-            else:
-                sent = await _send_and_track(context, chat_id, texto_estado, reply_markup)
+            # ponytail: floating message pattern
+            try:
+                if context.user_data.pop('is_cancelled', None):
+                    return
+                
+                for msg_id in filter(None, [
+                    context.user_data.pop("processing_msg_id", None),
+                    context.user_data.get("photo_status_msg_id")
+                ]):
+                    try:
+                        await context.bot.delete_message(chat_id=chat_id, message_id=msg_id)
+                    except BadRequest:
+                        pass
+
+                sent = await _send_and_track(context, chat_id, texto_estado, reply_markup, disable_notification=True)
                 context.user_data["photo_status_msg_id"] = sent.message_id
+            except Exception as e:
+                logger.error(f"Error actualizando UI: {e}")
+
+            logger.info("Lote procesado end-to-end | user_id=%s fotos=%d elapsed=%.1fms", user_id, len(fotos_ids), (time.monotonic() - t_batch - _DEBOUNCE_SECONDS) * 1000)
 
         except asyncio.CancelledError:
             # Esperado: llegó otra foto antes del debounce
@@ -237,9 +255,9 @@ async def _clear_inline_buttons(bot, chat_id: int, msg_ids: list) -> None:
     )
 
 
-async def _send_and_track(context, chat_id: int, text: str, reply_markup, parse_mode="HTML"):
+async def _send_and_track(context, chat_id: int, text: str, reply_markup, parse_mode="HTML", **kwargs):
     """Envia mensaje y rastrea su ID si tiene InlineKeyboard."""
-    sent = await context.bot.send_message(chat_id=chat_id, text=text, parse_mode=parse_mode, reply_markup=reply_markup)
+    sent = await context.bot.send_message(chat_id=chat_id, text=text, parse_mode=parse_mode, reply_markup=reply_markup, **kwargs)
     if reply_markup and isinstance(reply_markup, InlineKeyboardMarkup):
         context.user_data.setdefault("inline_msg_ids", []).append(sent.message_id)
     return sent
@@ -275,7 +293,9 @@ def create_terminar_callback(api_client):
             mensaje = "Error al procesar la terminación del álbum."
 
         # Liberar el tracking del mensaje de estado de fotos
+        context.user_data.pop("is_cancelled", None)
         context.user_data.pop("photo_status_msg_id", None)
+        context.user_data["total_fotos_sesion"] = 0
         await _clear_inline_buttons(context.bot, update.effective_chat.id, context.user_data.pop("inline_msg_ids", []))
 
         # Reemplazar in-place el mensaje con la pregunta [1/5] Modelo
