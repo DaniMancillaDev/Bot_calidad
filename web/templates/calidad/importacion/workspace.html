@@ -273,7 +273,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             showConfirmModal('Aviso', 'No hay sesión activa de importación.', 'Entendido', 'var(--primary)', () => {
                 window.location.href = "{% url 'importacion_iniciar' %}";
-            });
+            }, false);
         });
     }
 
@@ -535,14 +535,14 @@
             if (data.error) {
                 showConfirmModal('Error al guardar', "Error al guardar: " + data.error + ". Recargando página...", 'Entendido', 'var(--danger)', () => {
                     window.location.reload();
-                });
+                }, false).replace('})', '}, false');
             }
         })
         .catch(error => {
             console.error("Error AJAX:", error);
             showConfirmModal('Error de conexión', 'Error de conexión al guardar los cambios. Recargando para mantener sincronización...', 'Entendido', 'var(--danger)', () => {
                 window.location.reload();
-            });
+            }, false).replace('})', '}, false');
         });
     }
     
@@ -574,13 +574,13 @@
             if (data.redirect) {
                 window.location.href = data.redirect;
             } else if (data.error) {
-                showConfirmModal('Error', "Error: " + data.error, 'Entendido', 'var(--danger)', () => {});
+                showConfirmModal('Error', "Error: " + data.error, 'Entendido', 'var(--danger)', () => {}, false).replace('})', '}, false');
                 btn.disabled = false;
                 btn.innerHTML = '<span class="material-symbols-outlined icon" style="vertical-align: middle;">check_circle</span> Confirmar Importación';
             }
         })
         .catch(error => {
-            showConfirmModal('Error', 'Ocurrió un error al confirmar. Inténtalo de nuevo.', 'Entendido', 'var(--danger)', () => {});
+            showConfirmModal('Error', 'Ocurrió un error al confirmar. Inténtalo de nuevo.', 'Entendido', 'var(--danger)', () => {}, false).replace('})', '}, false');
             console.error(error);
             btn.disabled = false;
             btn.innerHTML = '<span class="material-symbols-outlined icon" style="vertical-align: middle;">check_circle</span> Confirmar Importación';

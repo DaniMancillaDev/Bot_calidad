@@ -503,11 +503,20 @@
       color: #34d399;
       border: 1px solid rgba(16, 185, 129, .3);
     }
-
     .messages .error {
       background: rgba(239, 68, 68, .15);
       color: #f87171;
       border: 1px solid rgba(239, 68, 68, .3);
+    }
+    .messages .warning {
+      background: rgba(245, 158, 11, .15);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, .3);
+    }
+    .messages .info {
+      background: rgba(59, 130, 246, .15);
+      color: #60a5fa;
+      border: 1px solid rgba(59, 130, 246, .3);
     }
 
     /* RESPONSIVE */
@@ -639,13 +648,13 @@
 
     <div class="content">
       {% if messages %}
-      <div style="margin-bottom: 24px;">
+      <ul class="messages">
         {% for message in messages %}
-        <div class="alert alert-{{ message.tags }}">
+        <li class="{{ message.tags }}">
           {{ message }}
-        </div>
+        </li>
         {% endfor %}
-      </div>
+      </ul>
       {% endif %}
       {% block content %}{% endblock %}
     </div>
@@ -693,13 +702,17 @@
   </div>
   <script>
     let globalConfirmAction = null;
-    window.showConfirmModal = function(title, text, btnText, btnColor, callback) {
+    window.showConfirmModal = function(title, text, btnText, btnColor, callback, showCancel=true) {
         document.getElementById('global-confirm-title').textContent = title;
         document.getElementById('global-confirm-text').textContent = text;
         const btnOk = document.getElementById('btn-global-confirm-ok');
         btnOk.textContent = btnText;
         btnOk.style.background = btnColor;
         btnOk.style.borderColor = btnColor;
+        
+        const btnCancel = document.getElementById('btn-global-confirm-cancel');
+        btnCancel.style.display = showCancel ? 'inline-block' : 'none';
+
         globalConfirmAction = callback;
         document.getElementById('global-confirm-modal').style.display = 'flex';
     };

@@ -1056,11 +1056,11 @@
         renderNavigator(searchInput.value);
 
       } else {
-        showConfirmModal('Error', 'Error al modificar el estado de la foto: ' + data.message, 'Entendido', 'var(--danger)', () => {});
+        showConfirmModal('Error', 'Error al modificar el estado de la foto: ' + data.message, 'Entendido', 'var(--danger)', () => {}, false).replace('})', '}, false');
       }
     } catch (e) {
       console.error('Error:', e);
-      showConfirmModal('Error', 'Error de red al intentar modificar el estado de la foto.', 'Entendido', 'var(--danger)', () => {});
+      showConfirmModal('Error', 'Error de red al intentar modificar el estado de la foto.', 'Entendido', 'var(--danger)', () => {}, false).replace('})', '}, false');
     }
   }
 
