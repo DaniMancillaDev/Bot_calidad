@@ -710,13 +710,18 @@ def _parse_fotos_nums(registros):
         fotos_str = r.get('fotos', '') if is_dict else getattr(r, 'fotos', '')
         user_id = r.get('user_id') if is_dict else getattr(r, 'user_id', None)
         
-        nums = []
-        if fotos_str:
-            nums = parse_photo_numbers(str(fotos_str))
-        
         # Integrar conteo de Fase 2 (Evidencias en Base de Datos)
         v2_count = r.get('v2_count', 0) if is_dict else getattr(r, 'v2_count', 0)
         
+        nums = []
+        if fotos_str:
+            # Bugfix: Si el registro viene de Importacion Web, trae fotos="1" como dummy
+            # Si tiene v2_count, ignoramos el "1" para no traer la foto 001.jpg por error.
+            if v2_count > 0 and str(fotos_str).strip() == "1":
+                nums = []
+            else:
+                nums = parse_photo_numbers(str(fotos_str))
+                
         if not fotos_str and v2_count > 0:
             fotos_str = f"{v2_count} foto(s)"
             nums = list(range(1, v2_count + 1))
@@ -791,6 +796,24 @@ def _build_fotos_en_disco(registros_data):
                     
                 img_path = get_best_image_path(fotos_dir, str(user_id), num)
                 if img_path:
+                    try:
+                        ruta_rel = str(img_path.relative_to(settings.MEDIA_ROOT))
+                    except ValueError:
+                        ruta_rel = str(img_path).replace(str(settings.MEDIA_ROOT), '').lstrip('/')
+                    
+                    # Filtrar excluidas también para las legacy migradas.
+                    # ponytail: normaliza prefijos para evitar mismatch media_files/ vs fotos/
+                    def _norm(r):
+                        r = r.lstrip('/')
+                        for pfx in ('media_files/', 'mediafiles/'):
+                            if r.startswith(pfx):
+                                r = r[len(pfx):]
+                        return r
+                    ruta_rel_norm = _norm(ruta_rel)
+                    ev_for_legacy = next((e for e in evidencias_qs if _norm(e.ruta_archivo) == ruta_rel_norm), None)
+                    if ev_for_legacy and isinstance(ev_for_legacy.metadatos, dict) and ev_for_legacy.metadatos.get('excluida'):
+                        continue
+
                     fotos_en_disco[clave] = {
                         'path': img_path,
                         'user_id': user_id,
@@ -801,6 +824,10 @@ def _build_fotos_en_disco(registros_data):
                     
         evs = evs_por_registro.get(r['id'], [])
         for ev in evs:
+            # Excluidas no entran ni al disco ni al payload
+            if isinstance(ev.metadatos, dict) and ev.metadatos.get('excluida'):
+                continue
+
             ev_path_str = ev.ruta_archivo
             if ev_path_str.startswith('media_files/'):
                 ev_path_str = ev_path_str[12:]
@@ -975,9 +1002,8 @@ def generar_excel(request):
     rotaciones = {str(k): int(v) for k, v in rotaciones_raw.items()}
     registros_data = body.get('registros', [])
     sn_map = {str(r['id']): r.get('sn_on_set', '') for r in registros_data if 'id' in r}
-    
-    # Extraer el orden de fotos definido en el frontend
     fotos_order = {str(r['id']): r.get('fotos_nums', []) for r in registros_data if 'id' in r}
+    
 
     if not registros_data:
         return HttpResponse('Sin registros para generar.', status=400)
