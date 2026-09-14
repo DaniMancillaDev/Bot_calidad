@@ -287,9 +287,9 @@ def generar_excel_task(self, registros_ids, rotaciones, fotos_dir_str, fecha_str
             
             # Aplicar el orden del frontend si se proporcionó
             if fotos_order and str(r.id) in fotos_order:
-                order_list = fotos_order[str(r.id)]
-                # Mantener solo los solicitados (esto permite exclusión de fotos)
-                f_list = [n for n in order_list if n in f_list]
+                # El frontend manda exactamente lo que se debe imprimir (incluyendo V2).
+                # No filtramos contra f_list porque V2 puede tener fotos="WEB" (f_list vacío).
+                f_list = fotos_order[str(r.id)]
                 
         except Exception:
             f_list = []

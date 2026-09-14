@@ -52,6 +52,32 @@ def get_best_image_path(fotos_dir: Path, uid_str: str, num: int) -> Optional[Pat
             if archivos:
                 return archivos[0]
 
+
+    # Fallback para V2 (Web Imports) donde 'num' es el ID de EvidenciaFotografica
+    try:
+        from calidad.models import EvidenciaFotografica
+        from django.conf import settings
+        
+        ev = EvidenciaFotografica.objects.get(id=num)
+        
+        filename = Path(ev.ruta_archivo).name
+        proxy_path = Path(settings.MEDIA_ROOT) / 'proxies' / str(uid_str) / filename
+        if proxy_path.exists():
+            return proxy_path
+            
+        ev_path_str = ev.ruta_archivo
+        if ev_path_str.startswith('media_files/'):
+            ev_path_str = ev_path_str[12:]
+        elif ev_path_str.startswith('/media_files/'):
+            ev_path_str = ev_path_str[13:]
+        ev_path_str = ev_path_str.lstrip('/')
+        
+        real_path = Path(settings.MEDIA_ROOT) / ev_path_str
+        if real_path.exists():
+            return real_path
+    except Exception:
+        pass
+
     return None
 
 
