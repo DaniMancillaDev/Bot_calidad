@@ -260,14 +260,21 @@
 {{ request.session.importacion_activa|json_script:"init-data" }}
 
 <script>
+    // Forzar recarga si el usuario navega hacia atrás (bfcache)
+    window.addEventListener('pageshow', (e) => { if (e.persisted) window.location.reload(); });
+
     // ==========================================
     // 1. ESTADO GLOBAL
     // ==========================================
     let state = JSON.parse(document.getElementById('init-data').textContent);
     
     if (!state || !state.registros) {
-        showConfirmModal('Aviso', 'No hay sesión activa de importación.', 'Entendido', 'var(--primary)', () => {});
-        window.location.href = "{% url 'importacion_iniciar' %}";
+        state = { fotos: {}, registros: [], fotos_huerfanas: [] };
+        document.addEventListener('DOMContentLoaded', () => {
+            showConfirmModal('Aviso', 'No hay sesión activa de importación.', 'Entendido', 'var(--primary)', () => {
+                window.location.href = "{% url 'importacion_iniciar' %}";
+            });
+        });
     }
 
     const dictFotos = state.fotos; // Diccionario maestro de fotos
@@ -526,14 +533,16 @@
         })
         .then(data => {
             if (data.error) {
-                showConfirmModal('Error al guardar', "Error al guardar: " + data.error + ". Recargando página...", 'Entendido', 'var(--danger)', () => {});
-                window.location.reload();
+                showConfirmModal('Error al guardar', "Error al guardar: " + data.error + ". Recargando página...", 'Entendido', 'var(--danger)', () => {
+                    window.location.reload();
+                });
             }
         })
         .catch(error => {
             console.error("Error AJAX:", error);
-            showConfirmModal('Error de conexión', 'Error de conexión al guardar los cambios. Recargando para mantener sincronización...', 'Entendido', 'var(--danger)', () => {});
-            window.location.reload();
+            showConfirmModal('Error de conexión', 'Error de conexión al guardar los cambios. Recargando para mantener sincronización...', 'Entendido', 'var(--danger)', () => {
+                window.location.reload();
+            });
         });
     }
     
@@ -581,13 +590,7 @@
     }
 
         // Bootstrap
-    document.addEventListener('DOMContentLoaded', () => {document.getElementById('btn-confirm-ok').addEventListener('click', () => {
-            document.getElementById('confirm-modal').style.display = 'none';
-            if (confirmAction) {
-                confirmAction();
-                confirmAction = null;
-            }
-        });
+    document.addEventListener('DOMContentLoaded', () => {
 
         // Cerrar modal al hacer clic afuera
         const modalEl = document.getElementById('foto-modal');
