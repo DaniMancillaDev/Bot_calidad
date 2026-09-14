@@ -61,6 +61,8 @@
         display: flex;
         align-items: center;
         justify-content: center;
+        will-change: transform;
+        transform: translateZ(0);
     }
     
     .photo-card img {
@@ -133,6 +135,99 @@
     .sortable-drag {
         cursor: grabbing !important;
     }
+
+#foto-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(10, 15, 29, 0.95);
+  backdrop-filter: blur(8px);
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+
+#foto-modal.open {
+  display: flex;
+}
+
+.modal-content-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 92vw;
+  max-height: 90vh;
+}
+
+#modal-img {
+  max-width: 88vw;
+  max-height: 72vh;
+  border-radius: 8px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
+  object-fit: contain;
+  transition: transform 0.2s ease;
+}
+
+.modal-footer {
+  margin-top: 14px;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 18px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  color: #f8fafc;
+  font-size: 0.85rem;
+}
+
+.modal-close-btn {
+  position: absolute;
+  top: 24px;
+  right: 28px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid var(--border);
+  color: #f8fafc;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all .2s;
+  z-index: 20;
+}
+
+.modal-close-btn:hover {
+  background: var(--danger);
+  color: #fff;
+  border-color: var(--danger);
+}
+
+
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
+      z-index: 2500;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-content {
+      background: var(--surface);
+      padding: 24px 28px;
+      border-radius: 14px;
+      width: 90%;
+      max-width: 440px;
+      border: 1px solid var(--border);
+      box-shadow: 0 24px 38px rgba(0, 0, 0, 0.35);
+    }
 </style>
 {% endblock %}
 
@@ -141,13 +236,14 @@
     <form action="{% url 'importacion_cancelar' %}" method="POST" onsubmit="return confirm('¿Estás seguro de cancelar? Se borrarán las fotos temporales y perderás el progreso.');">
         {% csrf_token %}
         <button type="submit" class="btn btn-ghost" style="color: var(--danger-color);">
-            <span class="icon">❌</span> Cancelar
+            <span class="material-symbols-outlined icon" style="vertical-align: middle;">cancel</span> Cancelar
         </button>
     </form>
     <button id="btn-confirmar" class="btn btn-primary" onclick="confirmarImportacion()">
-        <span class="icon">✅</span> Confirmar Importación
+        <span class="material-symbols-outlined icon" style="vertical-align: middle;">check_circle</span> Confirmar Importación
     </button>
 </div>
+
 {% endblock %}
 
 {% block content %}
@@ -208,14 +304,57 @@
         const div = document.createElement('div');
         div.className = 'photo-card';
         div.dataset.photoId = photoId;
-        div.title = foto.filename;
+        div.title = foto.original_name;
+        div.style.position = 'relative';
+        div.style.overflow = 'hidden';
         
         const img = document.createElement('img');
         img.src = foto.url;
         img.loading = "lazy";
-        
+        img.style.cursor = 'zoom-in';
+        img.onclick = () => {
+            const modal = document.getElementById('foto-modal');
+            document.getElementById('modal-img').src = foto.url;
+            document.getElementById('modal-filename').textContent = foto.original_name;
+            modal.classList.add('open');
+        };
         div.appendChild(img);
+        
+        const badge = document.createElement('div');
+        badge.textContent = foto.original_name;
+        badge.style.position = 'absolute';
+        badge.style.bottom = '0';
+        badge.style.left = '0';
+        badge.style.right = '0';
+        badge.style.background = 'rgba(0,0,0,0.6)';
+        badge.style.color = '#fff';
+        badge.style.fontSize = '10px';
+        badge.style.padding = '2px';
+        badge.style.textAlign = 'center';
+        badge.style.whiteSpace = 'nowrap';
+        badge.style.overflow = 'hidden';
+        badge.style.textOverflow = 'ellipsis';
+        badge.style.pointerEvents = 'none';
+        div.appendChild(badge);
+        
         return div;
+    }
+
+    
+
+
+
+    let confirmAction = null;
+    function showConfirmModal(title, text, btnText, btnColor, callback) {
+        document.getElementById('confirm-modal-title').textContent = title;
+        document.getElementById('confirm-modal-text').textContent = text;
+        const btnOk = document.getElementById('btn-confirm-ok');
+        btnOk.textContent = btnText;
+        btnOk.style.background = btnColor;
+        btnOk.style.borderColor = btnColor;
+        
+        confirmAction = callback;
+        document.getElementById('confirm-modal').style.display = 'flex';
     }
 
     function renderWorkspace() {
@@ -243,16 +382,19 @@
                 datosText += `
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; border-bottom: 1px solid var(--border); padding-bottom: 4px;">
                         <div><strong>${k.toUpperCase()}:</strong> <span id="val-${registro.id}-${k}">${v || '-'}</span></div>
-                        <button onclick="editarCampo('${registro.id}', '${k}')" class="btn btn-ghost" style="padding: 2px 6px; font-size: 0.7rem; border: none;" title="Editar">✏️</button>
+                        <button onclick="editarCampo('${registro.id}', '${k}')" class="btn btn-ghost" style="padding: 2px 6px; font-size: 0.7rem; border: none;" title="Editar"><span class="material-symbols-outlined icon" style="font-size: 14px; vertical-align: middle;">edit</span></button>
                     </div>
                 `;
             }
             
             card.innerHTML = `
-                <div class="record-header">
+                <div class="record-header" style="display: flex; justify-content: space-between; align-items: center;">
                     <div>
                         <strong>Fila #${registro.numero_fila_excel}</strong>
                     </div>
+                    <button onclick="eliminarRegistro('${registro.id}')" class="btn btn-ghost" style="color: var(--danger); padding: 4px; border: none; display: flex; align-items: center; border-radius: 4px;" title="Excluir Registro">
+                        <span class="material-symbols-outlined" style="font-size: 18px;">delete</span>
+                    </button>
                 </div>
                 <div class="record-body">
                     <div style="font-size: 0.85rem; margin-bottom: 15px; color: var(--text-muted); line-height: 1.4;">
@@ -285,7 +427,7 @@
         // Configuracion compartida para todas las listas
         const sharedConfig = {
             group: 'shared', // permite arrastrar entre listas
-            animation: 150,
+            animation: 0,
             ghostClass: 'sortable-ghost',
             onEnd: handleDropEvent
         };
@@ -345,6 +487,26 @@
             const row = state.registros.find(r => r.id === targetId);
             if (row) row.fotos_asignadas.push(photoId);
         }
+    }
+
+    function eliminarRegistro(recordId) {
+        showConfirmModal(
+            '¿Excluir registro?',
+            '¿Seguro que quieres excluir este registro de la importación? Las fotografías asignadas a esta fila no se perderán, volverán a la bandeja de "Huérfanas".',
+            'Sí, excluir',
+            'var(--danger)',
+            () => {
+                const idx = state.registros.findIndex(r => r.id === recordId);
+                if (idx !== -1) {
+                    const row = state.registros[idx];
+                    state.fotos_huerfanas.push(...row.fotos_asignadas);
+                    state.registros.splice(idx, 1);
+                    renderWorkspace();
+                    initSortable();
+                    enviarAccionAJAX({ action: 'DELETE_RECORD', record_id: recordId });
+                }
+            }
+        );
     }
 
     function editarCampo(recordId, field) {
@@ -414,13 +576,15 @@
     }
     
     function confirmarImportacion() {
-        if (!confirm("¿Estás seguro de finalizar la importación? Se crearán los registros definitivos y no se podrá deshacer.")) {
-            return;
-        }
-        
-        const btn = document.getElementById('btn-confirmar');
+        showConfirmModal(
+            '¿Finalizar Importación?',
+            '¿Estás seguro de procesar y finalizar la importación? Se crearán los registros definitivos en la base de datos y esta acción no se podrá deshacer.',
+            'Confirmar Importación',
+            'var(--primary)',
+            () => {
+                const btn = document.getElementById('btn-confirmar');
         btn.disabled = true;
-        btn.innerHTML = '<span class="icon">⏳</span> Procesando...';
+        btn.innerHTML = '<span class="material-symbols-outlined icon" style="vertical-align: middle;">hourglass_empty</span> Procesando...';
         
         fetch("{% url 'importacion_confirmar' %}", {
             method: 'POST',
@@ -441,20 +605,72 @@
             } else if (data.error) {
                 alert("Error: " + data.error);
                 btn.disabled = false;
-                btn.innerHTML = '<span class="icon">✅</span> Confirmar Importación';
+                btn.innerHTML = '<span class="material-symbols-outlined icon" style="vertical-align: middle;">check_circle</span> Confirmar Importación';
             }
         })
         .catch(error => {
             alert("Ocurrió un error al confirmar. Inténtalo de nuevo.");
             console.error(error);
             btn.disabled = false;
-            btn.innerHTML = '<span class="icon">✅</span> Confirmar Importación';
+            btn.innerHTML = '<span class="material-symbols-outlined icon" style="vertical-align: middle;">check_circle</span> Confirmar Importación';
         });
+            }
+        );
     }
 
-    // Bootstrap
+        // Bootstrap
     document.addEventListener('DOMContentLoaded', () => {
+        
+        document.getElementById('btn-confirm-cancel').addEventListener('click', () => {
+            document.getElementById('confirm-modal').style.display = 'none';
+            confirmAction = null;
+        });
+        
+        document.getElementById('btn-confirm-ok').addEventListener('click', () => {
+            document.getElementById('confirm-modal').style.display = 'none';
+            if (confirmAction) {
+                confirmAction();
+                confirmAction = null;
+            }
+        });
+
+        // Cerrar modal al hacer clic afuera
+        const modalEl = document.getElementById('foto-modal');
+        if (modalEl) {
+            modalEl.addEventListener('click', function(e) {
+                if (e.target === this) {
+                    this.classList.remove('open');
+                }
+            });
+        }
         renderWorkspace();
     });
 </script>
+
+
+
+<div class="modal-overlay" id="confirm-modal" style="z-index: 9999;">
+  <div class="modal-content">
+    <h3 id="confirm-modal-title" style="margin-top: 0; color: var(--text); font-size: 1.2rem; font-weight: 600; margin-bottom: 15px;">¿Excluir registro?</h3>
+    <p id="confirm-modal-text" style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 25px; line-height: 1.5;">¿Seguro que quieres excluir este registro de la importación?</p>
+    <div style="display: flex; justify-content: flex-end; gap: 12px;">
+      <button id="btn-confirm-cancel" class="btn btn-ghost" style="padding: 8px 18px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer;">Cancelar</button>
+      <button id="btn-confirm-ok" class="btn btn-primary" style="padding: 8px 18px; background: var(--danger); border-color: var(--danger); border-radius: 6px; cursor: pointer; border: none; color: white;">Sí, excluir</button>
+    </div>
+  </div>
+</div>
+
+<div id="foto-modal" role="dialog" aria-modal="true" aria-label="Visor de Evidencia Fotográfica">
+  <button class="modal-close-btn" onclick="document.getElementById('foto-modal').classList.remove('open')" aria-label="Cerrar visor">
+    <span class="material-symbols-outlined" style="font-size: 1.2rem;">close</span>
+  </button>
+
+  <div class="modal-content-wrap">
+    <img id="modal-img" src="" alt="Foto ampliada">
+    <div class="modal-footer" id="modal-footer-info">
+      <div><strong id="modal-filename"></strong></div>
+    </div>
+  </div>
+</div>
+
 {% endblock %}

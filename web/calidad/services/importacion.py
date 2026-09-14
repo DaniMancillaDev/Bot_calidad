@@ -86,7 +86,7 @@ def extraer_zip_seguro(file_obj, dest_folder: Path):
     dest_folder.mkdir(parents=True, exist_ok=True)
     fotos_extraidas = {}
     
-    valid_extensions = ('.jpg', '.jpeg', '.png')
+    valid_extensions = ('.jpg', '.jpeg', '.png', '.jfif', '.webp')
     
     with zipfile.ZipFile(file_obj, 'r') as zf:
         for file_info in zf.infolist():
@@ -171,9 +171,16 @@ def generar_estado_inicial(filas, fotos_dict, session_id):
                 except Exception:
                     pass
             
-            # Si el nombre de la foto (sin extensión) está en el texto de la fila o matched_by_range
-            if matched_by_range or (len(nombre_base) >= 3 and nombre_base in valores_fila):
+            # Si matchea por rango numérico explícito, lo asignamos seguro.
+            if matched_by_range:
                 fotos_a_asignar.append(fid)
+            elif len(nombre_base) >= 3:
+                # Si no matcheó por rango, intentamos buscar el nombre del archivo en los textos
+                # de la fila. Pero para evitar que un archivo "128.jpg" se asigne a una fila
+                # solo porque su cantidad es "128", exigimos que sea una palabra completa ().
+                import re
+                if re.search(r'\b' + re.escape(nombre_base) + r'\b', valores_fila):
+                    fotos_a_asignar.append(fid)
                 
         for fid in fotos_a_asignar:
             fila["fotos_asignadas"].append(fid)
@@ -227,7 +234,7 @@ def commit_importacion(session_data, user):
                 responsable=str(row.get('responsable', 'WEB')).upper(),
                 descripcion=str(row.get('defecto', row.get('descripcion', ''))),
                 estado_revision=EstadoRevision.PENDIENTE,
-                fotos="1" if row.get('fotos_asignadas') else "", # Dummy text required for legacy compat
+                fotos="WEB" if row.get('fotos_asignadas') else "", # Dummy text no numerico para legacy compat
                 numero_parte=str(row.get('numero_parte', ''))[:50]
             )
             

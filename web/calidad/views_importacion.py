@@ -19,8 +19,9 @@ def importacion_iniciar(request):
     POST: Recibe archivos y redirige al workspace.
     """
     import os
-    if os.getenv("ENABLE_WORKSPACE_V2", "false").lower() in ("true", "1", "yes"):
-        return redirect('workspace:upload')
+    # ponytail: redirect ciego a API POST sin UI. Desactivado hasta que la SPA exista.
+    # if os.getenv("ENABLE_WORKSPACE_V2", "false").lower() in ("true", "1", "yes"):
+    #     return redirect('workspace:upload')
 
     # Garbage Collection Perezoso: Limpiar carpeta temporal huérfana de este usuario
     session_key = request.session.session_key
@@ -132,6 +133,13 @@ def importacion_update_ajax(request):
             for row in estado['registros']:
                 if row['id'] == record_id:
                     row[field] = value
+                    break
+        elif action == 'DELETE_RECORD':
+            record_id = data.get('record_id')
+            for i, row in enumerate(estado['registros']):
+                if row['id'] == record_id:
+                    estado['fotos_huerfanas'].extend(row['fotos_asignadas'])
+                    estado['registros'].pop(i)
                     break
         else:
             return JsonResponse({"error": "Acción desconocida"}, status=400)
