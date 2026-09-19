@@ -174,10 +174,10 @@ def generar_estado_inicial(filas, fotos_dict, session_id):
             # Si matchea por rango numérico explícito, lo asignamos seguro.
             if matched_by_range:
                 fotos_a_asignar.append(fid)
-            elif len(nombre_base) >= 3:
-                # Si no matcheó por rango, intentamos buscar el nombre del archivo en los textos
-                # de la fila. Pero para evitar que un archivo "128.jpg" se asigne a una fila
-                # solo porque su cantidad es "128", exigimos que sea una palabra completa ().
+            elif len(nombre_base) >= 3 and not nombre_base.isdigit():
+                # ponytail: Solo aplicamos auto-match difuso en el resto de columnas a nombres descriptivos.
+                # Si la foto es un número puro ("100.jpg"), NO la buscamos en el texto completo
+                # porque colisionará con la "cantidad" o "fila" o "cajas" (ej. CANTIDAD: 100).
                 import re
                 if re.search(r'\b' + re.escape(nombre_base) + r'\b', valores_fila):
                     fotos_a_asignar.append(fid)
