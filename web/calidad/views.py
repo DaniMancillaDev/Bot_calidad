@@ -785,10 +785,23 @@ def _build_fotos_en_disco(registros_data):
             continue
             
         user_folder = fotos_dir / str(user_id)
+        evs = evs_por_registro.get(r['id'], [])
+        
+        # ponytail: Detectar V2 para limpiar rangos falsos (ej. fotos="1" -> [1])
+        has_v2 = False
+        for ev in evs:
+            path_name = Path(ev.ruta_archivo).name
+            if not path_name.split('.')[0].isdigit():
+                has_v2 = True
+                break
+                
+        # Si es V2, ignoramos lo que diga la columna fotos (que suele ser "1" o "WEB")
+        # para no inyectar fotos fantasma.
+        base_nums = [] if has_v2 else r.get('fotos_nums', [])
         actual_nums = []
         
         if user_folder.exists():
-            for num in r.get('fotos_nums', []):
+            for num in base_nums:
                 clave = f"{user_id}_{num}"
                 if clave in fotos_en_disco:
                     actual_nums.append(num)
@@ -801,16 +814,15 @@ def _build_fotos_en_disco(registros_data):
                     except ValueError:
                         ruta_rel = str(img_path).replace(str(settings.MEDIA_ROOT), '').lstrip('/')
                     
-                    # Filtrar excluidas también para las legacy migradas.
-                    # ponytail: normaliza prefijos para evitar mismatch media_files/ vs fotos/
-                    def _norm(r):
-                        r = r.lstrip('/')
+                    def _norm(p):
+                        p = p.lstrip('/')
                         for pfx in ('media_files/', 'mediafiles/'):
-                            if r.startswith(pfx):
-                                r = r[len(pfx):]
-                        return r
+                            if p.startswith(pfx):
+                                return p[len(pfx):]
+                        return p
+                    
                     ruta_rel_norm = _norm(ruta_rel)
-                    ev_for_legacy = next((e for e in evidencias_qs if _norm(e.ruta_archivo) == ruta_rel_norm), None)
+                    ev_for_legacy = next((e for e in evs if _norm(e.ruta_archivo) == ruta_rel_norm), None)
                     if ev_for_legacy and isinstance(ev_for_legacy.metadatos, dict) and ev_for_legacy.metadatos.get('excluida'):
                         continue
 
@@ -822,9 +834,7 @@ def _build_fotos_en_disco(registros_data):
                     }
                     actual_nums.append(num)
                     
-        evs = evs_por_registro.get(r['id'], [])
         for ev in evs:
-            # Excluidas no entran ni al disco ni al payload
             if isinstance(ev.metadatos, dict) and ev.metadatos.get('excluida'):
                 continue
 
@@ -837,11 +847,10 @@ def _build_fotos_en_disco(registros_data):
             
             real_path = Path(settings.MEDIA_ROOT) / ev_path_str
             if real_path.exists():
-                import re
-                num = ev.id
-                m = re.match(r'^(\d+)_', real_path.name)
-                if m:
-                    num = int(m.group(1))
+                if real_path.stem.isdigit():
+                    num = int(real_path.stem)
+                else:
+                    num = ev.id
                     
                 clave = f"{user_id}_{num}"
                 actual_nums.append(num)
@@ -858,6 +867,7 @@ def _build_fotos_en_disco(registros_data):
         r['fotos_nums'] = sorted(list(set(actual_nums)))
         
     return fotos_en_disco, evidencias_qs
+
 
 def _build_fotos_preview(fotos_en_disco, evidencias_qs):
     ev_by_path = {}
