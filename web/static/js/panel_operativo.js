@@ -692,14 +692,11 @@ class PanelOperativo {
         btnExcel.disabled = true;
         this.mostrarToast("Preparando Excel... Esto puede tardar si hay muchas fotos.", "var(--accent)");
 
-        // Limpiar y ordenar fotos antes de enviar
-        seleccionados.forEach(r => {
-            if (r.fotos_nums && Array.isArray(r.fotos_nums)) {
-                r.fotos_nums = [...new Set(r.fotos_nums)].sort((a,b) => a - b);
-            }
-        });
-
-        this.excelDataInput.value = JSON.stringify(seleccionados);
+        // ponytail: Navegación por POST (PRG pattern) para mantener DB como Single Source of Truth y ocultar la URL kilométrica
+        const ids = seleccionados.map(r => r.id).join(',');
+        this.excelDataInput.value = ids;
+        this.excelDataInput.name = 'ids'; // Cambiado de registros_data a ids
+        this.excelForm.method = 'POST';
         this.excelForm.submit();
         
         // Restaurar botón después de 5s por si el usuario usa el botón "Atrás" del navegador

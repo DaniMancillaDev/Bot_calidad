@@ -116,6 +116,7 @@
   </form>
 </div>
 
+
 <style>
 .shift-btn {
   display: inline-flex; align-items: center; gap: 4px;
@@ -143,7 +144,6 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
   opacity: 1;
 }
 </style>
-
 <script>
 document.addEventListener('DOMContentLoaded', () => {
   const form = document.getElementById('form-custom-range');
@@ -416,10 +416,10 @@ document.addEventListener('DOMContentLoaded', () => {
   </div>
 </div>
 
-<!-- Formulario oculto para exportación -->
+<!-- Formulario oculto para PRG pattern -->
 <form id="form-excel" method="POST" action="{% url 'revisar_orientacion' %}" style="display:none;">
     {% csrf_token %}
-    <input type="hidden" name="registros_data" id="registros_data_input">
+    <input type="hidden" name="ids" id="registros_data_input">
 </form>
 
 <!-- Floating Action Bar -->

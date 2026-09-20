@@ -723,8 +723,12 @@
         </div>
       </div>
 
-      <button class="btn-action btn-save" onclick="guardarMetadatos()"><span class="material-symbols-outlined"
-          style="vertical-align:text-bottom; font-size:1.1rem;">save</span> Guardar Cambios</button>
+      <div style="display:flex; gap:8px;">
+        <button class="btn-action btn-save" onclick="guardarMetadatos()" style="flex:2;"><span class="material-symbols-outlined"
+            style="vertical-align:text-bottom; font-size:1.1rem;">save</span> Guardar Cambios</button>
+        <button class="btn-action btn-reject" onclick="eliminarRegistro()" style="flex:1;" title="Eliminar registro completo"><span class="material-symbols-outlined"
+            style="vertical-align:text-bottom; font-size:1.1rem;">delete</span> Excluir</button>
+      </div>
       <div class="save-indicator" id="save-indicator"></div>
 
       <div class="inspector-divider"></div>
@@ -763,6 +767,15 @@
       portada_url: coverPhoto ? (coverPhoto.thumb_url || coverPhoto.url) : null,
       has_error: validPhotos.length === 0 || !reg.modelo,
     };
+  });
+
+  // Validación de seguridad de asignación (solicitada explícitamente)
+  appData.forEach(reg => {
+    reg.fotos_obj.forEach(photo => {
+      if (photo.registro_id && photo.registro_id !== reg.id) {
+        console.error(`%c [ERROR CRÍTICO] Fuga de fotografía detectada. \nLa foto ${photo.clave} pertenece en DB al registro ${photo.registro_id}, pero fue asignada en JS al registro ${reg.id}!`, "color: red; font-size: 16px; font-weight: bold;");
+      }
+    });
   });
 
 
@@ -866,7 +879,38 @@
         if (carouselSortable) { carouselSortable.destroy(); carouselSortable = null; }
         carouselSortable = new Sortable(carouselEl, {
           animation: 0,
-          onEnd: function (evt) {
+          onEnd: async function (evt) {
+            // ponytail: FASE 5 - Mover fotografía entre registros
+            const dropTarget = evt.originalEvent && evt.originalEvent.target ? evt.originalEvent.target.closest('.record-card') : null;
+            if (dropTarget && dropTarget.dataset.id !== String(activeRecord.id)) {
+              const fotoClave = evt.item.dataset.clave;
+              const foto = activeRecord.fotos_obj.find(f => f.clave === fotoClave);
+              const targetId = dropTarget.dataset.id;
+              
+              if (foto && foto.evidencia_id) {
+                dropTarget.style.opacity = '0.5'; // feedback visual
+                try {
+                  const res = await fetch(`/api/v2/evidencias/${foto.evidencia_id}/`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+                    body: JSON.stringify({ registro_id: parseInt(targetId) }),
+                  });
+                  if (res.ok) {
+                    // Recargar toda la vista desde la base de datos (única fuente de verdad)
+                    window.location.reload();
+                    return;
+                  } else {
+                    console.error("Error moviendo foto");
+                    dropTarget.style.opacity = '1';
+                  }
+                } catch (e) {
+                  console.error(e);
+                  dropTarget.style.opacity = '1';
+                }
+              }
+            }
+
+            // Flujo normal de reordenamiento interno
             const currentClaves = Array.from(carouselEl.children).map(c => c.dataset.clave);
             // Ordenar fotos_obj
             activeRecord.fotos_obj.sort((a, b) => {
@@ -1077,6 +1121,39 @@
     }
   }
 
+  // ponytail: FASE 2.1 - Excluir registro completo
+  async function eliminarRegistro() {
+    if (!activeRecord) return;
+    if (!confirm('¿Estás seguro de excluir este registro completo? Ya no aparecerá en el Excel.')) return;
+    
+    saveInd.textContent = 'Eliminando...';
+    saveInd.className = 'save-indicator';
+    try {
+      const res = await fetch(`/api/v2/registros/${activeRecord.id}/`, {
+        method: 'DELETE',
+        headers: { 'X-CSRFToken': getCookie('csrftoken') }
+      });
+      if (res.ok) {
+        // Al usar sesiones, simplemente recargamos. Si era el ultimo, el backend podria manejarlo, 
+        // pero podemos verificar cuantos quedan en el DOM.
+        const remaining = document.querySelectorAll('.record-card').length;
+        if (remaining > 1) {
+          window.location.reload();
+        } else {
+          window.location.href = '/operacion/';
+        }
+      } else {
+        const errorData = await res.json();
+        alert('Error al eliminar: ' + (errorData.message || 'Desconocido'));
+        saveInd.textContent = '';
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error de red al intentar eliminar.');
+      saveInd.textContent = '';
+    }
+  }
+
   // ── 7. METADATA PATCH ────────────────────────────────────────────────────
   async function guardarMetadatos() {
     if (!activeRecord) return;
@@ -1222,7 +1299,8 @@
     });
 
     try {
-      const res = await fetch("{% url 'generar_excel' %}", {
+      const queryParams = window.location.search;
+      const res = await fetch(`{% url 'generar_excel' %}${queryParams}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
         body: JSON.stringify({ rotaciones, registros: registrosLimpios }),
