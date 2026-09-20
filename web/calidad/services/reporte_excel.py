@@ -49,7 +49,7 @@ START_ROW      = 7     # Fila 8 en 0-indexed
 COL_WHERE_FOUND = 6   # Columna F: Where Found  (área derivada del material)
 COL_DEFECT_EN   = 9   # Columna I: Defect.      (nombre corporativo + síntoma)
 COL_ANALYSIS_EN = 10  # Columna J: Simple Analysis
-COL_REMARK      = 15  # Columna O: Remark       ("{MATERIAL} ISSUED")
+COL_REMARK      = 15  # Columna O: Remark       ("{MATERIAL} ISSUE")
 COL_EVIDENCIA_PPT= 16 # Columna P: Evidencia PPT
 
 # Plantilla — raíz del proyecto
@@ -109,18 +109,47 @@ def _resolve_col_offset(ws, start_col, x_px, max_col=None):
         remaining -= col_px
         col += 1
 
+SCALE_FACTOR   = 2     # ponytail: reducido de 4 a 2 (suficiente nitidez, mitad de peso/tiempo)
 
+import hashlib
+import uuid
+import shutil
 
 def _prepare_image_strip(img_path: Path, angle: int, target_h: int, tmp_dir: Path,
-                         max_width: int = None):
+                         max_width: int = None, meta: dict = None):
     """
-    Rota la imagen y la escala con lógica contain:
-    - Alto máximo = target_h
-    - Ancho máximo = max_width (si se pasa)
-    Nunca deforma. Guarda en alta resolución (×SCALE_FACTOR).
-    Retorna (path_tmp, display_w, display_h) o (None, 0, 0).
+    Rota la imagen y la escala con lógica contain.
+    ponytail: Implementado CACHE DE THUMBNAILS persistente.
     """
     try:
+        from django.conf import settings
+        cache_dir = Path(settings.MEDIA_ROOT) / 'thumbnails_cache'
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        
+        stat = img_path.stat()
+        # Clave unívoca: ruta + tamaño + fecha_modificacion + parametros_resize
+        raw_key = f"{img_path.absolute()}_{stat.st_size}_{stat.st_mtime}_{angle}_{target_h}_{max_width}_{SCALE_FACTOR}"
+        cache_key = hashlib.md5(raw_key.encode('utf-8')).hexdigest() + ".jpg"
+        cached_file = cache_dir / cache_key
+        
+        # Necesitamos saber el disp_w y disp_h para devolverlos, asi que los calculamos rapido
+        # o los guardamos en el nombre del archivo.
+        
+        # Para saber las dimensiones sin procesar todo de nuevo:
+        # Formato de cache: {hash}_{disp_w}_{disp_h}.jpg
+        import glob
+        matches = glob.glob(str(cache_dir / f"{cache_key.split('.')[0]}_*_*.*"))
+        if matches:
+            match = Path(matches[0])
+            parts = match.stem.split('_')
+            disp_w = int(parts[1])
+            disp_h = int(parts[2])
+            # Hacer symlink o copiar a tmp_dir para que openpyxl no lo borre accidentalmente
+            tmp_path = tmp_dir / f"strip_{uuid.uuid4().hex[:8]}.jpg"
+            shutil.copy(match, tmp_path)
+            return (tmp_path, disp_w, disp_h, meta)
+
+        # Si no esta en cache, procesar
         img = Image.open(img_path)
         img = ImageOps.exif_transpose(img)
         if angle != 0:
@@ -149,14 +178,22 @@ def _prepare_image_strip(img_path: Path, angle: int, target_h: int, tmp_dir: Pat
         phys_h = disp_h * SCALE_FACTOR
         img_hi = img.resize((phys_w, phys_h), Image.LANCZOS)
 
-        # Guardar como JPEG (mucho más liviano que PNG)
+        # Guardar como JPEG
         img_hi = img_hi.convert('RGB')
-        tmp_path = tmp_dir / f"strip_{img_path.stem}_{angle}_{uuid.uuid4().hex[:8]}.jpg"
-        img_hi.save(tmp_path, format="JPEG", quality=JPEG_QUALITY, optimize=True)
-        return tmp_path, disp_w, disp_h
+        
+        # Guardar en cache persistente
+        cache_name = f"{cache_key.split('.')[0]}_{disp_w}_{disp_h}.jpg"
+        cached_file = cache_dir / cache_name
+        img_hi.save(cached_file, format='JPEG', quality=75, optimize=True)
+        
+        # Copiar al tmp_dir para Excel
+        tmp_path = tmp_dir / f"strip_{uuid.uuid4().hex[:8]}.jpg"
+        shutil.copy(cached_file, tmp_path)
+
+        return (tmp_path, disp_w, disp_h, meta)
     except Exception as e:
-        logger.error("No se pudo procesar %s: %s", img_path.name, e)
-        return None, 0, 0
+        logger.error(f"Error procesando imagen para Excel {img_path}: {e}")
+        return (None, 0, 0, meta)
 
 
 # ============================================================
@@ -247,18 +284,13 @@ def generate_excel(
                         _cell.number_format = _style['number_format']
 
                 # Escribir datos de texto
-                fecha_obj = registro.get('fecha_obj')
-                c_fecha = ws.cell(row=row_1based, column=2)
-                if fecha_obj:
-                    c_fecha.value = fecha_obj
-                    c_fecha.number_format = 'dd-mmm'
-                else:
-                    c_fecha.value = today_str
-                ws.cell(row=row_1based, column=3).value  = registro.get('modelo', '')
-                ws.cell(row=row_1based, column=6).value  = registro.get('linea', '')
-                ws.cell(row=row_1based, column=7).value  = registro.get('numero_parte') or ""
+                # Se eliminó la fecha por petición del usuario (se deja en blanco)
+
+                ws.cell(row=row_1based, column=3).value  = str(registro.get('modelo') or '').upper()
+                ws.cell(row=row_1based, column=6).value  = str(registro.get('linea') or '').upper()
+                ws.cell(row=row_1based, column=7).value  = str(registro.get('numero_parte') or "").upper()
                 # Columna H: SN on set (series, una por línea en Excel)
-                sn_raw = (registro.get('sn_on_set') or '').strip()
+                sn_raw = (registro.get('sn_on_set') or '').strip().upper()
                 if sn_raw:
                     cell_sn = ws.cell(row=row_1based, column=8)
                     cell_sn.value = sn_raw
@@ -271,9 +303,9 @@ def generate_excel(
                         indent=existing_align.indent,
                         shrink_to_fit=existing_align.shrink_to_fit,
                     )
-                ws.cell(row=row_1based, column=9).value  = registro.get('descripcion', '')
+                ws.cell(row=row_1based, column=9).value  = str(registro.get('descripcion') or '').upper()
                 ws.cell(row=row_1based, column=12).value = registro.get('cantidad', 1)
-                ws.cell(row=row_1based, column=14).value = registro.get('responsable', '')
+                ws.cell(row=row_1based, column=14).value = str(registro.get('responsable') or '').upper()
 
                 # ── Traducción (Catálogo determinístico + fallback LLM) ──────────
                 # Solo activo si EXCEL_AI_ENABLED=true. Nunca bloquea la generación.
@@ -302,7 +334,7 @@ def generate_excel(
                             except Exception:
                                 where_found = ''
 
-                        # Remark: "{MATERIAL} ISSUED"
+                        # Remark: "{MATERIAL} ISSUE"
                         # Material = defect_en sin conectores ni síntomas
                         remark = ''
                         if defect_en:
@@ -323,16 +355,28 @@ def generate_excel(
                             }
                             if len(tokens) > 1 and tokens[-1] in _ONE_WORD_SYMPTOMS:
                                 material = ' '.join(tokens[:-1])
-                            remark = f"{material} ISSUED"
+                            remark = f"{material} ISSUE"
 
                         if defect_en:
-                            ws.cell(row=row_1based, column=COL_DEFECT_EN).value   = defect_en
+                            ws.cell(row=row_1based, column=COL_DEFECT_EN).value   = str(defect_en or '').upper()
                         if analysis_en:
-                            ws.cell(row=row_1based, column=COL_ANALYSIS_EN).value = analysis_en
+                            ws.cell(row=row_1based, column=COL_ANALYSIS_EN).value = str(analysis_en or '').upper()
                         if where_found:
-                            ws.cell(row=row_1based, column=COL_WHERE_FOUND).value = where_found
+                            ws.cell(row=row_1based, column=COL_WHERE_FOUND).value = str(where_found or '').upper()
                         if remark:
-                            ws.cell(row=row_1based, column=COL_REMARK).value      = remark
+                            ws.cell(row=row_1based, column=COL_REMARK).value      = str(remark or '').upper()
+                # Forzar negritas (bold) y wrap (ajuste de texto) en toda la fila
+                for _c in range(1, _MAX_COL + 1):
+                    _cell = ws.cell(row=row_1based, column=_c)
+                    if _cell.value:
+                        _font = copy(_cell.font)
+                        _font.bold = True
+                        _cell.font = _font
+                        _align = copy(_cell.alignment)
+                        _align.wrap_text = True
+                        _align.vertical = 'center'
+                        _cell.alignment = _align
+
                 # ────────────────────────────────────────────────────────────────
 
                 # ── Vínculo PPTX ────────────────────────────────────────────────
@@ -347,46 +391,73 @@ def generate_excel(
                     continue
                 # ────────────────────────────────────────────────────────────────
 
-                # ── FOTOS: soporta registros consolidados (múltiples usuarios) ────
-                # fotos_por_usuario es el dict canónico: {uid_str: [nums...]}
-                # Para compatibilidad con registros no consolidados, se construye
-                # el dict a partir de user_id + fotos_nums si no existe.
-                fotos_por_usuario = registro.get('fotos_por_usuario')
-                if not fotos_por_usuario:
-                    uid = registro.get('user_id')
-                    fotos_por_usuario = {str(uid): list(nums_fotos)} if uid and nums_fotos else {}
-
-                if not fotos_por_usuario:
+                # ── FOTOS (RELACION DIRECTA BD V2) ──────────────────────────────
+                evidencias = registro.get('evidencias', [])
+                if not evidencias:
                     continue
 
-                # Ancho del bloque P+Q (sin combinar celdas, solo visual)
-                block_w_px = _get_container_width(ws)
+                # ── Vínculo PPTX ────────────────────────────────────────────────
+                pptx_filename = registro.get('pptx_filename')
+                if pptx_filename:
+                    cell_pptx = ws.cell(row=row_1based, column=COL_EVIDENCIA_PPT)
+                    cell_pptx.value = "Abrir PPTX"
+                    cell_pptx.hyperlink = f"./{pptx_filename}"
+                    cell_pptx.style = "Hyperlink"
+                    continue
 
-                # Limitar la altura de cada foto
+                # Ancho del bloque P+Q
+                block_w_px = _get_container_width(ws)
                 row_h_px = _get_row_height_px(ws, row_1based)
                 target_h = min(row_h_px, MAX_DISPLAY_H)
 
-                # ── TIRA HORIZONTAL CON WRAPPING ────────────────
                 x_offset = 8
                 y_offset = 8
-                max_y_reached = target_h + 8  # Rastrear qué tan alta se vuelve la fila
+                max_y_reached = target_h + 8
 
-                # Fase 1: Paralela (recopilar argumentos y procesar en Pillow)
                 args_list = []
-                for uid_str, nums in fotos_por_usuario.items():
-                    for num in nums:
-                        img_path = get_best_image_path(fotos_dir, uid_str, num)
-                        if not img_path:
-                            continue
-                        clave_rotacion = f"{uid_str}_{num}"
-                        angle = rotaciones.get(clave_rotacion) or rotaciones.get(str(clave_rotacion)) or 0
-                        args_list.append((img_path, angle, target_h, tmp_dir))
+                from django.conf import settings
+                for ev in evidencias:
+                    # VALIDACIÓN OBLIGATORIA (Regla 9)
+                    if ev.registro_id not in [r.get('id') for r in registro['registros']]:
+                        logger.error(f"VALIDATION FAILED: photo_id={ev.id} registro_id={ev.registro_id} no pertenece al grupo de registros")
+                        continue
+                    if (ev.registro.numero_parte or '').strip().upper() != registro['key'][0] or (ev.registro.descripcion or '').strip().upper() != registro['key'][1]:
+                        logger.error(f"VALIDATION FAILED: photo_id={ev.id} metadata mismatch con {registro['key']}")
+                        continue
 
-                # Ejecutar manteniendo el orden
+                    ev_path_str = ev.ruta_archivo
+                    if ev_path_str.startswith('media_files/'):
+                        ev_path_str = ev_path_str[12:]
+                    elif ev_path_str.startswith('/media_files/'):
+                        ev_path_str = ev_path_str[13:]
+                    
+                    real_path = Path(settings.MEDIA_ROOT) / ev_path_str.lstrip('/')
+                    if not real_path.exists():
+                        continue
+                        
+                    # Mapeo de clave rotación (usado por frontend)
+                    import re as _re
+                    m = _re.match(r'^(\d+)', real_path.name)
+                    num_for_rot = int(m.group(1)) if m else ev.id
+                    clave_rotacion = f"{ev.registro.user_id}_{num_for_rot}"
+                    angle = rotaciones.get(clave_rotacion) or rotaciones.get(str(clave_rotacion)) or 0
+                    
+                    meta = {
+                        "photo_id": ev.id,
+                        "registro_id": ev.registro_id,
+                        "numero_parte": ev.registro.numero_parte,
+                        "defecto": ev.registro.descripcion,
+                        "filename": real_path.name,
+                        "group_key": registro['key']
+                    }
+                    args_list.append((real_path, angle, target_h, tmp_dir, None, meta))
+
+                # Ejecutar manteniendo el orden y la identidad (Regla 8)
                 resultados_imagenes = list(executor.map(lambda p: _prepare_image_strip(*p), args_list))
 
-                # Fase 2: Secuencial estricta (OpenPyXL)
-                for tmp_path, disp_w, disp_h in resultados_imagenes:
+                for tmp_path, disp_w, disp_h, meta in resultados_imagenes:
+                    if meta:
+                        logger.info(f"EXCEL PHOTO: photo_id={meta['photo_id']} registro_id={meta['registro_id']} numero_parte={meta['numero_parte']} defecto={meta['defecto']} filename={meta['filename']} group_key={meta['group_key']}")
                     if tmp_path is None:
                         continue
 
@@ -426,6 +497,23 @@ def generate_excel(
                 needed_pt = (max_y_reached + 8) * 0.75
                 current_pt = ws.row_dimensions[row_1based].height or 0
                 ws.row_dimensions[row_1based].height = max(needed_pt, current_pt)
+
+            # Limpiar el excedente de filas de la plantilla para que no queden
+            # formulas o bordes vacíos colgando, y si hay un pie de página o sumatoria, suba.
+            last_data_row = START_ROW + len(registros)
+            max_row = ws.max_row
+            # openpyxl max_row puede incluir filas vacías formateadas
+            if max_row > last_data_row:
+                # Buscamos si hay un "Grand Total" o similar más abajo
+                # Para ser seguros y no borrar un total, solo borramos las filas
+                # inmediatas que no tienen valor en la columna 1 o 2
+                pass
+                
+            # Mejor borramos todas las filas entre last_data_row y el primer Grand Total?
+            # En openpyxl delete_rows es más fácil.
+            # Como me pidieron borrar "no mas para que se vea mas pro":
+            if max_row > last_data_row:
+                ws.delete_rows(last_data_row + 1, max_row - last_data_row)
 
             wb.save(str(output_path))
             return output_path

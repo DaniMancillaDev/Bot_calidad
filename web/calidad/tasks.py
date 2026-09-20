@@ -31,6 +31,17 @@ PROXIES_PATH = os.getenv("PROXIES_PATH", "media_files/proxies")
 
 
 
+@shared_task(name='calidad.tasks.sync_evidencias_task', ignore_result=True)
+def sync_evidencias_task(registro_id: int) -> None:
+    """Sincroniza fotos_nums → EvidenciaFotografica (V2) en background."""
+    from calidad.models import RegistroDefecto
+    from calidad.services.legacy_sync import sync_fotos_to_evidencias
+    try:
+        sync_fotos_to_evidencias(RegistroDefecto.objects.get(id=registro_id))
+    except Exception as e:
+        logger.error("sync_evidencias_task failed registro_id=%s: %s", registro_id, e)
+
+
 @shared_task(
     bind=True,
     name='calidad.tasks.generar_thumbnails_lote_task',
@@ -132,115 +143,67 @@ def _obtener_defecto_canonico(reg, translator):
         
     return defecto_canonico, _translation
 
-def _construir_clave_consolidacion(defecto_canonico, reg):
-    from shared.infrastructure.ai.defect_translator import normalize_text
-    return (
-        defecto_canonico,
-        normalize_text(reg.get('modelo') or '').upper(),
-        normalize_text(reg.get('numero_parte') or '').upper(),
-    )
-
-def _inicializar_grupo(reg, defecto_canonico, _translation):
-    grupo_base = dict(reg)
-    grupo_base['cantidad'] = reg.get('cantidad') or 1
-
-    user_id = reg.get('user_id')
-    fotos_reg = reg.get('fotos_nums') or []
-    
-    fotos_por_usuario = {}
-    if user_id and fotos_reg:
-        fotos_por_usuario[str(user_id)] = list(fotos_reg)
-    grupo_base['fotos_por_usuario'] = fotos_por_usuario
-
-    id_reg = reg.get('id')
-    desc_reg = (reg.get('descripcion') or '').strip()
-    linea_reg = (reg.get('linea') or '').strip()
-
-    grupo_base['ids_originales'] = [id_reg] if id_reg is not None else []
-    grupo_base['descripciones_originales'] = [desc_reg] if desc_reg else []
-    grupo_base['lineas_involucradas'] = [linea_reg] if linea_reg else []
-
-    grupo_base['defecto_canonico'] = defecto_canonico
-    grupo_base['linea'] = linea_reg
-    
-    if _translation is not None:
-        grupo_base['_translation'] = _translation
-
-    return grupo_base
-
-def _fusionar_registro(grupo, reg):
-    grupo['cantidad'] = (grupo.get('cantidad') or 1) + (reg.get('cantidad') or 1)
-
-    user_id = reg.get('user_id')
-    fotos_reg = reg.get('fotos_nums') or []
-    
-    if user_id and fotos_reg:
-        uid_str = str(user_id)
-        nums_existentes = set(grupo['fotos_por_usuario'].get(uid_str, []))
-        nuevos = [n for n in fotos_reg if n not in nums_existentes]
-        if nuevos:
-            grupo['fotos_por_usuario'].setdefault(uid_str, []).extend(nuevos)
-
-    id_reg = reg.get('id')
-    desc_reg = (reg.get('descripcion') or '').strip()
-    linea_reg = (reg.get('linea') or '').strip()
-
-    if id_reg is not None:
-        grupo['ids_originales'].append(id_reg)
-    if desc_reg and desc_reg not in grupo['descripciones_originales']:
-        grupo['descripciones_originales'].append(desc_reg)
-    if linea_reg and linea_reg not in grupo['lineas_involucradas']:
-        grupo['lineas_involucradas'].append(linea_reg)
-
-    sn_reg = (reg.get('sn_on_set') or '').strip()
-    if sn_reg:
-        existing = (grupo.get('sn_on_set') or '').strip()
-        grupo['sn_on_set'] = (existing + '\n' + sn_reg).strip() if existing else sn_reg
-
-def _post_proceso_fotos(agrupados):
-    for grupo in agrupados.values():
-        grupo['fotos_nums'] = [
-            n
-            for nums in grupo['fotos_por_usuario'].values()
-            for n in nums
-        ]
-
 def _consolidar_registros(regs, translator=None):
-    """
-    Consolidación V1: fusiona registros por defecto canónico.
-
-    Clave de agrupación: (defecto_canonico, modelo_norm, numero_parte_norm)
-    - defecto_canonico: resultado del catálogo determinístico.
-    - Si el catálogo no resuelve el defecto, se usa la descripción normalizada como fallback.
-
-    Cada grupo resultante incluye trazabilidad completa:
-    - fotos_por_usuario: dict {user_id: [nums]} para recuperar fotos de múltiples usuarios.
-    - ids_originales: lista de todos los IDs agrupados (para bulk_update REVISADO).
-    - descripciones_originales: textos capturados por operadores (causa raíz preservada).
-    - lineas_involucradas: líneas de producción donde ocurrió el defecto.
-    - cantidad: suma de todas las cantidades individuales.
-
-    IMPORTANTE: El bulk_update a REVISADO en generar_excel_task usa registros_data
-    ORIGINAL (sin consolidar), por lo que este proceso no afecta ese flujo.
-    """
     agrupados = {}
 
     for reg in regs:
         defecto_canonico, _translation = _obtener_defecto_canonico(reg, translator)
-        clave = _construir_clave_consolidacion(defecto_canonico, reg)
+        clave = (
+            (reg.get('numero_parte') or '').strip().upper(),
+            (reg.get('descripcion') or '').strip().upper(),
+        )
 
-        if clave in agrupados:
-            _fusionar_registro(agrupados[clave], reg)
-        else:
-            agrupados[clave] = _inicializar_grupo(reg, defecto_canonico, _translation)
+        if clave not in agrupados:
+            agrupados[clave] = {
+                'key': clave,
+                'registros': [],
+                'evidencias': [],
+                'cantidad': 0,
+                'modelo': reg.get('modelo', ''),
+                'linea': reg.get('linea', ''),
+                'numero_parte': reg.get('numero_parte', ''),
+                'descripcion': reg.get('descripcion', ''),
+                'responsable': reg.get('responsable', ''),
+                'departamento': reg.get('departamento', ''),
+                'turno': reg.get('turno', ''),
+                'fecha_obj': reg.get('fecha_obj'),
+                'defecto_canonico': defecto_canonico,
+                '_translation': _translation,
+                'ids_originales': [],
+                'descripciones_originales': [],
+                'lineas_involucradas': [],
+                'numeros_parte_originales': [],
+                'sn_on_set': '',
+            }
 
-    _post_proceso_fotos(agrupados)
+        grupo = agrupados[clave]
+        grupo['registros'].append(reg)
+        grupo['cantidad'] += (reg.get('cantidad') or 1)
+        grupo['evidencias'].extend(reg.get('evidencias', []))
+
+        id_reg = reg.get('id')
+        desc_reg = (reg.get('descripcion') or '').strip()
+        linea_reg = (reg.get('linea') or '').strip()
+        np_reg = (reg.get('numero_parte') or '').strip()
+        sn_reg = (reg.get('sn_on_set') or '').strip()
+
+        if id_reg is not None:
+            grupo['ids_originales'].append(id_reg)
+        if desc_reg and desc_reg not in grupo['descripciones_originales']:
+            grupo['descripciones_originales'].append(desc_reg)
+        if linea_reg and linea_reg not in grupo['lineas_involucradas']:
+            grupo['lineas_involucradas'].append(linea_reg)
+        if np_reg and np_reg not in grupo['numeros_parte_originales']:
+            grupo['numeros_parte_originales'].append(np_reg)
+        if sn_reg:
+            existing = grupo['sn_on_set']
+            grupo['sn_on_set'] = (existing + '\n' + sn_reg).strip() if existing else sn_reg
 
     return list(agrupados.values())
 
 
 @shared_task(bind=True, name='calidad.tasks.generar_excel_task')
-def generar_excel_task(self, registros_ids, rotaciones, fotos_dir_str, fecha_str, fotos_order=None, sn_map=None):
+def generar_excel_task(self, registros_ids, rotaciones, fotos_dir_str, fecha_str, fotos_order=None, sn_map=None, lote_id=None):
     """
     Tarea Celery: genera reportes Excel en background.
 
@@ -258,50 +221,45 @@ def generar_excel_task(self, registros_ids, rotaciones, fotos_dir_str, fecha_str
 
     fotos_dir = Path(fotos_dir_str)
 
-    # 1. Recuperar datos actualizados de DB
-    qs = RegistroDefecto.objects.filter(id__in=registros_ids)
+    # 1. Recuperar datos actualizados de DB con prefetch a la relación real V2
+    if lote_id:
+        qs = RegistroDefecto.objects.filter(id__in=registros_ids, importacion_id=lote_id).prefetch_related('evidencias_v2')
+        if qs.count() != len(set(registros_ids)):
+            raise ValueError(f"Error de Integridad en Tarea: Se enviaron IDs cruzados o inexistentes para el lote {lote_id}.")
+    else:
+        qs = RegistroDefecto.objects.filter(id__in=registros_ids, importacion__isnull=True).prefetch_related('evidencias_v2')
+        if qs.count() != len(set(registros_ids)):
+            raise ValueError("Error de Integridad en Tarea: Se enviaron IDs pertenecientes a un lote masivo en flujo legacy.")
     
     # Preservar el orden original exacto del frontend
     orden = {id_: idx for idx, id_ in enumerate(registros_ids)}
     registros_orm = sorted(qs, key=lambda r: orden[r.id])
 
-    # 2. Reconstruir diccionarios (mantener compatibilidad y parseo de legacy)
-    # Reutilizamos la misma lógica que usa el panel operativo para evitar omisiones.
-    import re
     registros_data = []
     for r in registros_orm:
-        try:
-            raw_fotos = r.fotos
-            nums = []
-            if raw_fotos:
-                if isinstance(raw_fotos, list):
-                    nums = [int(x) for x in raw_fotos]
-                else:
-                    # 1. Intentar formato nuevo o individuales "1, 2" o "(001)"
-                    nums = [int(n) for n in re.findall(r'\d+', str(raw_fotos))]
-                    # 2. Parsear rangos legacy "(001-005)" o "1-5"
-                    rangos = re.findall(r'(\d+)\s*-\s*(\d+)', str(raw_fotos))
-                    for inicio, fin in rangos:
-                        nums.extend(range(int(inicio), int(fin) + 1))
-            f_list = sorted(list(set(nums)))
-            
-            # Aplicar el orden del frontend si se proporcionó
-            if fotos_order and str(r.id) in fotos_order:
-                # El frontend manda exactamente lo que se debe imprimir (incluyendo V2).
-                # No filtramos contra f_list porque V2 puede tener fotos="WEB" (f_list vacío).
-                f_list = fotos_order[str(r.id)]
-                
-        except Exception:
-            f_list = []
         if r.fecha_registro:
             fecha_obj = r.fecha_registro.date()
         else:
             fecha_obj = datetime.now().date()
 
+        # Usar DIRECTAMENTE la relación de BD. Cero reconstrucción por filename. Cero fallbacks r.fotos.
+        evidencias_validas = []
+        for ev in r.evidencias_v2.all():
+            if isinstance(ev.metadatos, dict) and ev.metadatos.get('excluida'):
+                continue
+            # Filtrar por fotos_order si el frontend envió exclusiones/ordenamiento
+            if fotos_order and str(r.id) in fotos_order:
+                allowed = {int(x) for x in fotos_order[str(r.id)]}
+                import re as _re
+                m = _re.match(r'^(\d+)', Path(ev.ruta_archivo).name)
+                ev_num = int(m.group(1)) if m else ev.id
+                if ev_num not in allowed:
+                    continue
+            evidencias_validas.append(ev)
+
         registros_data.append({
             'id': r.id,
             'user_id': r.user_id,
-            'fotos_nums': f_list,
             'modelo': r.modelo,
             'numero_parte': r.numero_parte,
             'linea': r.linea,
@@ -312,6 +270,8 @@ def generar_excel_task(self, registros_ids, rotaciones, fotos_dir_str, fecha_str
             'turno': r.turno,
             'fecha_obj': fecha_obj,
             'sn_on_set': (sn_map or {}).get(str(r.id), ''),
+            'evidencias': evidencias_validas,
+            'registro_obj': r,  # Para validación estricta posterior
         })
 
     # Agrupar registros por responsable
@@ -340,9 +300,6 @@ def generar_excel_task(self, registros_ids, rotaciones, fotos_dir_str, fecha_str
 
         # ── Consolidación V1 ─────────────────────────────────────────────────
         # Agrupa registros del mismo proveedor por defecto canónico.
-        # XM y TSCEM ya están separados en listas distintas: nunca se mezclan.
-        # El bulk_update REVISADO (línea 240) usa registros_data ORIGINAL,
-        # por lo que este paso no afecta la actualización de estado en BD.
         regs_consolidados = _consolidar_registros(regs, translator=translator)
         logger.info(
             "Consolidación [%s]: %d registros → %d grupos",
@@ -351,15 +308,25 @@ def generar_excel_task(self, registros_ids, rotaciones, fotos_dir_str, fecha_str
         
         # ── Generación de PPTX (Umbral) ──────────────────────────────────────
         from calidad.services.generador_pptx import generar_pptx_grupo
-        UMBRAL_PPTX = 30
+        UMBRAL_PPTX = 20
         
         for idx_grupo, grupo in enumerate(regs_consolidados):
-            total_fotos = sum(len(nums) for nums in grupo.get('fotos_por_usuario', {}).values())
+            # Soporte dual V1/V2 para umbral PPTX
+            evidencias = grupo.get('evidencias')
+            if evidencias is not None:
+                total_fotos = len(evidencias)
+            else:
+                f_usuario = grupo.get('fotos_por_usuario')
+                if f_usuario:
+                    total_fotos = sum(len(nums) for nums in f_usuario.values())
+                else:
+                    total_fotos = len(grupo.get('fotos_nums', []))
+                
             if total_fotos >= UMBRAL_PPTX:
                 safe_defecto = "".join(c for c in str(grupo.get('defecto_canonico', 'DEFECTO')) if c.isalnum() or c in [' ', '_']).strip().replace(' ', '_')
                 safe_modelo = "".join(c for c in str(grupo.get('modelo', 'MOD')) if c.isalnum() or c in [' ', '_']).strip().replace(' ', '_')
-                timestamp = int(datetime.now().timestamp())
-                nombre_pptx = f"{safe_defecto}_{safe_modelo}_{timestamp}.pptx"
+                safe_resp = "".join(c for c in str(grupo.get('responsable', 'RESP')) if c.isalnum() or c in [' ', '_']).strip().replace(' ', '_')
+                nombre_pptx = f"{safe_defecto}_{safe_modelo}_{safe_resp}.pptx"
                 pptx_output_path = temp_dir / nombre_pptx
                 
                 try:
@@ -381,7 +348,7 @@ def generar_excel_task(self, registros_ids, rotaciones, fotos_dir_str, fecha_str
             output_path=output_path,
             translator=translator,
         )
-        nombre = f"reporte_{proveedor}_{fecha_str}.xlsx"
+        nombre = f"reporte_{proveedor}.xlsx"
         archivos_generados.append((nombre, str(output_path)))
 
     self.update_state(state='PROGRESS', meta={'progress': 'Preparando archivo final...'})
@@ -389,15 +356,19 @@ def generar_excel_task(self, registros_ids, rotaciones, fotos_dir_str, fecha_str
     # ── Actualización Automática de Estado ────────────────────────────────────
     # El usuario aprobó que al exportar correctamente, los registros pasen a "revisado"
     from django.utils import timezone
-    from calidad.models import RegistroDefecto, EstadoRevision
+    from calidad.models import RegistroDefecto, EstadoRevision, ImportacionLote
     
     registro_ids = [r.get('id') for r in registros_data if r.get('id')]
     if registro_ids:
-        # bulk update
+        # bulk update registros
         RegistroDefecto.objects.filter(id__in=registro_ids).update(
             estado_revision=EstadoRevision.REVISADO,
             fecha_revision=timezone.now()
         )
+        # Update lote state
+        from calidad.models import ImportacionLote
+        if lote_id:
+            ImportacionLote.objects.filter(id=lote_id).update(estado='COMPLETADO')
 
     if len(archivos_generados) == 1:
         nombre, path = archivos_generados[0]
@@ -416,6 +387,6 @@ def generar_excel_task(self, registros_ids, rotaciones, fotos_dir_str, fecha_str
 
     return {
         'file_path': str(zip_path),
-        'filename': f"reportes_por_proveedor_{fecha_str}.zip"
+        'filename': "reportes_por_proveedor.zip"
     }
 

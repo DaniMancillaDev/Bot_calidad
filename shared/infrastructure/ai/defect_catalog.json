@@ -18,7 +18,10 @@
     "separador con poco adhesivo": "SPACER WITH LITTLE GLUE",
     "separador despegado": "SPACER WITH LITTLE GLUE",
     "pin dañado": "BACK COVER WITH DAMAGED PIN",
-    "pin danado": "BACK COVER WITH DAMAGED PIN"
+    "pin danado": "BACK COVER WITH DAMAGED PIN",
+    "sheet flyer dañado": "DAMAGED SHEET FLYER",
+    "sheet flyer danado": "DAMAGED SHEET FLYER",
+    "blu mal retrabajado": "METAL BLU WITH BAD REWORK"
   },
   "components": {
     "etiqueta": "LABEL",
@@ -80,7 +83,8 @@
     "cover lateral": "REAR COVER",
     "mylar": "MYLAR",
     "bolsa": "PROTECT BAG",
-    "by carton": "CUSHION DIE"
+    "by carton": "CUSHION DIE",
+    "sheet flyer": "SHEET FLYER"
   },
   "material_areas": {
     "REFLECTOR FILM": "CLEAN ROOM",
@@ -101,7 +105,10 @@
     "CUSHION": "INPUT",
     "PROTECT BAG": "INPUT",
     "CUSHION DIE": "INPUT",
-    "BACK COVER WITH DAMAGED PIN": "INPUT"
+    "BACK COVER WITH DAMAGED PIN": "INPUT",
+    "SHEET FLYER": "INPUT",
+    "DAMAGED SHEET FLYER": "INPUT",
+    "METAL BLU WITH BAD REWORK": "INPUT"
   },
   "symptoms": {
     "dañad": "DAMAGED",
@@ -123,7 +130,9 @@
     "mojad": "WET",
     "manchad": "STAINED",
     "abertura": "GAP",
-    "fuga de luz": "LIGHT LEAK"
+    "fuga de luz": "LIGHT LEAK",
+    "mal retrabajad": "BADLY REWORKED",
+    "mal retrabajo": "BAD REWORK"
   },
   "connectors": {
     "con poco de": "WITH LITTLE",

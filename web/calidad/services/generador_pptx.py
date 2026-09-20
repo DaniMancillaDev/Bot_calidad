@@ -106,7 +106,7 @@ def _place_row(slide, row_items: list, y_top: float, available_w: float,
                     mapping = {90: Image.ROTATE_270, 180: Image.ROTATE_180, 270: Image.ROTATE_90}
                     im = im.transpose(mapping[angle])
                 buf = BytesIO()
-                im.convert('RGB').save(buf, format='JPEG', quality=92)
+                im.convert('RGB').save(buf, format='JPEG', quality=75, optimize=True)
                 buf.seek(0)
 
             slide.shapes.add_picture(
@@ -158,16 +158,41 @@ def generar_pptx_grupo(grupo: dict, fotos_dir: Path, output_path: Path,
     except IndexError:
         blank_layout = prs.slide_layouts[0]
 
-    # Recolectar tuplas (path, angle) en orden
     rotaciones = rotaciones or {}
     fotos_items = []
-    for uid_str, nums in grupo.get('fotos_por_usuario', {}).items():
-        for num in nums:
-            p = _get_image_path(fotos_dir, uid_str, num)
-            if p:
-                clave = f"{uid_str}_{num}"
+    
+    # ponytail: soporte dual (consolidados V1 vs directos WYSIWYG)
+    evidencias = grupo.get('evidencias')
+    if evidencias is not None:
+        from django.conf import settings
+        import re as _re
+        for ev in evidencias:
+            ev_path_str = ev.ruta_archivo
+            if ev_path_str.startswith('media_files/'):
+                ev_path_str = ev_path_str[12:]
+            elif ev_path_str.startswith('/media_files/'):
+                ev_path_str = ev_path_str[13:]
+            real_path = Path(settings.MEDIA_ROOT) / ev_path_str.lstrip('/')
+            if real_path.exists():
+                m = _re.match(r'^(\d+)', real_path.name)
+                num_for_rot = int(m.group(1)) if m else ev.id
+                clave = f"{ev.registro.user_id}_{num_for_rot}"
                 angle = rotaciones.get(clave) or rotaciones.get(str(clave)) or 0
-                fotos_items.append((p, angle))
+                fotos_items.append((real_path, angle))
+    else:
+        fotos_dict = grupo.get('fotos_por_usuario')
+        if not fotos_dict:
+            uid = grupo.get('user_id')
+            nums = grupo.get('fotos_nums')
+            fotos_dict = {str(uid): list(nums)} if uid and nums else {}
+            
+        for uid_str, nums in fotos_dict.items():
+            for num in nums:
+                p = _get_image_path(fotos_dir, uid_str, num)
+                if p:
+                    clave = f"{uid_str}_{num}"
+                    angle = rotaciones.get(clave) or rotaciones.get(str(clave)) or 0
+                    fotos_items.append((p, angle))
 
     if not fotos_items:
         prs.save(str(output_path))
