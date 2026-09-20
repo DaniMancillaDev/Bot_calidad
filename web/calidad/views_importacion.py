@@ -166,17 +166,21 @@ def importacion_confirmar(request):
         return redirect('importacion_iniciar')
         
     try:
-        commit_importacion(estado, request.user)
+        lote = commit_importacion(estado, request.user)
         
         # Limpieza de sesión
-        del request.session['importacion_activa']
+        if 'importacion_activa' in request.session:
+            del request.session['importacion_activa']
+        if 'revisar_ids' in request.session:
+            del request.session['revisar_ids']
         request.session.modified = True
         
         messages.success(request, "Importación completada correctamente.")
         # Responder JSON si es por AJAX (fetch), o redirect normal
+        redirect_url = f"/revisar/?lote_id={lote.id}"
         if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.content_type == 'application/json':
-            return JsonResponse({"status": "ok", "redirect": "/revisar/"})
-        return redirect('revisar_orientacion')
+            return JsonResponse({"status": "ok", "redirect": redirect_url})
+        return redirect(redirect_url)
         
     except Exception as e:
         messages.error(request, f"Error al guardar: {str(e)}")

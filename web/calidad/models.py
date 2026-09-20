@@ -68,9 +68,22 @@ class ProteccionBorradoManager(models.Manager):
     def get_queryset(self):
         return ProteccionBorradoQuerySet(self.model, using=self._db)
 
+class ImportacionLote(models.Model):
+    usuario = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True)
+    fecha_inicio = models.DateTimeField(auto_now_add=True)
+    estado = models.CharField(max_length=20, default='ACTIVO')
+    
+    class Meta:
+        db_table = 'importaciones_lotes'
+        ordering = ['-fecha_inicio']
+
 class RegistroDefecto(models.Model):
     """Tabla principal del bot: cada defecto fotografiado."""
     objects = ProteccionBorradoManager()
+    
+    # ── Fase 2: Lotes de Importación ───────────────────────────────────────
+    importacion = models.ForeignKey(ImportacionLote, on_delete=models.SET_NULL, null=True, blank=True, related_name='registros')
+
     # ── Campos originales (NO modificar — backward compat) ─────────────────
     fotos          = models.TextField()              # Legacy: "1, 2, 3"
     modelo         = models.TextField()

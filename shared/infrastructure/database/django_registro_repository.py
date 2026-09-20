@@ -50,9 +50,9 @@ class DjangoRegistroRepository:
                 numero_parte=_np_upper,
             )
             
-            # Dual-Write: crear EvidenciaFotografica (V2)
-            from calidad.services.legacy_sync import sync_fotos_to_evidencias
-            sync_fotos_to_evidencias(registro)
+            # Dual-Write: sincronizar EvidenciaFotografica (V2) en background
+            from calidad.tasks import sync_evidencias_task
+            sync_evidencias_task.delay(registro.id)
             
             elapsed = (time.monotonic() - t0) * 1000
             logger.info(

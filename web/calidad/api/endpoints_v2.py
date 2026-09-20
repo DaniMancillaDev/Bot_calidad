@@ -32,8 +32,19 @@ def api_get_registros_por_lote(request, lote_id):
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 @csrf_exempt
-@require_http_methods(["PATCH"])
-def api_patch_registro(request, registro_id):
+@require_http_methods(["PATCH", "DELETE"])
+def api_registro_detail(request, registro_id):
+    if request.method == "DELETE":
+        try:
+            registro = RegistroDefecto.objects.get(id=registro_id)
+            registro.delete(force_delete=True)
+            return JsonResponse({'status': 'success'})
+        except RegistroDefecto.DoesNotExist:
+            return JsonResponse({'status': 'error', 'message': 'Registro no encontrado'}, status=404)
+        except Exception as e:
+            return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+            
+    # PATCH
     try:
         data = json.loads(request.body)
         registro = RegistroDefecto.objects.get(id=registro_id)
@@ -90,21 +101,40 @@ def api_rotar_evidencia(request, evidencia_id):
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 @csrf_exempt
-@require_http_methods(["DELETE"])
-def api_delete_evidencia(request, evidencia_id):
-    try:
-        evidencia = EvidenciaFotografica.objects.get(id=evidencia_id)
-        # Soft-delete: add a flag to metadatos so it doesn't appear in the Excel/UI
-        if not isinstance(evidencia.metadatos, dict):
-            evidencia.metadatos = {}
-        evidencia.metadatos['excluida'] = True
-        evidencia.save(update_fields=['metadatos'])
-        return JsonResponse({'status': 'success'})
-    except EvidenciaFotografica.DoesNotExist:
-        return JsonResponse({'status': 'error', 'message': 'Evidencia no encontrada'}, status=404)
-    except Exception as e:
-        logger.error(f"Error api_delete_evidencia: {e}", exc_info=True)
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+@require_http_methods(["PATCH", "DELETE"])
+def api_evidencia_detail(request, evidencia_id):
+    if request.method == "PATCH":
+        try:
+            data = json.loads(request.body)
+            evidencia = EvidenciaFotografica.objects.get(id=evidencia_id)
+            
+            if 'registro_id' in data:
+                nuevo_registro = RegistroDefecto.objects.get(id=data['registro_id'])
+                evidencia.registro_id = nuevo_registro.id
+                evidencia.save(update_fields=['registro_id'])
+                
+            return JsonResponse({'status': 'success'})
+        except EvidenciaFotografica.DoesNotExist:
+            return JsonResponse({'status': 'error', 'message': 'Evidencia no encontrada'}, status=404)
+        except RegistroDefecto.DoesNotExist:
+            return JsonResponse({'status': 'error', 'message': 'Registro destino no encontrado'}, status=404)
+        except Exception as e:
+            logger.error(f"Error api_patch_evidencia: {e}", exc_info=True)
+            return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+            
+    elif request.method == "DELETE":
+        try:
+            evidencia = EvidenciaFotografica.objects.get(id=evidencia_id)
+            if not isinstance(evidencia.metadatos, dict):
+                evidencia.metadatos = {}
+            evidencia.metadatos['excluida'] = True
+            evidencia.save(update_fields=['metadatos'])
+            return JsonResponse({'status': 'success'})
+        except EvidenciaFotografica.DoesNotExist:
+            return JsonResponse({'status': 'error', 'message': 'Evidencia no encontrada'}, status=404)
+        except Exception as e:
+            logger.error(f"Error api_delete_evidencia: {e}", exc_info=True)
+            return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 @csrf_exempt
 @require_http_methods(["POST"])

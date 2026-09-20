@@ -204,7 +204,7 @@ def commit_importacion(session_data, user):
     mueve las fotos y lanza la tarea asíncrona de thumbnails.
     Todo ocurre en una transacción atómica.
     """
-    from calidad.models import RegistroDefecto, EvidenciaFotografica, EstadoRevision
+    from calidad.models import RegistroDefecto, EvidenciaFotografica, EstadoRevision, ImportacionLote
     from calidad.tasks import generar_thumbnails_lote_task
     
     registros_data = session_data.get('registros', [])
@@ -222,6 +222,8 @@ def commit_importacion(session_data, user):
     fotos_paths_para_celery = []
     
     with transaction.atomic():
+        lote = ImportacionLote.objects.create(usuario=user)
+        
         for row in registros_data:
             # Crear registro
             reg = RegistroDefecto.objects.create(
@@ -235,7 +237,8 @@ def commit_importacion(session_data, user):
                 descripcion=str(row.get('defecto', row.get('descripcion', ''))),
                 estado_revision=EstadoRevision.PENDIENTE,
                 fotos="WEB" if row.get('fotos_asignadas') else "", # Dummy text no numerico para legacy compat
-                numero_parte=str(row.get('numero_parte', ''))[:50]
+                numero_parte=str(row.get('numero_parte', ''))[:50],
+                importacion=lote
             )
             
             # Asociar fotos
@@ -271,3 +274,5 @@ def commit_importacion(session_data, user):
         
     if fotos_paths_para_celery:
         generar_thumbnails_lote_task.delay(user_id, fotos_paths_para_celery)
+        
+    return lote
