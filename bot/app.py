@@ -49,13 +49,14 @@ async def _post_init(application):
     await application.bot.set_my_commands(comandos)
 
 
-def build_application(token: str, container: dict):
+def build_application(token: str, container: dict, persistence=None):
     """
     Construye y devuelve la Application de Telegram completamente configurada.
 
     Args:
         token:     Token del bot de Telegram.
         container: Dict con repos e interfaces (output de build_container()).
+        persistence: Objeto de persistencia (opcional).
 
     Returns:
         Application lista para llamar .run_polling().
@@ -63,12 +64,16 @@ def build_application(token: str, container: dict):
     # Configurar timeouts para evitar errores de conexión con fotos pesadas
     request = HTTPXRequest(connect_timeout=30, read_timeout=30)
     
-    app = ApplicationBuilder() \
+    builder = ApplicationBuilder() \
         .token(token) \
         .request(request) \
         .concurrent_updates(True) \
-        .post_init(_post_init) \
-        .build()
+        .post_init(_post_init)
+        
+    if persistence:
+        builder = builder.persistence(persistence)
+        
+    app = builder.build()
 
     # ── Middleware de seguridad (grupo -1 = se ejecuta ANTES que cualquier handler) ──
     app.add_handler(

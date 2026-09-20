@@ -33,6 +33,8 @@ FOTOS_PATH = os.getenv('FOTOS_PATH', 'media_files/fotos')
 os.makedirs(FOTOS_PATH, exist_ok=True)
 
 
+from telegram.ext import PicklePersistence
+
 def main() -> None:
     token = os.getenv("TELEGRAM_TOKEN")
     if not token:
@@ -40,7 +42,9 @@ def main() -> None:
         sys.exit(1)
 
     container = build_container()
-    application = build_application(token, container)
+    
+    persistencia = PicklePersistence(filepath="/app/media_files/bot_memoria.pickle")
+    application = build_application(token, container, persistencia)
 
     logger.info("Bot de Calidad iniciado (Clean Architecture)")
 
