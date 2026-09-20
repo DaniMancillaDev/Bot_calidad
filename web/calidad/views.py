@@ -98,7 +98,7 @@ def _build_display_map(registros_sorted, fotos_dir):
         for ev in reg.evidencias_v2.all():
             import re as _re
             filename = Path(settings.MEDIA_ROOT / ev.ruta_archivo.lstrip('/')).name
-            m = _re.match(r'^(\d+)_', filename)
+            m = _re.match(r'^(\d+)', filename)
             real_num = int(m.group(1)) if m else ev.id
             if real_num not in display_map[uid]:
                 counters[uid] += 1
@@ -244,9 +244,17 @@ def _filter_registros_from_request(request, base_qs=None):
     fecha_desde = request.GET.get('fecha_desde', '')
     fecha_hasta = request.GET.get('fecha_hasta', '')
     preset      = request.GET.get('preset', '')
+    lote_id     = request.GET.get('lote_id', '')
 
-    # Primera carga sin parámetros: por defecto Hoy (d0)
-    if not request.GET:
+    # Filtrar por lote si se proporciona explícitamente
+    if lote_id and lote_id.isdigit():
+        registros = registros.filter(importacion_id=int(lote_id))
+    else:
+        # Aislamiento estricto: Las consultas globales (legacy) NO deben incluir registros de importaciones masivas.
+        registros = registros.filter(importacion__isnull=True)
+
+    # Primera carga sin parámetros: por defecto Hoy (d0), a menos que estemos filtrando por lote
+    if not request.GET and not lote_id:
         preset = 'd0'
 
     if linea:
@@ -254,7 +262,25 @@ def _filter_registros_from_request(request, base_qs=None):
     if responsable:
         registros = registros.filter(responsable__icontains=responsable)
     if modelo:
-        registros = registros.filter(modelo__icontains=modelo)
+        from calidad.models import PerfilUsuario
+        from django.db.models import Q
+        matching_user_ids = list(PerfilUsuario.objects.filter(
+            Q(usuario__first_name__icontains=modelo) |
+            Q(usuario__last_name__icontains=modelo) |
+            Q(usuario__username__icontains=modelo)
+        ).values_list('telegram_user_id', flat=True))
+        matching_user_ids = [uid for uid in matching_user_ids if uid is not None]
+
+        registros = registros.filter(
+            Q(descripcion__icontains=modelo) |
+            Q(modelo__icontains=modelo) |
+            Q(responsable__icontains=modelo) |
+            Q(numero_parte__icontains=modelo) |
+            Q(linea__icontains=modelo) |
+            Q(departamento__icontains=modelo) |
+            Q(user_id__in=matching_user_ids) |
+            Q(fotos__icontains=modelo)
+        )
 
     if request.user.is_superuser:
         turno_filtro = request.GET.get('turno', '')
@@ -425,7 +451,7 @@ def _build_galeria_queryset(request):
         .prefetch_related('evidencias_v2')
         .only(
             'id', 'fotos', 'fotos_nums', 'modelo', 'linea',
-            'cantidad', 'responsable', 'descripcion',
+            'numero_parte', 'cantidad', 'responsable', 'descripcion',
             'fecha_registro', 'user_id', 'turno', 'departamento',
             'estado_revision', 'supervisor_id', 'is_duplicate', 'is_blurry',
         )
@@ -471,6 +497,18 @@ def _build_galeria_queryset(request):
     q_filter = filtros['q']
     if q_filter:
         import re
+        
+        # Buscar IDs de Telegram de los operarios que coincidan con el texto
+        from calidad.models import PerfilUsuario
+        from django.db.models import Q
+        matching_user_ids = list(PerfilUsuario.objects.filter(
+            Q(usuario__first_name__icontains=q_filter) |
+            Q(usuario__last_name__icontains=q_filter) |
+            Q(usuario__username__icontains=q_filter)
+        ).values_list('telegram_user_id', flat=True))
+        # Remove None values
+        matching_user_ids = [uid for uid in matching_user_ids if uid is not None]
+
         m = re.match(r'^(\d+)\s*-\s*(\d+)$', q_filter.strip())
         if m:
             start_num = int(m.group(1))
@@ -480,6 +518,10 @@ def _build_galeria_queryset(request):
                 Q(descripcion__icontains=q_filter) |
                 Q(modelo__icontains=q_filter) |
                 Q(responsable__icontains=q_filter) |
+                Q(numero_parte__icontains=q_filter) |
+                Q(linea__icontains=q_filter) |
+                Q(departamento__icontains=q_filter) |
+                Q(user_id__in=matching_user_ids) |
                 Q(fotos_nums__overlap=range_list)
             )
         elif q_filter.strip().isdigit():
@@ -488,6 +530,10 @@ def _build_galeria_queryset(request):
                 Q(descripcion__icontains=q_filter) |
                 Q(modelo__icontains=q_filter) |
                 Q(responsable__icontains=q_filter) |
+                Q(numero_parte__icontains=q_filter) |
+                Q(linea__icontains=q_filter) |
+                Q(departamento__icontains=q_filter) |
+                Q(user_id__in=matching_user_ids) |
                 Q(fotos__icontains=q_filter) |
                 Q(fotos_nums__contains=[num])
             )
@@ -496,6 +542,10 @@ def _build_galeria_queryset(request):
                 Q(descripcion__icontains=q_filter) |
                 Q(modelo__icontains=q_filter) |
                 Q(responsable__icontains=q_filter) |
+                Q(numero_parte__icontains=q_filter) |
+                Q(linea__icontains=q_filter) |
+                Q(departamento__icontains=q_filter) |
+                Q(user_id__in=matching_user_ids) |
                 Q(fotos__icontains=q_filter)
             )
             
@@ -503,7 +553,7 @@ def _build_galeria_queryset(request):
 
 def _enrich_galeria_registros(object_list):
     import re
-    num_prefix_re = re.compile(r'^(\d+)_')
+    num_prefix_re = re.compile(r'^(\d+)')
 
     nombres_dict = {
         p.telegram_user_id: p.usuario.get_full_name() or p.usuario.username
@@ -754,14 +804,23 @@ def _get_orientacion_registros(request):
     fecha_hasta = ''
     registros_data = []
     
-    if request.method == 'POST' and request.POST.get('registros_data'):
+    # ponytail: Leer IDs de la sesión para evitar URLs kilométricas
+    ids_str = request.session.get('revisar_ids', '')
+    
+    registros_qs, fecha_desde, fecha_hasta, preset, _ = _filter_registros_from_request(request)
+    
+    if ids_str:
         try:
-            registros_data = json.loads(request.POST.get('registros_data'))
-        except json.JSONDecodeError:
+            ids = [int(i) for i in ids_str.split(',') if i.strip().isdigit()]
+            if ids:
+                # Ordenar manteniendo el orden de los IDs seleccionados
+                from django.db.models import Case, When
+                preserved_order = Case(*[When(id=id_, then=pos) for pos, id_ in enumerate(ids)])
+                registros_qs = registros_qs.filter(id__in=ids).order_by(preserved_order)
+        except Exception:
             pass
-    else:
-        registros_qs, fecha_desde, fecha_hasta, preset, _ = _filter_registros_from_request(request)
-        registros_data = _parse_fotos_nums(registros_qs)
+            
+    registros_data = _parse_fotos_nums(registros_qs)
         
     return registros_data, fecha_desde, fecha_hasta
 
@@ -831,6 +890,7 @@ def _build_fotos_en_disco(registros_data):
                         'user_id': user_id,
                         'numero': num,
                         'es_legacy': True,
+                        'registro_id': r.get('id'),
                     }
                     actual_nums.append(num)
                     
@@ -847,10 +907,9 @@ def _build_fotos_en_disco(registros_data):
             
             real_path = Path(settings.MEDIA_ROOT) / ev_path_str
             if real_path.exists():
-                if real_path.stem.isdigit():
-                    num = int(real_path.stem)
-                else:
-                    num = ev.id
+                import re as _re
+                m = _re.match(r'^(\d+)', real_path.name)
+                num = int(m.group(1)) if m else ev.id
                     
                 clave = f"{user_id}_{num}"
                 actual_nums.append(num)
@@ -861,7 +920,8 @@ def _build_fotos_en_disco(registros_data):
                     'numero': num,
                     'evidencia': ev,
                     'es_legacy': False,
-                    'ruta_rel': ev_path_str
+                    'ruta_rel': ev_path_str,
+                    'registro_id': r.get('id'),
                 }
 
         r['fotos_nums'] = sorted(list(set(actual_nums)))
@@ -929,6 +989,7 @@ def _build_fotos_preview(fotos_en_disco, evidencias_qs):
             'angulo':       angulo,
             'evidencia_id': ev_id,
             'excluida':     excluida,
+            'registro_id':  data.get('registro_id'),
         })
 
     fotos_preview.sort(key=lambda x: (x['user_id'], x['numero']))
@@ -941,6 +1002,10 @@ def revisar_orientacion(request):
     Muestra todas las fotos del turno con su ángulo auto-detectado,
     y permite al usuario corregirlas con botones de rotación.
     """
+    if request.method == 'POST':
+        request.session['revisar_ids'] = request.POST.get('ids', '')
+        return redirect('revisar_orientacion')
+
     registros_data, fecha_desde, fecha_hasta = _get_orientacion_registros(request)
     
     registros_data.sort(key=lambda x: (x.get('user_id'), x['fotos_nums'][0] if x.get('fotos_nums') else 0))
@@ -1019,6 +1084,36 @@ def generar_excel(request):
         return HttpResponse('Sin registros para generar.', status=400)
 
     registros_ids = [int(r['id']) for r in registros_data if 'id' in r]
+    registros_ids_set = set(registros_ids)
+    
+    lote_id = request.GET.get('lote_id', '')
+    
+    # ── Validación estricta de Integridad del Lote ──
+    from calidad.models import RegistroDefecto, ImportacionLote
+    
+    if lote_id and lote_id.isdigit():
+        if not ImportacionLote.objects.filter(id=int(lote_id)).exists():
+            return HttpResponse(f'Error: El lote {lote_id} no existe.', status=400)
+            
+        registros_bd = RegistroDefecto.objects.filter(id__in=registros_ids_set)
+        
+        # Validar que no haya IDs inexistentes
+        if registros_bd.count() != len(registros_ids_set):
+            return HttpResponse('Error de integridad: Se enviaron IDs inexistentes o duplicados.', status=400)
+            
+        for r in registros_bd:
+            if str(r.importacion_id) != lote_id:
+                return HttpResponse(f'Error de integridad: El registro {r.id} no pertenece al lote {lote_id}.', status=400)
+    else:
+        # Modo legacy: asegurarse que no haya registros de lotes masivos
+        registros_bd = RegistroDefecto.objects.filter(id__in=registros_ids_set)
+        
+        if registros_bd.count() != len(registros_ids_set):
+            return HttpResponse('Error de integridad: Se enviaron IDs inexistentes o duplicados en modo legacy.', status=400)
+            
+        for r in registros_bd:
+            if r.importacion_id is not None:
+                return HttpResponse(f'Error de integridad: El registro {r.id} pertenece a un lote masivo y no puede procesarse en modo legacy.', status=400)
 
     fotos_dir = settings.MEDIA_ROOT / 'fotos'
     fecha_str = timezone.now().strftime('%Y%m%d_%H%M%S')
@@ -1031,6 +1126,7 @@ def generar_excel(request):
         fecha_str=fecha_str,
         fotos_order=fotos_order,
         sn_map=sn_map,
+        lote_id=lote_id if lote_id else None
     )
 
     return JsonResponse({'task_id': task.id})
@@ -1370,7 +1466,7 @@ def descargar_txt(request):
 
 
     content = "\n".join(lines)
-    filename = f"rep_{turno}_{depto}_{datetime.now().strftime('%H%M')}.txt"
+    filename = f"reporte_{turno}_{depto}.txt"
     return HttpResponse(
         content,
         content_type="text/plain; charset=utf-8",
@@ -1426,7 +1522,7 @@ def descargar_zip(request):
 
                     if ev_path.exists():
                         import re as _re
-                        m = _re.match(r'^(\d+)_', ev_path.name)
+                        m = _re.match(r'^(\d+)', ev_path.name)
                         real_num = int(m.group(1)) if m else ev.id
                         display_num = uid_map.get(real_num)
                         if display_num is None:
@@ -1459,7 +1555,7 @@ def descargar_zip(request):
 
         perfil = getattr(request.user, 'perfil', None)
         turno = perfil.turno if perfil else 'X'
-        filename = f"fotos_{turno}_{datetime.now().strftime('%Y%m%d_%H%M')}.zip"
+        filename = f"fotos_{turno}.zip"
 
         response = FileResponse(_AutoDeleteFile(temp_path), content_type="application/zip")
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
