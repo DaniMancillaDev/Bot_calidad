@@ -10,6 +10,12 @@
     <span class="material-symbols-outlined" style="font-size: 1.1rem; margin-right: 6px;">download</span>
     <span id="btn-generar-text">Generar Excel</span>
   </button>
+  <button id="btn-generar-box" class="btn btn-primary" 
+    onclick="window.open('{% url 'revisar_box_condition' %}' + window.location.search, '_blank', 'noopener')"
+    style="display:flex; align-items:center; background:#8b5cf6; color:white; border:none; padding:8px 16px; border-radius:6px; cursor:pointer;">
+    <span class="material-symbols-outlined" style="font-size: 1.1rem; margin-right: 6px;">box</span>
+    <span id="btn-generar-box-text">Generar Daily Tracking Box Condition</span>
+  </button>
 </div>
 {% endblock %}
 
@@ -693,6 +699,14 @@
         <input class="field-input" id="inp-numparte" type="text" placeholder="Número de parte">
       </div>
       <div class="field-group">
+        <div class="field-label">WO</div>
+        <input class="field-input" id="inp-wo" type="text" placeholder="Work Order">
+      </div>
+      <div class="field-group">
+        <div class="field-label">Invoice</div>
+        <input class="field-input" id="inp-invoice" type="text" placeholder="Invoice">
+      </div>
+      <div class="field-group">
         <div class="field-label">Línea</div>
         <input class="field-input" id="inp-linea" type="text" placeholder="Línea">
       </div>
@@ -748,15 +762,13 @@
   const registrosRaw = JSON.parse(document.getElementById('registros-data').textContent);
   const fotosPreviewData = JSON.parse(document.getElementById('fotos-preview-data').textContent);
 
-  const fotosMap = {};
-  fotosPreviewData.forEach(f => { fotosMap[f.clave] = f; });
-
   const appData = registrosRaw.map(reg => {
-    const fotosAsociadas = [];
-    (reg.fotos_nums || []).forEach(num => {
-      const clave = `${reg.user_id}_${num}`;
-      if (fotosMap[clave]) fotosAsociadas.push(fotosMap[clave]);
-    });
+    // ponytail: Agrupar por registro_id real, evitamos colisiones entre lotes
+    // si reutilizan los mismos números de fotos
+    const fotosAsociadas = fotosPreviewData.filter(f => f.registro_id === reg.id);
+    
+    // Opcional: ordenar fotosAsociadas para que coincida con el orden de fotos_nums si es necesario
+    fotosAsociadas.sort((a, b) => a.numero - b.numero);
 
     // Find the first valid photo to be the cover
     const validPhotos = fotosAsociadas.filter(f => !f.excluida);
@@ -961,6 +973,8 @@
 
     document.getElementById('inp-modelo').value = reg.modelo || '';
     document.getElementById('inp-numparte').value = reg.numero_parte || '';
+    document.getElementById('inp-wo').value = reg.wo || '';
+    document.getElementById('inp-invoice').value = reg.invoice || '';
     document.getElementById('inp-linea').value = reg.linea || '';
     document.getElementById('inp-cantidad').value = reg.cantidad || '';
     document.getElementById('inp-responsable').value = reg.responsable || '';
@@ -1163,6 +1177,8 @@
     const payload = {
       modelo: document.getElementById('inp-modelo').value.trim(),
       numero_parte: document.getElementById('inp-numparte').value.trim(),
+      wo: document.getElementById('inp-wo').value.trim(),
+      invoice: document.getElementById('inp-invoice').value.trim(),
       linea: document.getElementById('inp-linea').value.trim(),
       cantidad: parseInt(document.getElementById('inp-cantidad').value) || null,
       responsable: document.getElementById('inp-responsable').value.trim(),
@@ -1268,6 +1284,10 @@
   async function generarExcel() {
     const btn = document.getElementById('btn-generar');
     if (btn.disabled) return; // Prevent double clicks
+
+    if (activeRecord) {
+      await guardarMetadatos();
+    }
 
     const overlay = document.getElementById('loading-overlay');
     const msg = document.getElementById('status-msg');
@@ -1447,5 +1467,8 @@
       }
     });
   }
+
+
+
 </script>
 {% endblock %}

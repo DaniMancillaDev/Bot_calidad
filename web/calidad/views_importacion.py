@@ -141,6 +141,10 @@ def importacion_update_ajax(request):
                     estado['fotos_huerfanas'].extend(row['fotos_asignadas'])
                     estado['registros'].pop(i)
                     break
+        elif action == 'ADD_RECORD':
+            new_record = data.get('record')
+            if new_record:
+                estado['registros'].append(new_record)
         else:
             return JsonResponse({"error": "Acción desconocida"}, status=400)
             
@@ -173,6 +177,13 @@ def importacion_confirmar(request):
             del request.session['importacion_activa']
         if 'revisar_ids' in request.session:
             del request.session['revisar_ids']
+        
+        # Limpiar también las revisiones activas para no acumular basura de lotes anteriores
+        active_revs = request.session.get('active_revs', [])
+        for rev in active_revs:
+            request.session.pop(f'revisar_ids_{rev}', None)
+        if 'active_revs' in request.session:
+            del request.session['active_revs']
         request.session.modified = True
         
         messages.success(request, "Importación completada correctamente.")

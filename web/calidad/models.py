@@ -96,6 +96,8 @@ class RegistroDefecto(models.Model):
     user_id        = models.BigIntegerField(db_index=True)
     turno          = models.CharField(max_length=1, null=True, blank=True)
     departamento   = models.CharField(max_length=10, null=True, blank=True)
+    invoice        = models.CharField(max_length=100, null=True, blank=True, help_text="Factura")
+    wo             = models.CharField(max_length=100, null=True, blank=True, help_text="Work Order")
 
     # ── Fase 1: Normalización ──────────────────────────────────────────────
     fotos_nums     = ArrayField(

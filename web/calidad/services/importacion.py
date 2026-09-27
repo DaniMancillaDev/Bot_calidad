@@ -9,6 +9,45 @@ import shutil
 from django.conf import settings
 from django.utils import timezone
 
+
+def explotar_fila(fila_dict):
+    import re
+    import copy
+    import uuid
+    
+    rango_str = str(fila_dict.get('fotos_rango', '')).strip()
+    cant_str = str(fila_dict.get('cantidad', '1')).strip()
+    
+    if not rango_str:
+        return [fila_dict]
+        
+    bloques_rango = re.findall(r'\([^)]+\)', rango_str)
+    
+    if not bloques_rango:
+        return [fila_dict]
+        
+    if '+' in cant_str:
+        cantidades = [c.strip() for c in cant_str.split('+') if c.strip()]
+    else:
+        cantidades = [cant_str] if cant_str else ['1']
+        
+    if len(bloques_rango) != len(cantidades):
+        fila_dict['error_inconsistencia'] = f"Inconsistencia: {len(bloques_rango)} rangos vs {len(cantidades)} cantidades"
+        # Mantenemos las originales para mostrarlas en el error
+        fila_dict['fotos_rango'] = rango_str
+        fila_dict['cantidad'] = cant_str
+        return [fila_dict]
+        
+    ocurrencias = []
+    for i in range(len(bloques_rango)):
+        nueva_fila = fila_dict.copy()
+        nueva_fila['id'] = f"row_{uuid.uuid4().hex[:8]}"
+        nueva_fila['fotos_rango'] = bloques_rango[i]
+        nueva_fila['cantidad'] = cantidades[i]
+        ocurrencias.append(nueva_fila)
+        
+    return ocurrencias
+
 def parsear_excel(file_obj):
     """
     Lee un archivo Excel y retorna una lista de diccionarios.
@@ -23,7 +62,29 @@ def parsear_excel(file_obj):
     for i, row in enumerate(ws.iter_rows(values_only=True)):
         if i == 0:
             # Normalizar cabeceras (minúsculas, sin espacios extra)
-            headers = [str(cell).strip().lower() if cell else f"col_{j}" for j, cell in enumerate(row)]
+            
+            raw_headers = [str(cell).strip().lower() if cell else f"col_{j}" for j, cell in enumerate(row)]
+            # Mapeo flexible de columnas para correcta detección
+            alias_map = {
+                'cant.': 'cantidad',
+                'cant': 'cantidad',
+                'q' : 'cantidad',
+                'qty': 'cantidad',
+                'resp.': 'responsable',
+                'resp': 'responsable',
+                'rango fotos': 'fotos_rango',
+                'rango': 'fotos_rango',
+                'fotos': 'fotos_rango',
+                'línea': 'linea',
+                'line': 'linea',
+                'descripción': 'descripcion',
+                'desc': 'descripcion',
+                'defecto': 'descripcion', # Lo unificamos a descripcion
+                'número de parte': 'numero_parte',
+                'pn': 'numero_parte'
+            }
+            headers = [alias_map.get(h, h) for h in raw_headers]
+
             continue
             
         # Si la fila está completamente vacía, saltar
@@ -33,6 +94,7 @@ def parsear_excel(file_obj):
         fila_dict = {
             "id": f"row_{uuid.uuid4().hex[:8]}", # ID único para el frontend
             "numero_fila_excel": i + 1,
+            "usuario": "Importador", # Opcional, pero previene errores en frontend
             "fotos_asignadas": []
         }
         
@@ -41,7 +103,7 @@ def parsear_excel(file_obj):
                 val = str(cell).strip() if cell is not None else ""
                 fila_dict[headers[j]] = val
                 
-        filas.append(fila_dict)
+        filas.extend(explotar_fila(fila_dict))
         
     return filas
 
@@ -53,9 +115,18 @@ def parsear_txt(file_obj):
     import uuid
     filas = []
     content = file_obj.read().decode('utf-8')
+    current_user = "Desconocido"
     
     for i, line in enumerate(content.splitlines()):
         line = line.strip()
+        # Parsear usuario (líneas como "--- Operador_1 (35 registros) ---")
+        if line.startswith('---') and 'registros' in line:
+            import re
+            m = re.search(r'---\s*(.*?)\s*\(', line)
+            if m:
+                current_user = m.group(1).strip()
+            continue
+            
         # Ignorar cabeceras y líneas vacías
         if '===' in line or 'REPORTE' in line or 'Usuario' in line or 'Generado' in line or line.startswith('---') or not line:
             continue
@@ -65,6 +136,7 @@ def parsear_txt(file_obj):
             fila_dict = {
                 "id": f"row_{uuid.uuid4().hex[:8]}",
                 "numero_fila_excel": i + 1,
+                "usuario": current_user,
                 "fotos_asignadas": [],
                 "fotos_rango": parts[0],
                 "modelo": parts[1].replace('Modelo:', '').strip(),
@@ -73,7 +145,7 @@ def parsear_txt(file_obj):
                 "responsable": parts[4].replace('Resp:', '').strip(),
                 "defecto": parts[5].replace('Desc:', '').strip(),
             }
-            filas.append(fila_dict)
+            filas.extend(explotar_fila(fila_dict))
             
     return filas
 
@@ -134,7 +206,7 @@ def generar_estado_inicial(filas, fotos_dict, session_id):
     fotos_huerfanas = list(fotos_dict.keys())
     
     # Enriquecer URLs de las fotos
-    base_url = f"/media/importaciones_temp/{session_id}/"
+    base_url = f"/media-protegida/importaciones_temp/{session_id}/"
     for fid, foto in fotos_dict.items():
         foto["url"] = base_url + foto["filename"]
         
@@ -236,7 +308,8 @@ def commit_importacion(session_data, user):
                 responsable=str(row.get('responsable', 'WEB')).upper(),
                 descripcion=str(row.get('defecto', row.get('descripcion', ''))),
                 estado_revision=EstadoRevision.PENDIENTE,
-                fotos="WEB" if row.get('fotos_asignadas') else "", # Dummy text no numerico para legacy compat
+                # ponytail: Preservar el rango crudo si existe, si no usar WEB
+                fotos=str(row.get('fotos_rango', "WEB" if row.get('fotos_asignadas') else "")),
                 numero_parte=str(row.get('numero_parte', ''))[:50],
                 importacion=lote
             )

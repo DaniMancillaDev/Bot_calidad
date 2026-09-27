@@ -31,4 +31,49 @@
         </div>
     </form>
 </div>
+
+<div class="card" style="max-width: 800px; margin: 30px auto;">
+    <h2 class="card-title" style="display:flex; align-items:center; gap:8px;">
+        <span class="material-symbols-outlined" style="color:var(--accent);">lightbulb</span> 
+        Guía de Importación rápida
+    </h2>
+    
+    <div style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 16px; line-height: 1.6;">
+        <ul style="margin: 0; padding-left: 20px;">
+            <li><strong>Columnas flexibles:</strong> El sistema detecta automáticamente sin importar si escribes "Cant.", "Resp.", "Línea", "Rango", o "Defecto".</li>
+            <li><strong>Tabla plana:</strong> NO uses celdas combinadas.</li>
+            <li><strong>Rangos múltiples:</strong> Pon los rangos entre paréntesis y separa las cantidades con <code>+</code>. El sistema las agrupará y separará las fotos automáticamente.</li>
+        </ul>
+    </div>
+        
+    <div class="table-wrapper" style="margin-bottom: 16px;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Modelo</th>
+                    <th>Línea</th>
+                    <th>Cant.</th>
+                    <th>Resp.</th>
+                    <th>Defecto</th>
+                    <th>Rango Fotos</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>NS-55</td>
+                    <td>T08</td>
+                    <td style="font-weight: 700; color: var(--accent);">13+9</td>
+                    <td>XM</td>
+                    <td>Cajas Dañadas</td>
+                    <td style="font-weight: 700; color: var(--accent);">(14-24) (109-118)</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    
+    <div style="display: flex; align-items: start; gap: 8px; color: var(--danger); font-size: 0.85rem; padding: 10px; background: rgba(239, 68, 68, 0.1); border-radius: var(--radius);">
+        <span class="material-symbols-outlined" style="font-size: 1.1rem;">warning</span>
+        <div><strong>Regla de oro:</strong> Si usas <code>+</code>, asegúrate de que el número de rangos coincida exactamente con las cantidades para evitar inconsistencias.</div>
+    </div>
+</div>
 {% endblock %}

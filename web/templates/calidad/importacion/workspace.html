@@ -339,53 +339,148 @@
         // Render Registros
         const rl = document.getElementById('record-list');
         rl.innerHTML = '';
+        
+        // Función auxiliar para normalizar (definida internamente si es necesario)
+        const normalizeText = (text) => {
+            if (!text) return "";
+            return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+        };
+
+        const groups = {};
+        
         state.registros.forEach(registro => {
-            // Contruir tarjeta HTML
-            const card = document.createElement('div');
-            card.className = 'record-card';
+            const user = registro.usuario || 'Importador';
+            const rawDefecto = registro.defecto || registro.descripcion || 'Sin defecto';
+            const normDefecto = normalizeText(rawDefecto);
+            const groupKey = `${user}|${normDefecto}`;
             
-            // Texto y datos del excel (Buscamos claves comunes, o mostramos todas)
-            let datosText = '';
-            for (const [k, v] of Object.entries(registro)) {
-                if (['id', 'numero_fila_excel', 'fotos_asignadas'].includes(k)) continue;
-                datosText += `
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; border-bottom: 1px solid var(--border); padding-bottom: 4px;">
-                        <div><strong>${k.toUpperCase()}:</strong> <span id="val-${registro.id}-${k}">${v || '-'}</span></div>
-                        <button onclick="editarCampo('${registro.id}', '${k}')" class="btn btn-ghost" style="padding: 2px 6px; font-size: 0.7rem; border: none;" title="Editar"><span class="material-symbols-outlined icon" style="font-size: 14px; vertical-align: middle;">edit</span></button>
-                    </div>
-                `;
+            if (!groups[groupKey]) {
+                groups[groupKey] = {
+                    user: user,
+                    rawDefecto: rawDefecto,
+                    occurrences: []
+                };
             }
+            groups[groupKey].occurrences.push(registro);
+        });
+        
+        Object.values(groups).forEach(group => {
+            const groupCard = document.createElement('div');
+            groupCard.className = 'record-card group-card';
+            groupCard.style = 'margin-bottom: 20px; padding: 0; overflow: hidden; border: 1px solid var(--border);';
             
-            card.innerHTML = `
-                <div class="record-header" style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <strong>Fila #${registro.numero_fila_excel}</strong>
+            const header = document.createElement('div');
+            header.className = 'record-header';
+            header.style = 'display: flex; justify-content: space-between; align-items: center; cursor: pointer; background: var(--bg-hover); padding: 15px; border-bottom: 1px solid var(--border);';
+            header.innerHTML = `
+                <div>
+                    <div style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase;">Usuario: ${group.user}</div>
+                    <div style="font-size: 1.1rem; font-weight: bold; margin-top: 4px;">
+                        ${group.rawDefecto} 
+                        <span class="badge text-bg-secondary" style="margin-left: 8px; font-size: 0.8rem;">${group.occurrences.length} ocurrencias</span>
                     </div>
-                    <button onclick="eliminarRegistro('${registro.id}')" class="btn btn-ghost" style="color: var(--danger); padding: 4px; border: none; display: flex; align-items: center; border-radius: 4px;" title="Excluir Registro">
-                        <span class="material-symbols-outlined" style="font-size: 18px;">delete</span>
-                    </button>
                 </div>
-                <div class="record-body">
+                <div>
+                    <button class="btn btn-ghost toggle-btn" style="border: none;"><span class="material-symbols-outlined">expand_more</span></button>
+                </div>
+            `;
+            
+            const body = document.createElement('div');
+            body.className = 'group-body';
+            body.style = 'padding: 15px; display: block; background: var(--bg);';
+            
+            header.onclick = () => {
+                const isHidden = body.style.display === 'none';
+                body.style.display = isHidden ? 'block' : 'none';
+                header.querySelector('.toggle-btn span').textContent = isHidden ? 'expand_more' : 'chevron_right';
+            };
+            
+            groupCard.appendChild(header);
+            
+            group.occurrences.forEach((registro, idx) => {
+                const occCard = document.createElement('div');
+                occCard.style = 'border: 1px solid var(--border); margin-bottom: 15px; padding: 12px; border-radius: 6px; background: var(--bg-card);';
+                
+                let datosText = '';
+                for (const [k, v] of Object.entries(registro)) {
+                    if (['id', 'numero_fila_excel', 'fotos_asignadas', 'usuario', 'defecto', 'descripcion'].includes(k)) continue;
+                    datosText += `
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; border-bottom: 1px solid var(--border); padding-bottom: 4px;">
+                            <div><strong>${k.toUpperCase()}:</strong> <span id="val-${registro.id}-${k}">${v || '-'}</span></div>
+                            <button onclick="editarCampo('${registro.id}', '${k}')" class="btn btn-ghost" style="padding: 2px 6px; font-size: 0.7rem; border: none;" title="Editar"><span class="material-symbols-outlined icon" style="font-size: 14px; vertical-align: middle;">edit</span></button>
+                        </div>
+                    `;
+                }
+                
+                occCard.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <strong>Ocurrencia ${idx + 1} (Fila #${registro.numero_fila_excel || '-'})</strong>
+                        <button onclick="eliminarRegistro('${registro.id}')" class="btn btn-ghost" style="color: var(--danger); padding: 4px; border: none; display: flex; align-items: center; border-radius: 4px;" title="Excluir Ocurrencia">
+                            <span class="material-symbols-outlined" style="font-size: 18px;">delete</span>
+                        </button>
+                    </div>
+                    ${registro.error_inconsistencia ? 
+                        `<div class="alert alert-danger" style="margin-bottom: 15px; font-size: 0.85rem; padding: 10px; border-radius: 6px;">
+                            <strong>Error de validación:</strong> ${registro.error_inconsistencia}<br>
+                            Corrige los datos manualmente para continuar.
+                        </div>` 
+                    : ''}
                     <div style="font-size: 0.85rem; margin-bottom: 15px; color: var(--text-muted); line-height: 1.4;">
                         ${datosText}
                     </div>
                     <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 5px;">Fotografías Asignadas</div>
-                    <div class="record-dropzone" id="dz-${registro.id}" data-record-id="${registro.id}">
+                    <div class="record-dropzone" id="dz-${registro.id}" data-record-id="${registro.id}" style="min-height: 60px; border: 2px dashed var(--border); border-radius: 4px; padding: 5px; display: flex; gap: 5px; flex-wrap: wrap;">
                     </div>
-                </div>
-            `;
-            rl.appendChild(card);
-            
-            // Render fotos asignadas
-            const dz = card.querySelector('.record-dropzone');
-            registro.fotos_asignadas.forEach(fid => {
-                const el = createPhotoElement(fid);
-                if(el) dz.appendChild(el);
+                `;
+                body.appendChild(occCard);
+                
+                setTimeout(() => {
+                    const dz = occCard.querySelector('.record-dropzone');
+                    if(dz) {
+                        registro.fotos_asignadas.forEach(fid => {
+                            const el = createPhotoElement(fid);
+                            if(el) dz.appendChild(el);
+                        });
+                    }
+                }, 0);
             });
+            
+            // Boton de agregar
+            const addBtn = document.createElement('button');
+            addBtn.className = 'btn btn-outline';
+            addBtn.style = 'width: 100%; margin-top: 5px; display: flex; justify-content: center; align-items: center; gap: 5px; padding: 10px; border: 1px dashed var(--border); border-radius: 6px; background: transparent; cursor: pointer; color: var(--text);';
+            addBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size: 18px;">add</span> Agregar ocurrencia a este grupo';
+            addBtn.onclick = () => {
+                let maxFila = 0;
+                state.registros.forEach(r => {
+                    if (r.numero_fila_excel && r.numero_fila_excel > maxFila) maxFila = r.numero_fila_excel;
+                });
+                const newId = 'row_' + Math.random().toString(16).substring(2, 10);
+                const newRecord = {
+                    id: newId,
+                    numero_fila_excel: maxFila + 1,
+                    usuario: group.user,
+                    defecto: group.rawDefecto,
+                    fotos_asignadas: [],
+                    modelo: 'NUEVO',
+                    linea: 'N/A',
+                    cantidad: '1',
+                    responsable: 'N/A',
+                    fotos_rango: '-'
+                };
+                state.registros.push(newRecord);
+                enviarAccionAJAX({ action: 'ADD_RECORD', record: newRecord });
+                renderWorkspace();
+            };
+            body.appendChild(addBtn);
+            
+            groupCard.appendChild(body);
+            rl.appendChild(groupCard);
         });
+        
         document.getElementById('count-registros').textContent = state.registros.length;
         
-        initSortable();
+        setTimeout(initSortable, 100);
     }
 
     // ==========================================
@@ -547,6 +642,12 @@
     }
     
     function confirmarImportacion() {
+        const tieneErrores = state.registros.some(r => r.error_inconsistencia);
+        if (tieneErrores) {
+            alert('No puedes confirmar la importación porque hay filas con errores de inconsistencia (rangos vs cantidades). Por favor, corrígelos o elimina las filas problemáticas antes de continuar.');
+            return;
+        }
+
         showConfirmModal(
             '¿Finalizar Importación?',
             '¿Estás seguro de procesar y finalizar la importación? Se crearán los registros definitivos en la base de datos y esta acción no se podrá deshacer.',

@@ -177,7 +177,7 @@ def generar_pptx_grupo(grupo: dict, fotos_dir: Path, output_path: Path,
                 m = _re.match(r'^(\d+)', real_path.name)
                 num_for_rot = int(m.group(1)) if m else ev.id
                 clave = f"{ev.registro.user_id}_{num_for_rot}"
-                angle = rotaciones.get(clave) or rotaciones.get(str(clave)) or 0
+                angle = rotaciones.get(clave) or rotaciones.get(str(clave)) or getattr(ev, 'angulo_rotacion', 0) or 0
                 fotos_items.append((real_path, angle))
     else:
         fotos_dict = grupo.get('fotos_por_usuario')

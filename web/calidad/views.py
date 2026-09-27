@@ -18,6 +18,17 @@ from .models import RegistroDefecto, PerfilUsuario, EstadoRevision
 from calidad.utils import get_best_image_path
 
 # ============================================================
+# CONSTANTES DE URL INTERNAS (X-Accel-Redirect)
+# ============================================================
+
+# Frontend usa estas prefixes para construir URLs de imágenes.
+# Ahora apuntan a la vista proxy Django en lugar de a Nginx directo.
+FOTOS_INTERNAL_PREFIX    = '/media-protegida/fotos/'
+THUMBS_INTERNAL_PREFIX   = '/media-protegida/thumbs/'
+PROXIES_INTERNAL_PREFIX  = '/media-protegida/proxies/'
+IMPORTTEMP_INTERNAL_PREFIX = '/media-protegida/importaciones_temp/'
+
+# ============================================================
 # FUNCIONES AUXILIARES DE SEGURIDAD Y PERMISOS
 # ============================================================
 
@@ -27,6 +38,7 @@ def get_registros_permitidos(user):
     - Superusers: ven todo.
     - Usuarios normales: ven registros de SU MISMO TURNO Y DEPARTAMENTO.
     """
+
     if user.is_superuser:
         return RegistroDefecto.objects.all()
 
@@ -369,8 +381,88 @@ def reportes(request):
 # ============================================================
 
 @login_required
+def serve_protected_media(request, subpath):
+    """
+    Proxy autorizado de archivos de media vía X-Accel-Redirect.
+    
+    Flujo:
+      Browser → Django (auth + permisos) → X-Accel-Redirect → Nginx internal → archivo
+    
+    Seguridad:
+    - Solo usuarios autenticados.
+    - Path traversal bloqueado: resolvemos la ruta y verificamos que queda dentro de MEDIA_ROOT.
+    - Política de turno/departamento: el user_id de la carpeta debe estar autorizado
+      por get_registros_permitidos (misma política que todos los endpoints).
+    - Superuser puede ver todo.
+    """
+    import posixpath
+    
+    # 1. Sanitizar y resolver la ruta — bloquear traversal
+    subpath_clean = posixpath.normpath(subpath).lstrip('/')
+    full_path = (Path(settings.MEDIA_ROOT) / subpath_clean).resolve()
+    
+    try:
+        full_path.relative_to(Path(settings.MEDIA_ROOT).resolve())
+    except ValueError:
+        raise Http404("Ruta no permitida")
+    
+    if not full_path.exists() or not full_path.is_file():
+        raise Http404("Archivo no encontrado")
+    
+    # 2. Verificar autorización por turno/depto
+    # El path tiene la forma: fotos/<user_id>/<filename> o proxies/<user_id>/<filename>
+    # etc. Extraemos el user_id del segundo segmento para validar.
+    parts = subpath_clean.split('/')
+    PROTECTED_PREFIXES = ('fotos', 'thumbs', 'proxies')
+    
+    if len(parts) >= 2 and parts[0] in PROTECTED_PREFIXES:
+        try:
+            path_user_id = int(parts[1])
+        except ValueError:
+            raise Http404("Ruta no permitida")
+        
+        if not request.user.is_superuser:
+            # El usuario puede ver archivos de operadores de su mismo turno/depto
+            if not hasattr(request.user, 'perfil'):
+                raise Http404("Sin perfil de usuario")
+            
+            perfil = request.user.perfil
+            allowed_user_ids = set(
+                PerfilUsuario.objects.filter(
+                    turno=perfil.turno,
+                    departamento=perfil.departamento
+                ).values_list('telegram_user_id', flat=True)
+            )
+            if path_user_id not in allowed_user_ids:
+                raise Http404("Sin permiso para este archivo")
+    elif parts[0] == 'importaciones_temp':
+        # Temporales de importación: solo el usuario que subió la sesión puede verlos.
+        # El session_id es el session_key del usuario, impredecible externamente.
+        # No exponemos datos de negocio, pero por seguridad verificamos que el
+        # session_key en la URL coincida con la sesión activa del usuario.
+        if not request.user.is_superuser:
+            session_key = request.session.session_key
+            if len(parts) < 2 or parts[1] != session_key:
+                raise Http404("Sin permiso para este archivo temporal")
+    else:
+        # Directorio desconocido dentro de MEDIA_ROOT — bloquear por defecto
+        raise Http404("Ruta no permitida")
+    
+    # 3. Devolver respuesta vacía con cabecera X-Accel-Redirect
+    # Nginx ve la cabecera, cancela la respuesta Django y entrega el archivo directamente.
+    # La URL interna apunta a /protected/ que Nginx tiene como `internal`.
+    internal_url = f"/protected/{subpath_clean}"
+    
+    response = HttpResponse()
+    response['X-Accel-Redirect'] = internal_url
+    response['Content-Type'] = ''  # Nginx infiere el tipo correcto
+    return response
+
+
+@login_required
 def ver_foto(request, numero):
     """Muestra una foto si el usuario tiene permiso para verla (por turno/depto)."""
+
 
     # Validar permiso por turno/depto
     registros_permitidos = get_registros_permitidos(request.user)
@@ -413,7 +505,7 @@ def ver_foto(request, numero):
 
         img_path = get_best_image_path(fotos_base_dir, str(user_id), numero)
         if img_path:
-            url_foto = f"/media/proxies/{user_id}/{img_path.name}" if "proxies" in str(img_path) else f"/media/fotos/{user_id}/{img_path.name}"
+            url_foto = f"/media-protegida/proxies/{user_id}/{img_path.name}" if "proxies" in str(img_path) else f"/media-protegida/fotos/{user_id}/{img_path.name}"
             nombre = img_path.name
             user_id_encontrado = user_id
             break
@@ -566,7 +658,7 @@ def _enrich_galeria_registros(object_list):
     proxies_root = Path(settings.MEDIA_ROOT) / 'proxies'
     thumbs_url  = settings.THUMBS_URL
     fotos_url   = settings.FOTOS_URL
-    proxies_url = settings.MEDIA_URL + 'proxies/'
+    proxies_url = '/media-protegida/proxies/'
 
     # Pre-indexar carpetas de usuario en memoria (O(1) lookups sin I/O de disco redundante)
     user_ids = {reg.user_id for reg in object_list if reg.user_id}
@@ -790,6 +882,8 @@ def _parse_fotos_nums(registros):
             'fotos_rango':    fotos_rango,
             'modelo':         r.get('modelo', '') if is_dict else getattr(r, 'modelo', ''),
             'numero_parte':   r.get('numero_parte', '') if is_dict else getattr(r, 'numero_parte', ''),
+            'invoice':        r.get('invoice', '') if is_dict else getattr(r, 'invoice', ''),
+            'wo':             r.get('wo', '') if is_dict else getattr(r, 'wo', ''),
             'linea':          r.get('linea', '') if is_dict else getattr(r, 'linea', ''),
             'descripcion':    r.get('descripcion', '') if is_dict else getattr(r, 'descripcion', ''),
             'responsable':    r.get('responsable', '') if is_dict else getattr(r, 'responsable', ''),
@@ -805,28 +899,52 @@ def _get_orientacion_registros(request):
     registros_data = []
     
     # ponytail: Leer IDs de la sesión para evitar URLs kilométricas
-    ids_str = request.session.get('revisar_ids', '')
-    
-    registros_qs, fecha_desde, fecha_hasta, preset, _ = _filter_registros_from_request(request)
+    rev_id = request.GET.get('rev_id')
+    if rev_id:
+        ids_str = request.session.get(f'revisar_ids_{rev_id}', '')
+    else:
+        ids_str = request.session.get('revisar_ids', '')
     
     if ids_str:
         try:
             ids = [int(i) for i in ids_str.split(',') if i.strip().isdigit()]
             if ids:
-                # Ordenar manteniendo el orden de los IDs seleccionados
                 from django.db.models import Case, When
                 preserved_order = Case(*[When(id=id_, then=pos) for pos, id_ in enumerate(ids)])
-                registros_qs = registros_qs.filter(id__in=ids).order_by(preserved_order)
+                registros_qs = get_registros_permitidos(request.user).filter(id__in=ids).order_by(preserved_order)
+                
+                # ponytail: Si la URL exige un lote, purgar cualquier ID basura en sesión que sea de otro lote
+                lote_id = request.GET.get('lote_id')
+                if lote_id and lote_id.isdigit():
+                    registros_qs = registros_qs.filter(importacion_id=int(lote_id))
+                    
+                registros_data = _parse_fotos_nums(registros_qs)
+                return registros_data, fecha_desde, fecha_hasta
         except Exception:
             pass
             
+    # Si no hay IDs explícitos, usar filtros de request estándar
+    registros_qs, fecha_desde, fecha_hasta, preset, _ = _filter_registros_from_request(request)
     registros_data = _parse_fotos_nums(registros_qs)
+    
+    # ponytail: Pre-filtrado estricto si venimos de generar Box Condition
+    if request.GET.get('box_condition') == '1':
+        from calidad.services.reporte_box_condition import es_box_condition, DUTY_BOX_CONDITION
+        from shared.infrastructure.ai.defect_translator import build_translator
+        translator = build_translator()
+        
+        filtered_data = []
+        for r in registros_data:
+            resp = (r.get('responsable') or '').strip().upper()
+            if resp in DUTY_BOX_CONDITION and es_box_condition(r.get('descripcion'), translator):
+                filtered_data.append(r)
+        registros_data = filtered_data
         
     return registros_data, fecha_desde, fecha_hasta
 
 def _build_fotos_en_disco(registros_data):
     fotos_dir = settings.MEDIA_ROOT / 'fotos'
-    fotos_en_disco = {}
+    fotos_en_disco = {} # key will be (registro_id, clave)
     
     from calidad.models import EvidenciaFotografica
     registro_ids = [r['id'] for r in registros_data if r.get('id')]
@@ -885,7 +1003,7 @@ def _build_fotos_en_disco(registros_data):
                     if ev_for_legacy and isinstance(ev_for_legacy.metadatos, dict) and ev_for_legacy.metadatos.get('excluida'):
                         continue
 
-                    fotos_en_disco[clave] = {
+                    fotos_en_disco[(r.get('id'), clave)] = {
                         'path': img_path,
                         'user_id': user_id,
                         'numero': num,
@@ -914,7 +1032,7 @@ def _build_fotos_en_disco(registros_data):
                 clave = f"{user_id}_{num}"
                 actual_nums.append(num)
                 
-                fotos_en_disco[clave] = {
+                fotos_en_disco[(r.get('id'), clave)] = {
                     'path': real_path,
                     'user_id': user_id,
                     'numero': num,
@@ -937,7 +1055,7 @@ def _build_fotos_preview(fotos_en_disco, evidencias_qs):
     thumbs_root = Path(settings.THUMBS_ROOT)
     proxies_root = Path(settings.MEDIA_ROOT) / 'proxies'
     thumbs_url  = settings.THUMBS_URL
-    proxies_url = settings.MEDIA_URL + 'proxies/'
+    proxies_url = '/media-protegida/proxies/'
 
     # Pre-indexar thumbs y proxies por usuario para verificación O(1) en memoria
     user_ids = {data['user_id'] for data in fotos_en_disco.values() if data.get('user_id')}
@@ -950,7 +1068,7 @@ def _build_fotos_preview(fotos_en_disco, evidencias_qs):
         user_proxies[uid] = {entry.name for entry in os.scandir(p_dir) if entry.is_file()} if p_dir.is_dir() else set()
 
     fotos_preview = []
-    for clave, data in fotos_en_disco.items():
+    for (reg_id, string_clave), data in fotos_en_disco.items():
         real_path = data['path']
         filename = real_path.name
         user_id = data['user_id']
@@ -964,14 +1082,14 @@ def _build_fotos_preview(fotos_en_disco, evidencias_qs):
             except ValueError:
                 ruta_rel = str(real_path)
 
-            orig_url = f"/media/{ruta_rel}"
+            orig_url = f"/media-protegida/{ruta_rel}"
             ev = ev_by_path.get(ruta_rel)
             angulo = ev.angulo_rotacion if ev else 0
             ev_id = ev.id if ev else None
             excluida = bool(ev.metadatos.get('excluida')) if ev and isinstance(ev.metadatos, dict) else False
         else:
             ev = data['evidencia']
-            orig_url = f"/media/{data['ruta_rel']}"
+            orig_url = f"/media-protegida/{data['ruta_rel']}"
             angulo = ev.angulo_rotacion
             ev_id = ev.id
             excluida = bool(ev.metadatos.get('excluida')) if isinstance(ev.metadatos, dict) else False
@@ -980,7 +1098,7 @@ def _build_fotos_preview(fotos_en_disco, evidencias_qs):
         proxy_src = f"{proxies_url}{user_id}/{filename}" if has_proxy else orig_url
 
         fotos_preview.append({
-            'clave':        clave.split('_v2_')[0],
+            'clave':        string_clave.split('_v2_')[0],
             'numero':       data['numero'],
             'user_id':      user_id,
             'url':          orig_url,
@@ -1003,8 +1121,35 @@ def revisar_orientacion(request):
     y permite al usuario corregirlas con botones de rotación.
     """
     if request.method == 'POST':
-        request.session['revisar_ids'] = request.POST.get('ids', '')
-        return redirect('revisar_orientacion')
+        raw_ids = request.POST.get('ids', '')
+        ids_solicitados = [int(i) for i in raw_ids.split(',') if i.strip().isdigit()]
+        redirect_url = request.get_full_path()
+        if ids_solicitados:
+            permitidos = set(get_registros_permitidos(request.user).filter(id__in=ids_solicitados).values_list('id', flat=True))
+            ids_validos = [str(i) for i in ids_solicitados if i in permitidos]
+            
+            import uuid
+            from urllib.parse import urlparse, urlencode, parse_qsl, urlunparse
+            
+            rev_id = uuid.uuid4().hex[:8]
+            request.session[f'revisar_ids_{rev_id}'] = ','.join(ids_validos)
+            
+            active_revs = request.session.get('active_revs', [])
+            active_revs.append(rev_id)
+            if len(active_revs) > 5:
+                old_rev = active_revs.pop(0)
+                request.session.pop(f'revisar_ids_{old_rev}', None)
+            request.session['active_revs'] = active_revs
+            
+            parsed = urlparse(redirect_url)
+            query = parse_qsl(parsed.query)
+            query = [q for q in query if q[0] != 'rev_id']
+            query.append(('rev_id', rev_id))
+            redirect_url = urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, urlencode(query), parsed.fragment))
+        else:
+            request.session['revisar_ids'] = ''
+            
+        return redirect(redirect_url)
 
     registros_data, fecha_desde, fecha_hasta = _get_orientacion_registros(request)
     
@@ -1088,32 +1233,31 @@ def generar_excel(request):
     
     lote_id = request.GET.get('lote_id', '')
     
-    # ── Validación estricta de Integridad del Lote ──
     from calidad.models import RegistroDefecto, ImportacionLote
+    registros_bd = RegistroDefecto.objects.filter(id__in=registros_ids_set)
     
+    # Validar que no haya IDs inexistentes
+    if registros_bd.count() != len(registros_ids_set):
+        return HttpResponse('Error de integridad: Se enviaron IDs inexistentes o duplicados.', status=400)
+
+    # ── Validación estricta de Integridad del Lote ──
     if lote_id and lote_id.isdigit():
         if not ImportacionLote.objects.filter(id=int(lote_id)).exists():
             return HttpResponse(f'Error: El lote {lote_id} no existe.', status=400)
-            
-        registros_bd = RegistroDefecto.objects.filter(id__in=registros_ids_set)
-        
-        # Validar que no haya IDs inexistentes
-        if registros_bd.count() != len(registros_ids_set):
-            return HttpResponse('Error de integridad: Se enviaron IDs inexistentes o duplicados.', status=400)
-            
         for r in registros_bd:
             if str(r.importacion_id) != lote_id:
                 return HttpResponse(f'Error de integridad: El registro {r.id} no pertenece al lote {lote_id}.', status=400)
-    else:
-        # Modo legacy: asegurarse que no haya registros de lotes masivos
-        registros_bd = RegistroDefecto.objects.filter(id__in=registros_ids_set)
+
+    # ── Autorización (NUEVO) ──
+    # ponytail: La vista es la frontera. Solo enviamos a Celery lo autorizado.
+    ids_autorizados = set(get_registros_permitidos(request.user).filter(id__in=registros_ids_set).values_list('id', flat=True))
+    
+    
+    if not ids_autorizados:
+        return HttpResponse('Error de autorización: No tiene permiso para exportar ninguno de los registros solicitados.', status=403)
         
-        if registros_bd.count() != len(registros_ids_set):
-            return HttpResponse('Error de integridad: Se enviaron IDs inexistentes o duplicados en modo legacy.', status=400)
-            
-        for r in registros_bd:
-            if r.importacion_id is not None:
-                return HttpResponse(f'Error de integridad: El registro {r.id} pertenece a un lote masivo y no puede procesarse en modo legacy.', status=400)
+    # Filtrar silenciosamente para comportarse como Box Condition
+    registros_ids = [id_ for id_ in registros_ids if id_ in ids_autorizados]
 
     fotos_dir = settings.MEDIA_ROOT / 'fotos'
     fecha_str = timezone.now().strftime('%Y%m%d_%H%M%S')
@@ -1155,6 +1299,7 @@ def api_excel_status(request, task_id):
             'status': 'done',
             'file_path': data.get('file_path'),
             'filename': data.get('filename'),
+            'error': data.get('error'),
         })
 
     if result.state == 'FAILURE':
@@ -1191,11 +1336,12 @@ def api_download_excel(request, task_id):
     except Exception:
         pass
 
-    content_type = (
-        'application/zip'
-        if nombre.endswith('.zip')
-        else 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    )
+    if nombre.endswith('.zip'):
+        content_type = 'application/zip'
+    elif nombre.endswith('.pptx'):
+        content_type = 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+    else:
+        content_type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     response = HttpResponse(contenido, content_type=content_type)
     response['Content-Disposition'] = f'attachment; filename="{nombre}"'
     return response
@@ -1220,17 +1366,23 @@ def panel_operativo(request):
     
     registros_base = get_registros_permitidos(request.user)
     
+    lote_id = request.GET.get('lote_id')
     dt_desde = _parse_aware_dt(fecha_desde_str, end=False) if fecha_desde_str else None
     dt_hasta = _parse_aware_dt(fecha_hasta_str, end=True) if fecha_hasta_str else None
     
     registros_qs = registros_base
-    if dt_desde:
-        registros_qs = registros_qs.filter(fecha_registro__gte=dt_desde)
-    if dt_hasta:
-        registros_qs = registros_qs.filter(fecha_registro__lte=dt_hasta)
-        
-    # Si no hubo fechas explícitas pero sí preset rápido
-    if not dt_desde and not dt_hasta:
+    
+    if lote_id and lote_id.isdigit():
+        registros_qs = registros_qs.filter(importacion_id=int(lote_id))
+        preset = 'lote'
+    else:
+        if dt_desde:
+            registros_qs = registros_qs.filter(fecha_registro__gte=dt_desde)
+        if dt_hasta:
+            registros_qs = registros_qs.filter(fecha_registro__lte=dt_hasta)
+            
+    # Si no hubo fechas explícitas ni lote_id pero sí preset rápido
+    if not dt_desde and not dt_hasta and not lote_id:
         _HOURS = {'h1': 1, 'h4': 4, 'h8': 8, 'h24': 24}
         if preset in _HOURS:
             delta = timedelta(hours=_HOURS[preset])
@@ -1255,11 +1407,39 @@ def panel_operativo(request):
             preset = 'h24'
             registros_qs = registros_base.filter(fecha_registro__gte=timezone.now() - timedelta(hours=24))
 
-    # Control de Polling: pausar si el límite superior está en el pasado
+    # Control de Polling: pausar si el límite superior está en el pasado o si estamos viendo un lote fijo
     now = timezone.now()
-    disable_polling = bool(dt_hasta and dt_hasta < (now - timedelta(minutes=1)))
+    disable_polling = bool(dt_hasta and dt_hasta < (now - timedelta(minutes=1))) or bool(lote_id)
     
     registros_data = _parse_fotos_nums(registros_qs)
+    
+    # ponytail: Pre-filtrado estricto si venimos de generar Box Condition
+    if request.GET.get('box_condition') == '1':
+        from calidad.services.reporte_box_condition import es_box_condition, DUTY_BOX_CONDITION
+        from shared.infrastructure.ai.defect_translator import build_translator
+        translator = build_translator()
+        
+        filtered_data = []
+        for r in registros_data:
+            resp = (r.get('responsable') or '').strip().upper()
+            if resp in DUTY_BOX_CONDITION and es_box_condition(r.get('descripcion'), translator):
+                filtered_data.append(r)
+        registros_data = filtered_data
+    
+    # Preparar previews visuales (thumbnails reales desde DB)
+    fotos_en_disco, evidencias_qs = _build_fotos_en_disco(registros_data)
+    fotos_preview_list = _build_fotos_preview(fotos_en_disco, evidencias_qs)
+    
+    fotos_by_reg = {}
+    for fp in fotos_preview_list:
+        rid = fp.get('registro_id')
+        if rid:
+            if rid not in fotos_by_reg:
+                fotos_by_reg[rid] = []
+            fotos_by_reg[rid].append(fp)
+            
+    for r in registros_data:
+        r['fotos_preview'] = fotos_by_reg.get(r['id'], [])
     
     # Si polling está deshabilitado enviamos last_id=None, sino enviamos el MAX(id) actual
     if disable_polling:
@@ -1316,6 +1496,20 @@ def api_get_nuevos(request):
     nuevos_qs = registros_base.filter(id__gt=last_id).order_by('-fecha_registro')
     
     registros_data = _parse_fotos_nums(nuevos_qs)
+    
+    fotos_en_disco, evidencias_qs = _build_fotos_en_disco(registros_data)
+    fotos_preview_list = _build_fotos_preview(fotos_en_disco, evidencias_qs)
+    
+    fotos_by_reg = {}
+    for fp in fotos_preview_list:
+        rid = fp.get('registro_id')
+        if rid:
+            if rid not in fotos_by_reg:
+                fotos_by_reg[rid] = []
+            fotos_by_reg[rid].append(fp)
+            
+    for r in registros_data:
+        r['fotos_preview'] = fotos_by_reg.get(r['id'], [])
     
     return JsonResponse({'registros': registros_data})
 
@@ -1565,3 +1759,156 @@ def descargar_zip(request):
         try: os.unlink(temp_path)
         except OSError: pass
         raise
+
+@login_required
+def generar_excel_box_condition(request):
+    """
+    Encola la generación del Excel Box Condition con Celery.
+    Acepta IDs explícitos (desde /operacion/) o un lote_id (desde /reportes/).
+    """
+    from .tasks import generar_excel_box_condition_task
+    from django.http import JsonResponse
+    import json
+
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+    lote_id = request.GET.get('lote_id')
+    registros_data = []
+    rotaciones = {}
+    
+    try:
+        body = json.loads(request.body)
+        registros_data = body.get('registros', [])
+        rotaciones = body.get('rotaciones', {})
+    except Exception:
+        pass
+
+    if not lote_id and not registros_data:
+        return JsonResponse({'error': 'Se requieren registros explícitos o un lote_id.'}, status=400)
+
+    from calidad.models import ImportacionLote
+    if lote_id:
+        if not ImportacionLote.objects.filter(id=lote_id).exists():
+            return JsonResponse({'error': 'Lote no encontrado'}, status=404)
+        # ponytail: validar que el usuario tenga acceso a registros de este lote
+        permitidos_lote = get_registros_permitidos(request.user).filter(importacion_id=lote_id)
+        if not permitidos_lote.exists():
+            return JsonResponse({'error': 'No tienes permisos para este lote'}, status=403)
+            
+        if not registros_data:
+            # ponytail: la vista DEBE resolver la intersección permitidos ∩ lote. No delegar a Celery.
+            registros_data = [{'id': r_id} for r_id in permitidos_lote.values_list('id', flat=True)]
+
+    if registros_data:
+        # ponytail: validar que los IDs explícitos pertenezcan al usuario
+        ids_solicitados = [int(r.get('id')) for r in registros_data if str(r.get('id', '')).isdigit()]
+        if ids_solicitados:
+            permitidos = set(get_registros_permitidos(request.user).filter(id__in=ids_solicitados).values_list('id', flat=True))
+            registros_data = [r for r in registros_data if int(r.get('id')) in permitidos]
+            if not registros_data:
+                return JsonResponse({'error': 'No tienes permisos para estos registros'}, status=403)
+
+    fotos_dir = settings.MEDIA_ROOT / 'fotos'
+
+    task = generar_excel_box_condition_task.delay(
+        lote_id=lote_id,
+        fotos_dir_str=str(fotos_dir),
+        registros_data=registros_data,
+        rotaciones=rotaciones
+    )
+
+    return JsonResponse({'task_id': task.id})
+
+@login_required
+def api_lotes_importacion(request):
+    """Lista de lotes de importación autorizados para el usuario actual."""
+    from django.db.models import Count
+    from calidad.models import ImportacionLote
+    
+    permitidos_qs = get_registros_permitidos(request.user)
+    lotes_ids = permitidos_qs.values_list('importacion_id', flat=True).distinct()
+    
+    data = list(
+        ImportacionLote.objects.filter(id__in=lotes_ids)
+        .annotate(total_registros=Count('registros'))
+        .order_by('-fecha_inicio')[:50]
+        .values('id', 'fecha_inicio', 'total_registros')
+    )
+    for l in data:
+        l['fecha'] = l.pop('fecha_inicio').strftime('%d-%b-%Y %H:%M')
+    return JsonResponse({'lotes': data})
+
+@login_required
+def revisar_box_condition(request):
+    """
+    Segunda etapa específica para Box Condition.
+    Filtra los IDs provenientes de la selección principal y muestra una vista
+    enfocada en selección local y edición de estos candidatos.
+    """
+    rev_id = request.GET.get('rev_id')
+    if rev_id:
+        ids_str = request.session.get(f'revisar_ids_{rev_id}', '')
+    else:
+        ids_str = request.session.get('revisar_ids', '')
+    lote_id = request.GET.get('lote_id')
+
+    if not ids_str:
+        # ponytail: fallback a lote completo si viene lote_id (flujo importacion→revisar→box-condition directo)
+        if lote_id:
+            ids = list(
+                get_registros_permitidos(request.user)
+                .filter(importacion_id=lote_id)
+                .values_list('id', flat=True)
+                .order_by('id')
+            )
+            if not ids:
+                return redirect('panel_operativo')
+        else:
+            return redirect('panel_operativo')
+    else:
+        try:
+            ids = [int(i) for i in ids_str.split(',') if i.strip().isdigit()]
+        except ValueError:
+            return redirect('panel_operativo')
+        
+    from django.db.models import Case, When
+    preserved_order = Case(*[When(id=id_, then=pos) for pos, id_ in enumerate(ids)])
+    registros_qs = get_registros_permitidos(request.user).filter(id__in=ids).order_by(preserved_order)
+    
+    # Obtenemos los registros con sus fotos pre-parseadas
+    registros_data = _parse_fotos_nums(registros_qs)
+    
+    from calidad.services.reporte_box_condition import es_box_condition, DUTY_BOX_CONDITION
+    from shared.infrastructure.ai.defect_translator import build_translator
+    translator = build_translator()
+    
+    candidatos = []
+    for r in registros_data:
+        resp = (r.get('responsable') or '').strip().upper()
+        if resp in DUTY_BOX_CONDITION and es_box_condition(r.get('descripcion'), translator):
+            candidatos.append(r)
+            
+    # Traer fotos thumbnail para visualización rápida
+    fotos_en_disco, evidencias_qs = _build_fotos_en_disco(candidatos)
+    fotos_preview = _build_fotos_preview(fotos_en_disco, evidencias_qs)
+    
+    # Agrupar las previews por registro para que el template las pinte fácil
+    fotos_by_reg = {}
+    for f in fotos_preview:
+        if f['registro_id'] not in fotos_by_reg:
+            fotos_by_reg[f['registro_id']] = []
+        fotos_by_reg[f['registro_id']].append(f)
+        
+    # Filtrar también los fotos_preview para que solo queden las fotos de los candidatos
+    fotos_preview_filtradas = [f for f in fotos_preview if f['registro_id'] in [c['id'] for c in candidatos]]
+
+    # Reutilizamos el mismo JSON shape que /revisar/
+    context = {
+        'registros':           candidatos,
+        'registros_json':      json.dumps(candidatos, default=str),
+        'fotos_preview_json':  json.dumps(fotos_preview_filtradas),
+        'filtros':             {},
+        'seccion':             'revisar'
+    }
+    return render(request, 'calidad/revisar_box_condition.html', context)

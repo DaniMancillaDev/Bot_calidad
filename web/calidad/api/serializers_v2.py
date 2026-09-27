@@ -18,6 +18,8 @@ def serialize_registro(reg: RegistroDefecto) -> dict:
         'user_id': reg.user_id,
         'modelo': reg.modelo,
         'numero_parte': reg.numero_parte,
+        'invoice': reg.invoice,
+        'wo': reg.wo,
         'linea': reg.linea,
         'cantidad': reg.cantidad,
         'defecto': reg.descripcion,

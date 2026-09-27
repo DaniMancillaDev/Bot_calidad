@@ -280,11 +280,30 @@ class PanelOperativo {
 
             const fotosParam = encodeURIComponent(r.fotos_rango || r.fotos_str || '');
             const hasFotos = (r.fotos_nums && r.fotos_nums.length > 0) || (r.fotos_rango && r.fotos_rango !== '—');
-            const fotosBadge = hasFotos ? `
-                <a href="/fotos/?q=${fotosParam}" target="_blank" onclick="event.stopPropagation();" title="Ver evidencias fotográficas" class="badge-evidencia">
-                    <span class="material-symbols-outlined" style="font-size:0.95rem;">photo_library</span>
-                    <span>${fotosStr}</span>
-                </a>` : `<span style="color:var(--text-muted); font-size:0.85rem;">—</span>`;
+            
+            // ponytail: Renderizar thumbnails reales si existen, sino fallback a badge.
+            let fotosBadge = '';
+            if (r.fotos_preview && r.fotos_preview.length > 0) {
+                fotosBadge = `<div style="display:flex; gap:4px; overflow-x:auto; max-width:150px;">`;
+                r.fotos_preview.slice(0, 3).forEach(f => {
+                    fotosBadge += `<a href="${f.url}" target="_blank" onclick="event.stopPropagation();" title="Ver foto">
+                                     <img src="${f.thumb_url}" style="height:32px; border-radius:4px; object-fit:cover;">
+                                   </a>`;
+                });
+                if (r.fotos_preview.length > 3) {
+                    fotosBadge += `<a href="/fotos/?q=${fotosParam}" target="_blank" onclick="event.stopPropagation();" style="display:flex; align-items:center; background:var(--surface2); padding:0 6px; border-radius:4px; font-size:0.8rem; color:var(--text); text-decoration:none;">+${r.fotos_preview.length - 3}</a>`;
+                }
+                fotosBadge += `</div>`;
+            } else if (hasFotos) {
+                fotosBadge = `
+                    <a href="/fotos/?q=${fotosParam}" target="_blank" onclick="event.stopPropagation();" title="Ver evidencias fotográficas" class="badge-evidencia">
+                        <span class="material-symbols-outlined" style="font-size:0.95rem;">photo_library</span>
+                        <span>${fotosStr}</span>
+                    </a>`;
+            } else {
+                fotosBadge = `<span style="color:var(--text-muted); font-size:0.85rem;">—</span>`;
+            }
+
 
             tr.innerHTML = `
                 <td class="col-check text-center">
@@ -560,13 +579,22 @@ class PanelOperativo {
 
         const fotosSet = new Set();
         let totalCantidad = 0;
+        let mergedPreviews = [];
+        const previewIds = new Set();
         seleccionados.forEach(r => {
             (r.fotos_nums || []).forEach(n => fotosSet.add(n));
+            (r.fotos_preview || []).forEach(fp => {
+                if (!previewIds.has(fp.evidencia_id || fp.url)) {
+                    previewIds.add(fp.evidencia_id || fp.url);
+                    mergedPreviews.push(fp);
+                }
+            });
             totalCantidad += (r.cantidad || 1);
         });
 
         const superRegistro = { ...ref };
         superRegistro.fotos_nums = Array.from(fotosSet).sort((a, b) => a - b);
+        superRegistro.fotos_preview = mergedPreviews;
         superRegistro.cantidad = totalCantidad;
         superRegistro.fotos_str = `(${superRegistro.fotos_nums[0]}-${superRegistro.fotos_nums[superRegistro.fotos_nums.length-1]})`;
         superRegistro._agrupado = true;

@@ -264,6 +264,20 @@ def generate_excel(
                     'number_format': _cell.number_format,
                 }
 
+            
+            # Agrupar preservando el orden original en O(N)
+            import unicodedata
+            def normalize_defecto(texto):
+                texto = str(texto or '').strip().lower()
+                return unicodedata.normalize('NFKD', texto).encode('ASCII', 'ignore').decode('utf-8')
+                
+            grupos = {}
+            for r in registros:
+                llave = (r.get('user_id', 0), normalize_defecto(r.get('descripcion', '')))
+                grupos.setdefault(llave, []).append(r)
+                    
+            registros = [r for g in grupos.values() for r in g]
+            
             for idx, registro in enumerate(registros):
                 row        = START_ROW + idx
                 row_1based = row + 1
@@ -287,6 +301,8 @@ def generate_excel(
                 # Se eliminó la fecha por petición del usuario (se deja en blanco)
 
                 ws.cell(row=row_1based, column=3).value  = str(registro.get('modelo') or '').upper()
+                ws.cell(row=row_1based, column=4).value  = str(registro.get('wo') or '').upper()
+                ws.cell(row=row_1based, column=5).value  = str(registro.get('invoice') or '').upper()
                 ws.cell(row=row_1based, column=6).value  = str(registro.get('linea') or '').upper()
                 ws.cell(row=row_1based, column=7).value  = str(registro.get('numero_parte') or "").upper()
                 # Columna H: SN on set (series, una por línea en Excel)
