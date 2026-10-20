@@ -55,3 +55,8 @@ revert_photos.bat
 skills/
 skills-lock.json
 .env.local
+
+# Secretos del piloto WhatsApp (el ejemplo versionado es seguro)
+whatsapp-pilot.env
+whatsapp-pilot.env.*
+!whatsapp-pilot.env.example

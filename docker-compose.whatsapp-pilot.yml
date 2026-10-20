@@ -1,0 +1,147 @@
+services:
+  # Todos los servicios tienen el perfil explícito "pilot". Un `up` sin
+  # --profile pilot no arranca nada.
+  postgres:
+    profiles: [pilot]
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${WA_PILOT_DB_NAME:-bot_calidad_pilot}
+      POSTGRES_USER: ${WA_PILOT_DB_USER:-bot_calidad_pilot}
+      POSTGRES_PASSWORD: ${WA_PILOT_DB_PASSWORD:?WA_PILOT_DB_PASSWORD is required}
+    volumes:
+      - wa_pilot_postgres_data:/var/lib/postgresql/data
+    networks: [wa_pilot]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    profiles: [pilot]
+    image: redis:7-alpine
+    environment:
+      REDIS_PASSWORD: ${WA_PILOT_REDIS_PASSWORD:?WA_PILOT_REDIS_PASSWORD is required}
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - ${WA_PILOT_REDIS_PASSWORD:?WA_PILOT_REDIS_PASSWORD is required}
+    volumes:
+      - wa_pilot_redis_data:/data
+    networks: [wa_pilot]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" ping | grep PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  web:
+    profiles: [pilot]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SOURCE_COMMIT: ${WA_PILOT_SOURCE_COMMIT:-b17f7c2}
+    environment:
+      DATABASE_URL: postgresql://${WA_PILOT_DB_USER:-bot_calidad_pilot}:${WA_PILOT_DB_PASSWORD:?WA_PILOT_DB_PASSWORD is required}@postgres:5432/${WA_PILOT_DB_NAME:-bot_calidad_pilot}
+      CELERY_BROKER_URL: redis://:${WA_PILOT_REDIS_PASSWORD:?WA_PILOT_REDIS_PASSWORD is required}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${WA_PILOT_REDIS_PASSWORD:?WA_PILOT_REDIS_PASSWORD is required}@redis:6379/0
+      DJANGO_SECRET_KEY: ${WA_PILOT_DJANGO_SECRET_KEY:?WA_PILOT_DJANGO_SECRET_KEY is required}
+      DJANGO_DEBUG: "False"
+      DJANGO_ALLOWED_HOSTS: ${WA_PILOT_ALLOWED_HOSTS:-localhost,127.0.0.1,web}
+      WHATSAPP_INGEST_API_KEY: ${WA_PILOT_INGEST_KEY:?WA_PILOT_INGEST_KEY is required}
+      WHATSAPP_ALLOWED_GROUP_IDS: ${WA_PILOT_ALLOWED_GROUP_ID:-}
+      WHATSAPP_PENDING_ROOT: /app/data/whatsapp_pending
+      WHATSAPP_MAX_IMAGE_BYTES: ${WA_PILOT_MAX_IMAGE_BYTES:-26214400}
+      PYTHONPATH: /app/web
+    volumes:
+      - wa_pilot_media:/app/media_files
+      - wa_pilot_web_data:/app/data
+      - wa_pilot_static:/app/static_collected
+    ports:
+      - "127.0.0.1:${WA_PILOT_WEB_PORT:-18080}:8000"
+    networks: [wa_pilot]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command:
+      - sh
+      - -c
+      - >-
+        uv run python web/manage.py migrate --noinput &&
+        uv run python web/manage.py collectstatic --noinput &&
+        uv run gunicorn --bind 0.0.0.0:8000 --workers 1 --timeout 30
+        --pythonpath web config.wsgi:application
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/login/')"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  celery:
+    profiles: [pilot]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SOURCE_COMMIT: ${WA_PILOT_SOURCE_COMMIT:-b17f7c2}
+    environment:
+      DATABASE_URL: postgresql://${WA_PILOT_DB_USER:-bot_calidad_pilot}:${WA_PILOT_DB_PASSWORD:?WA_PILOT_DB_PASSWORD is required}@postgres:5432/${WA_PILOT_DB_NAME:-bot_calidad_pilot}
+      CELERY_BROKER_URL: redis://:${WA_PILOT_REDIS_PASSWORD:?WA_PILOT_REDIS_PASSWORD is required}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${WA_PILOT_REDIS_PASSWORD:?WA_PILOT_REDIS_PASSWORD is required}@redis:6379/0
+      DJANGO_SECRET_KEY: ${WA_PILOT_DJANGO_SECRET_KEY:?WA_PILOT_DJANGO_SECRET_KEY is required}
+      DJANGO_DEBUG: "False"
+      WHATSAPP_PENDING_ROOT: /app/data/whatsapp_pending
+      PYTHONPATH: /app/web
+    volumes:
+      - wa_pilot_media:/app/media_files
+      - wa_pilot_web_data:/app/data
+    networks: [wa_pilot]
+    depends_on:
+      web:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: ["uv", "run", "celery", "-A", "calidad.celery_app", "worker", "--loglevel=info", "--concurrency=2"]
+
+  whatsapp-adapter:
+    profiles: [pilot]
+    build:
+      context: ./whatsapp
+      dockerfile: Dockerfile
+    environment:
+      # El valor por defecto mantiene el adaptador inerte aunque el perfil se active.
+      WHATSAPP_ENABLED: ${WA_PILOT_ENABLED:-false}
+      WHATSAPP_ALLOWED_GROUP_IDS: ${WA_PILOT_ALLOWED_GROUP_ID:-}
+      WHATSAPP_INGEST_URL: http://web:8000/api/v1/whatsapp/ingest/
+      WHATSAPP_INGEST_API_KEY: ${WA_PILOT_INGEST_KEY:?WA_PILOT_INGEST_KEY is required}
+      WHATSAPP_SESSION_DIR: /app/data/whatsapp_session
+      WHATSAPP_QUEUE_DIR: /app/data/whatsapp_queue
+      WHATSAPP_QR_IN_TERMINAL: ${WA_PILOT_SHOW_QR:-false}
+      WHATSAPP_LOG_LEVEL: ${WA_PILOT_LOG_LEVEL:-warn}
+      WHATSAPP_MAX_IMAGE_BYTES: ${WA_PILOT_MAX_IMAGE_BYTES:-26214400}
+    volumes:
+      - wa_pilot_whatsapp_data:/app/data
+    networks: [wa_pilot]
+    depends_on:
+      web:
+        condition: service_healthy
+    # No auto-restart: enabling the adapter must be an explicit operator action.
+    restart: "no"
+
+volumes:
+  wa_pilot_postgres_data:
+  wa_pilot_redis_data:
+  wa_pilot_media:
+  wa_pilot_web_data:
+  wa_pilot_static:
+  wa_pilot_whatsapp_data:
+
+networks:
+  wa_pilot:
+    driver: bridge
