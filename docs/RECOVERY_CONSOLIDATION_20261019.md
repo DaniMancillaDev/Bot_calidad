@@ -63,7 +63,7 @@ Se requieren variables para Django, PostgreSQL, Redis, Telegram, URL/puerto de w
 
 El Compose original de GitHub usa `build:` y `.env`; el Compose desplegado usa imágenes fijadas para web/Celery y `latest` para bot. Esa diferencia debe resolverse antes de convertir el repositorio en fuente única de despliegue.
 
-No se ejecutaron migraciones ni despliegues durante esta consolidación.
+No se ejecutaron migraciones ni despliegues en producción durante esta consolidación. Las migraciones usadas por las pruebas se aplicaron únicamente en PostgreSQL temporal.
 
 ## Backups y restauración
 
@@ -89,13 +89,13 @@ Ejecutadas en el árbol consolidado o en una copia archivada de la rama, siempre
 
 Los tests con PostgreSQL 16 y Redis 7 temporales se ejecutaron en puertos locales efímeros y ambos contenedores fueron detenidos y eliminados. No se usó PostgreSQL, Redis, media ni volúmenes de producción.
 
-## Cambios todavía pendientes
+## Riesgos residuales y decisiones pendientes
 
-- Resolver de forma definitiva las diferencias entre `web` y `celery`.
-- Revisar scripts de diagnóstico recuperados que escriben en bases de datos o dependen de rutas personales.
+- La diferencia `web`/`celery` quedó resuelta para el código fuente: ambos deben construirse desde el mismo `Dockerfile` y commit. El árbol Celery antiguo se conserva únicamente como evidencia y no se mezcla sobre la variante segura.
+- Revisar scripts de diagnóstico recuperados que escriben en bases de datos o dependen de rutas personales antes de volver a usarlos.
 - Los 19 artefactos binarios temporales rastreados por GitHub se retiraron de esta rama y quedaron excluidos por `.gitignore`; permanecen recuperables desde `origin/feature/v2.1.0-ui-galeria-optimizaciones` y su historial.
 - Revisar antes de producción la fijación de paquetes APT y la política de publicación de etiquetas.
-- Comparar el catálogo consolidado con las decisiones funcionales del equipo; el árbol web es un superconjunto compatible del catálogo del bot recuperado.
+- El catálogo consolidado es un superconjunto compatible del catálogo del bot recuperado; falta validación funcional con ejemplos reales de Telegram.
 - No iniciar aún la integración WhatsApp.
 
 Los scripts auxiliares que solo estaban en las imágenes se conservaron fuera de esta rama en `/mnt/Orto/bot_calidad_runtime_scripts_quarantine_20261019/`; su clasificación está en `docs/RECOVERED_RUNTIME_SCRIPTS.md`.
