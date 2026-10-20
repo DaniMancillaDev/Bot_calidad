@@ -5,6 +5,8 @@ Con PostgreSQL, Django gestiona TODAS las tablas (managed = True).
 El bot consume el ORM en lugar de sqlite3 directo.
 """
 import json
+import uuid
+from django.conf import settings
 from django.db import models
 from django.contrib.auth.models import User
 from django.contrib.postgres.fields import ArrayField
@@ -296,6 +298,149 @@ class EvidenciaFotografica(models.Model):
         if not force_delete:
             raise PermissionError("Borrado bloqueado por seguridad. Utiliza force_delete=True desde admin o panel web.")
         return super().delete(*args, **kwargs)
+
+
+class WhatsAppContact(models.Model):
+    """Contacto de origen; no requiere una cuenta de usuario web."""
+    display_name = models.CharField(max_length=255, blank=True, default='')
+    phone_number = models.CharField(max_length=40, null=True, blank=True)
+    whatsapp_id = models.CharField(max_length=255, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'whatsapp_contacts'
+        indexes = [
+            models.Index(fields=['phone_number'], name='wa_contact_phone_idx'),
+            models.Index(fields=['updated_at'], name='wa_contact_updated_idx'),
+        ]
+        ordering = ['display_name', 'id']
+
+    def __str__(self):
+        return self.display_name or self.whatsapp_id
+
+
+class PendingEvidenceGroup(models.Model):
+    """Borrador manual que agrupa evidencias antes del registro definitivo."""
+    STATUS_DRAFT = 'DRAFT'
+    STATUS_CONFIRMED = 'CONFIRMED'
+    STATUS_ARCHIVED = 'ARCHIVED'
+    STATUS_CHOICES = (
+        (STATUS_DRAFT, 'Borrador'),
+        (STATUS_CONFIRMED, 'Confirmado'),
+        (STATUS_ARCHIVED, 'Archivado'),
+    )
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    operator = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='pending_evidence_groups',
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='created_pending_evidence_groups',
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_DRAFT, db_index=True)
+    model = models.CharField(max_length=255, blank=True, default='')
+    line = models.CharField(max_length=100, blank=True, default='')
+    quantity = models.PositiveIntegerField(null=True, blank=True)
+    responsible = models.CharField(max_length=100, blank=True, default='')
+    description = models.TextField(blank=True, default='')
+    definitive_record = models.OneToOneField(
+        'RegistroDefecto',
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name='pending_evidence_group',
+    )
+    confirmed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name='confirmed_pending_evidence_groups',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'pending_evidence_groups'
+        indexes = [
+            models.Index(fields=['operator', 'status'], name='pending_group_owner_idx'),
+            models.Index(fields=['created_at'], name='pending_group_created_idx'),
+        ]
+        ordering = ['-created_at']
+
+
+class PendingEvidence(models.Model):
+    """Una fotografía recibida, aún no convertida en evidencia definitiva."""
+    SOURCE_WHATSAPP = 'WHATSAPP'
+    SOURCE_CHOICES = ((SOURCE_WHATSAPP, 'WhatsApp'),)
+    STATUS_PROCESSING = 'PROCESSING'
+    STATUS_READY = 'READY'
+    STATUS_FAILED = 'FAILED'
+    STATUS_ARCHIVED = 'ARCHIVED'
+    STATUS_CHOICES = (
+        (STATUS_PROCESSING, 'Procesando'),
+        (STATUS_READY, 'Lista'),
+        (STATUS_FAILED, 'Error'),
+        (STATUS_ARCHIVED, 'Archivada'),
+    )
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    source = models.CharField(max_length=30, choices=SOURCE_CHOICES, default=SOURCE_WHATSAPP)
+    source_group_id = models.CharField(max_length=255)
+    source_group_name = models.CharField(max_length=255, blank=True, default='')
+    source_message_id = models.CharField(max_length=255)
+    media_index = models.PositiveIntegerField(default=0)
+    sender = models.ForeignKey(
+        WhatsAppContact,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='pending_evidences',
+    )
+    sender_whatsapp_id = models.CharField(max_length=255, blank=True, default='')
+    caption = models.TextField(blank=True, default='')
+    message_at = models.DateTimeField(null=True, blank=True)
+    received_at = models.DateTimeField(auto_now_add=True)
+    processing_started_at = models.DateTimeField(null=True, blank=True)
+    file_path = models.CharField(max_length=500, blank=True, default='')
+    sha256 = models.CharField(max_length=64, blank=True, default='')
+    mime_type = models.CharField(max_length=100, blank=True, default='')
+    size_bytes = models.PositiveBigIntegerField(default=0)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PROCESSING, db_index=True)
+    attempts = models.PositiveIntegerField(default=0)
+    error_message = models.TextField(blank=True, default='')
+    group = models.ForeignKey(
+        PendingEvidenceGroup,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='evidences',
+    )
+
+    class Meta:
+        db_table = 'pending_evidences'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['source', 'source_group_id', 'source_message_id', 'media_index'],
+                name='pending_evidence_source_message_uq',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['source_group_id', 'status'], name='pending_evidence_group_idx'),
+            models.Index(fields=['sender_whatsapp_id'], name='pending_evidence_sender_idx'),
+            models.Index(fields=['received_at'], name='pending_evidence_received_idx'),
+            models.Index(fields=['group', 'status'], name='pending_ev_assign_idx'),
+        ]
+        ordering = ['-received_at', 'id']
+
+    def __str__(self):
+        return f"{self.source}:{self.source_message_id}:{self.media_index}"
 
 class GlobalCounter(models.Model):
     """Secuencia de numeración global de fotos en toda la planta."""

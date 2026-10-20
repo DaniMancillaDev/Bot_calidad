@@ -127,6 +127,19 @@ THUMBS_URL  = '/media-protegida/thumbs/'
 FOTOS_ROOT  = MEDIA_ROOT / 'fotos'
 FOTOS_URL   = '/media-protegida/fotos/'
 
+# WhatsApp ingestion is disabled until an explicit key and group allow-list exist.
+WHATSAPP_INGEST_API_KEY = os.getenv('WHATSAPP_INGEST_API_KEY')
+WHATSAPP_ALLOWED_GROUP_IDS = frozenset(
+    item.strip() for item in os.getenv('WHATSAPP_ALLOWED_GROUP_IDS', '').split(',') if item.strip()
+)
+WHATSAPP_PENDING_ROOT = Path(os.getenv(
+    'WHATSAPP_PENDING_ROOT',
+    str(BOT_DIR / 'data' / 'whatsapp_pending'),
+))
+WHATSAPP_MAX_IMAGE_BYTES = int(os.getenv('WHATSAPP_MAX_IMAGE_BYTES', str(25 * 1024 * 1024)))
+WHATSAPP_ALLOW_HISTORICAL = False
+WHATSAPP_PROCESSING_LEASE_SECONDS = max(1, int(os.getenv('WHATSAPP_PROCESSING_LEASE_SECONDS', '300')))
+
 # ====================================
 # LOGIN
 # ====================================

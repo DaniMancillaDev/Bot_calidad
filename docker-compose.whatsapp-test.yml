@@ -1,0 +1,56 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: wa_test
+      POSTGRES_USER: wa_test
+      POSTGRES_PASSWORD: ${WA_TEST_DB_PASSWORD:?WA_TEST_DB_PASSWORD is required}
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wa_test -d wa_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    networks:
+      - wa_test
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    networks:
+      - wa_test
+
+  test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SOURCE_COMMIT: whatsapp-phase1-isolated-test
+    environment:
+      DATABASE_URL: postgresql://wa_test:${WA_TEST_DB_PASSWORD:?WA_TEST_DB_PASSWORD is required}@postgres:5432/wa_test
+      CELERY_BROKER_URL: redis://redis:6379/15
+      CELERY_RESULT_BACKEND: redis://redis:6379/15
+      DJANGO_SECRET_KEY: ${WA_TEST_DJANGO_SECRET_KEY:?WA_TEST_DJANGO_SECRET_KEY is required}
+      DJANGO_DEBUG: "True"
+      PYTHONPATH: /app/web
+      WHATSAPP_PENDING_ROOT: /app/data/whatsapp_pending
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: [".venv/bin/python", "web/manage.py", "check"]
+    networks:
+      - wa_test
+
+networks:
+  wa_test:
+    name: bot_calidad_wa_test_net
+    driver: bridge
+    internal: true

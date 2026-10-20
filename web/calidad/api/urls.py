@@ -1,7 +1,10 @@
 from django.urls import path
-from . import views
+from . import views, whatsapp
 
 urlpatterns = [
+    # Receptor interno de WhatsApp; autenticación propia en whatsapp.ingest.
+    path('whatsapp/ingest/', whatsapp.ingest, name='whatsapp_ingest'),
+
     # Auth
     path('workflows/auth/tiene-acceso/', views.AuthTieneAccesoView.as_view(), name='workflow_auth_acceso'),
 
