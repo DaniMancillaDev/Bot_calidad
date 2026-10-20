@@ -724,7 +724,7 @@ def _enrich_galeria_registros(object_list):
                 num_display = int(m.group(1))
 
             thumb_src = f"{thumbs_url}{reg.user_id}/{filename}" if filename in thumbs_set else f"{proxies_url}{reg.user_id}/{filename}"
-            orig_src = f"{proxies_url}{reg.user_id}/{filename}" if filename in proxies_set else f"{fotos_url}{reg.user_id}/{filename}"
+            orig_src = f"/media-protegida/{path}"
 
             fotos_data.append({
                 'num': num_display,
@@ -751,7 +751,7 @@ def _enrich_galeria_registros(object_list):
                 continue
 
             thumb_src = f"{thumbs_url}{reg.user_id}/{foto_filename}" if foto_filename in thumbs_set else f"{fotos_url}{reg.user_id}/{foto_filename}"
-            orig_src = f"{proxies_url}{reg.user_id}/{foto_filename}" if foto_filename in proxies_set else f"{fotos_url}{reg.user_id}/{foto_filename}"
+            orig_src = f"{fotos_url}{reg.user_id}/{foto_filename}"
 
             if not any(f['nombre'] == foto_filename for f in fotos_data):
                 fotos_data.append({
@@ -948,7 +948,9 @@ def _build_fotos_en_disco(registros_data):
     
     from calidad.models import EvidenciaFotografica
     registro_ids = [r['id'] for r in registros_data if r.get('id')]
-    evidencias_qs = EvidenciaFotografica.objects.filter(registro_id__in=registro_ids)
+    evidencias_qs = EvidenciaFotografica.objects.filter(
+        registro_id__in=registro_ids
+    ).order_by('registro_id', 'orden', 'id')
     
     evs_por_registro = {}
     for ev in evidencias_qs:
@@ -1007,6 +1009,7 @@ def _build_fotos_en_disco(registros_data):
                         'path': img_path,
                         'user_id': user_id,
                         'numero': num,
+                        'orden': ev_for_legacy.orden if ev_for_legacy else None,
                         'es_legacy': True,
                         'registro_id': r.get('id'),
                     }
@@ -1036,13 +1039,14 @@ def _build_fotos_en_disco(registros_data):
                     'path': real_path,
                     'user_id': user_id,
                     'numero': num,
+                    'orden': ev.orden,
                     'evidencia': ev,
                     'es_legacy': False,
                     'ruta_rel': ev_path_str,
                     'registro_id': r.get('id'),
                 }
 
-        r['fotos_nums'] = sorted(list(set(actual_nums)))
+        r['fotos_nums'] = list(dict.fromkeys(actual_nums))
         
     return fotos_en_disco, evidencias_qs
 
@@ -1100,6 +1104,7 @@ def _build_fotos_preview(fotos_en_disco, evidencias_qs):
         fotos_preview.append({
             'clave':        string_clave.split('_v2_')[0],
             'numero':       data['numero'],
+            'orden':        data.get('orden'),
             'user_id':      user_id,
             'url':          orig_url,
             'thumb_url':    thumb_src,
@@ -1110,7 +1115,12 @@ def _build_fotos_preview(fotos_en_disco, evidencias_qs):
             'registro_id':  data.get('registro_id'),
         })
 
-    fotos_preview.sort(key=lambda x: (x['user_id'], x['numero']))
+    fotos_preview.sort(key=lambda x: (
+        x['user_id'],
+        x['registro_id'] or 0,
+        x['orden'] if x['orden'] is not None else float('inf'),
+        x['numero'],
+    ))
     return fotos_preview
 
 @login_required
@@ -1121,6 +1131,34 @@ def revisar_orientacion(request):
     y permite al usuario corregirlas con botones de rotación.
     """
     if request.method == 'POST':
+        order_raw = request.POST.get('order')
+        if order_raw is not None:
+            requested_order = [
+                int(value) for value in order_raw.split(',')
+                if value.strip().isdigit()
+            ]
+            rev_id = request.POST.get('rev_id') or request.GET.get('rev_id')
+            session_key = f'revisar_ids_{rev_id}' if rev_id else 'revisar_ids'
+            current_order = [
+                int(value) for value in request.session.get(session_key, '').split(',')
+                if value.strip().isdigit()
+            ]
+
+            is_same_set = (
+                requested_order
+                and len(requested_order) == len(set(requested_order))
+                and len(requested_order) == len(current_order)
+                and set(requested_order) == set(current_order)
+            )
+            if not is_same_set:
+                return JsonResponse(
+                    {'ok': False, 'message': 'El orden no pertenece al lote actual.'},
+                    status=400,
+                )
+
+            request.session[session_key] = ','.join(map(str, requested_order))
+            return JsonResponse({'ok': True})
+
         raw_ids = request.POST.get('ids', '')
         ids_solicitados = [int(i) for i in raw_ids.split(',') if i.strip().isdigit()]
         redirect_url = request.get_full_path()
@@ -1152,8 +1190,6 @@ def revisar_orientacion(request):
         return redirect(redirect_url)
 
     registros_data, fecha_desde, fecha_hasta = _get_orientacion_registros(request)
-    
-    registros_data.sort(key=lambda x: (x.get('user_id'), x['fotos_nums'][0] if x.get('fotos_nums') else 0))
     
     fotos_en_disco, evidencias_qs = _build_fotos_en_disco(registros_data)
     

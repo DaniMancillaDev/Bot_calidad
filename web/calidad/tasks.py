@@ -31,9 +31,9 @@ PROXIES_PATH = os.getenv("PROXIES_PATH", "media_files/proxies")
 
 # ── Umbrales de desahogo a PowerPoint ──────────────────────────────────────────
 UMBRAL_PPTX = 20          # Reporte normal consolidado
-UMBRAL_PPTX_BOX = 15      # Reporte Daily Tracking Box Condition
 
 
+@shared_task(name='calidad.tasks.sync_evidencias_task')
 def sync_evidencias_task(registro_id: int) -> None:
     """Sincroniza fotos_nums → EvidenciaFotografica (V2) en background."""
     from calidad.models import RegistroDefecto
@@ -123,6 +123,10 @@ def generar_thumbnails_lote_task(self, user_id: int, fotos_paths: list[str]) -> 
 # ── Alias de proveedores ────────────────────────────────────────────────────
 ALIAS = {
     'WH': 'TSCEM',
+    **dict.fromkeys((
+        'MTTO', 'MNTO', 'MTO', 'MNT', 'MANT', 'MANTTO', 'MANTENIMIENTO',
+        'MANTENIMINETO', 'MANTINIMIENTO', 'MAINTENANCE', 'MAINT', 'MTCE',
+    ), 'TSCEM'),
 }
 
 
@@ -206,6 +210,23 @@ def _consolidar_registros(regs, translator=None):
     return list(agrupados.values())
 
 
+def _ordenar_evidencias(evidencias, fotos_order):
+    """Filtra y ordena evidencias según el orden elegido en la pantalla."""
+    if fotos_order is None:
+        return list(evidencias)
+
+    order_by_num = {int(numero): indice for indice, numero in enumerate(fotos_order)}
+    validas = []
+    for ev in evidencias:
+        match = re.match(r'^(\d+)', Path(ev.ruta_archivo).name)
+        numero = int(match.group(1)) if match else ev.id
+        if numero in order_by_num:
+            validas.append((order_by_num[numero], ev))
+
+    validas.sort(key=lambda item: item[0])
+    return [ev for _, ev in validas]
+
+
 @shared_task(bind=True, name='calidad.tasks.generar_excel_task')
 def generar_excel_task(self, registros_ids, rotaciones, fotos_dir_str, fecha_str, fotos_order=None, sn_map=None, lote_id=None):
     """
@@ -243,18 +264,18 @@ def generar_excel_task(self, registros_ids, rotaciones, fotos_dir_str, fecha_str
 
         # Usar DIRECTAMENTE la relación de BD. Cero reconstrucción por filename. Cero fallbacks r.fotos.
         evidencias_validas = []
+        fotos_order_registro = None
+        if fotos_order is not None and str(r.id) in fotos_order:
+            fotos_order_registro = fotos_order[str(r.id)]
+
         for ev in r.evidencias_v2.all():
             if isinstance(ev.metadatos, dict) and ev.metadatos.get('excluida'):
                 continue
-            # Filtrar por fotos_order si el frontend envió exclusiones/ordenamiento
-            if fotos_order and str(r.id) in fotos_order:
-                allowed = {int(x) for x in fotos_order[str(r.id)]}
-                import re as _re
-                m = _re.match(r'^(\d+)', Path(ev.ruta_archivo).name)
-                ev_num = int(m.group(1)) if m else ev.id
-                if ev_num not in allowed:
-                    continue
             evidencias_validas.append(ev)
+
+        # El queryset viene ordenado por la DB. Reordenarlo aquí conserva el
+        # drag-and-drop aunque el worker corra en otro proceso.
+        evidencias_validas = _ordenar_evidencias(evidencias_validas, fotos_order_registro)
 
         registros_data.append({
             'id': r.id,
@@ -279,7 +300,8 @@ def generar_excel_task(self, registros_ids, rotaciones, fotos_dir_str, fecha_str
     grupos = {}
     for reg in registros_data:
         resp = (reg.get('responsable') or 'SIN_PROVEEDOR').strip().upper()
-        resp = ALIAS.get(resp, resp)
+        alias_key = re.sub(r'[\s._-]+', '', resp)
+        resp = ALIAS.get(alias_key, resp)
         grupos.setdefault(resp, []).append(reg)
 
     # Crear directorio temporal compartido si no existe
@@ -397,15 +419,14 @@ def generar_excel_box_condition_task(self, lote_id, fotos_dir_str, registros_ids
     """
     Tarea Celery aislada para el reporte Daily Tracking Box Condition.
     Acepta registros con ediciones locales en registros_data y rotaciones.
-    Si total_fotos >= UMBRAL_PPTX (20), genera PPTX para evitar un XLSX sobredimensionado.
+    Siempre genera Excel. El PPTX queda como exportación independiente, no como
+    cambio automático por cantidad de fotografías.
     """
     from calidad.models import RegistroDefecto, ImportacionLote
     from calidad.services.reporte_box_condition import generate_box_condition_excel
-    from calidad.services.generador_pptx import generar_pptx_grupo
     from shared.infrastructure.ai.defect_translator import build_translator
     from datetime import datetime
     from pathlib import Path
-    import re as _re
 
     fotos_dir = Path(fotos_dir_str)
     fecha_reporte = datetime.now()
@@ -461,59 +482,23 @@ def generar_excel_box_condition_task(self, lote_id, fotos_dir_str, registros_ids
     temp_dir.mkdir(parents=True, exist_ok=True)
     fecha_str = fecha_reporte.strftime('%d-%b-%Y').upper()
 
-    # ── Conteo de fotos y evaluación de umbral PPTX (mismo que reporte normal) ──
+    # ── Conteo de fotos para progreso/log; no cambia el formato de salida ──
     todas_evidencias = []
-    fotos_por_usuario = {}
-    rotaciones_map = dict(rotaciones or {})
 
     for r in registros_validos:
         evs = [ev for ev in r.evidencias_v2.all() if not (isinstance(ev.metadatos, dict) and ev.metadatos.get('excluida'))]
         if evs:
             for ev in evs:
                 todas_evidencias.append(ev)
-                m = _re.match(r'^(\d+)', Path(ev.ruta_archivo).name)
-                num = int(m.group(1)) if m else ev.id
-                clave = f"{r.user_id}_{num}"
-                if clave not in rotaciones_map and getattr(ev, 'angulo_rotacion', 0):
-                    rotaciones_map[clave] = ev.angulo_rotacion
-        else:
-            nums = r.fotos_nums or []
-            if not nums and r.fotos:
-                try:
-                    nums = [int(x.strip()) for x in r.fotos.split(',') if x.strip().isdigit()]
-                except Exception:
-                    nums = []
-            if nums:
-                uid_str = str(r.user_id)
-                fotos_por_usuario.setdefault(uid_str, []).extend(nums)
 
-    total_fotos = len(todas_evidencias) + sum(len(nums) for nums in fotos_por_usuario.values())
+    total_fotos = len(todas_evidencias)
 
-    if total_fotos >= UMBRAL_PPTX_BOX:
-        nombre_archivo = f"Daily_Tracking_Box_Condition_{fecha_str}.pptx"
-        output_path = temp_dir / f"tmp_box_{datetime.now().timestamp()}.pptx"
-        self.update_state(state='PROGRESS', meta={'progress': f'Generando PowerPoint Box Condition ({total_fotos} fotos)...'})
-
-        grupo_pptx = {
-            'evidencias': todas_evidencias if todas_evidencias else None,
-            'fotos_por_usuario': fotos_por_usuario if not todas_evidencias else None,
-        }
-        generar_pptx_grupo(
-            grupo=grupo_pptx,
-            fotos_dir=fotos_dir,
-            output_path=output_path,
-            rotaciones=rotaciones_map,
-            translator=translator
-        )
-        logger.info("Box Condition PPTX generado: %s | %d fotos", nombre_archivo, total_fotos)
-        return {'file_path': str(output_path), 'filename': nombre_archivo}
-
-    # ── Modo normal Excel (< UMBRAL_PPTX) ────────────────────────────────────
+    # ── Modo Excel ───────────────────────────────────────────────────────────
     template_path = Path("/app/Daily Tracking Box Condition.xlsx")
     nombre_archivo = f"Daily_Tracking_Box_Condition_{fecha_str}.xlsx"
     output_path = temp_dir / f"tmp_box_{datetime.now().timestamp()}.xlsx"
 
-    self.update_state(state='PROGRESS', meta={'progress': 'Generando reporte Box Condition...'})
+    self.update_state(state='PROGRESS', meta={'progress': f'Generando Excel Box Condition ({total_fotos} fotos)...'})
 
     generate_box_condition_excel(
         registros_orm=registros_validos,
@@ -524,4 +509,3 @@ def generar_excel_box_condition_task(self, lote_id, fotos_dir_str, registros_ids
     )
 
     return {'file_path': str(output_path), 'filename': nombre_archivo}
-

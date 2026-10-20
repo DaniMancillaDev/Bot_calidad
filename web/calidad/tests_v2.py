@@ -1,6 +1,8 @@
 import json
 from django.test import TestCase, Client
 from django.utils import timezone
+from django.contrib.auth.models import User
+from django.urls import reverse
 from calidad.models import RegistroDefecto, EvidenciaFotografica, EstadoRevision
 from shared.infrastructure.database.django_registro_repository import DjangoRegistroRepository
 
@@ -118,3 +120,28 @@ class Fase1BackendV2Tests(TestCase):
         
         evidencia.refresh_from_db()
         self.assertEqual(evidencia.angulo_rotacion, 180)
+
+
+class RevisarOrdenRegistrosTests(TestCase):
+    def test_persists_only_a_valid_permutation_of_the_active_batch(self):
+        user = User.objects.create_user(username='review-order-test', password='test-pass')
+        self.client.force_login(user)
+        session = self.client.session
+        session['revisar_ids_testbatch'] = '10,20,30'
+        session.save()
+        url = f'{reverse("revisar_orientacion")}?rev_id=testbatch'
+
+        invalid = self.client.post(
+            url,
+            {'order': '30,99,10', 'rev_id': 'testbatch'},
+        )
+        self.assertEqual(invalid.status_code, 400)
+        self.assertEqual(self.client.session['revisar_ids_testbatch'], '10,20,30')
+
+        valid = self.client.post(
+            url,
+            {'order': '30,10,20', 'rev_id': 'testbatch'},
+        )
+        self.assertEqual(valid.status_code, 200)
+        self.assertEqual(valid.json(), {'ok': True})
+        self.assertEqual(self.client.session['revisar_ids_testbatch'], '30,10,20')

@@ -84,7 +84,8 @@
     "mylar": "MYLAR",
     "bolsa": "PROTECT BAG",
     "by carton": "CUSHION DIE",
-    "sheet flyer": "SHEET FLYER"
+    "sheet flyer": "SHEET FLYER",
+    "bracket": "BKT"
   },
   "material_areas": {
     "REFLECTOR FILM": "CLEAN ROOM",
@@ -108,7 +109,8 @@
     "BACK COVER WITH DAMAGED PIN": "INPUT",
     "SHEET FLYER": "INPUT",
     "DAMAGED SHEET FLYER": "INPUT",
-    "METAL BLU WITH BAD REWORK": "INPUT"
+    "METAL BLU WITH BAD REWORK": "INPUT",
+    "bracket": "INPUT"
   },
   "symptoms": {
     "dañad": "DAMAGED",

@@ -28,6 +28,11 @@ def sync_fotos_to_evidencias(registro: RegistroDefecto):
             logger.warning(f"No se encontró archivo para foto {foto_num} de registro {registro.id}")
             continue
 
+        original_path = fotos_dir / str(registro.user_id) / real_path.name
+        if original_path.is_file():
+            real_path = original_path
+        real_path = real_path.resolve()
+
         try:
             ruta_relativa = str(real_path.relative_to(settings.MEDIA_ROOT))
         except ValueError:
@@ -41,7 +46,7 @@ def sync_fotos_to_evidencias(registro: RegistroDefecto):
             evidencia = EvidenciaFotografica(
                 registro=registro,
                 ruta_archivo=ruta_relativa,
-                orden=idx,
+                orden=idx + 1,
                 es_portada=es_portada,
             )
             nuevas_evidencias.append(evidencia)

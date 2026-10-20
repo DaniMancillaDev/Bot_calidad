@@ -928,6 +928,18 @@
             // Reflejar en registrosRaw
             const regRaw = registrosRaw.find(r => r.id === activeRecord.id);
             if (regRaw) regRaw.fotos_nums = activeRecord.fotos_nums;
+            const evidenciasOrder = activeRecord.fotos_obj.map(f => f.evidencia_id).filter(Boolean);
+            if (evidenciasOrder.length) {
+              try {
+                await fetch(`/api/v2/registros/${activeRecord.id}/`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+                  body: JSON.stringify({ evidencias_order: evidenciasOrder }),
+                });
+              } catch (e) {
+                console.error('Error guardando orden de evidencias', e);
+              }
+            }
           }
         });
       }
@@ -989,7 +1001,7 @@
     
     const fallbackSvg = `data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27%23334155%27%3E%3Cpath%20d%3D%27M21%2019V5c0-1.1-.9-2-2-2H5c-1.1%200-2%20.9-2%202v14c0%201.1.9%202%202%202h14c1.1%200%202-.9%202-2zM8.5%2013.5l2.5%203.01L14.5%2012l4.5%206H5l3.5-4.5z%27%2F%3E%3C%2Fsvg%3E`;
     
-    const finalUrl = foto.proxy_url || foto.url;
+    const finalUrl = foto.url;
     const highRes = new Image();
     highRes.onload = () => {
       // Solo aplicar si el usuario no ha cambiado de foto súper rápido
@@ -1011,7 +1023,7 @@
       const idx = activeRecord.fotos_obj.findIndex(f => f.clave === foto.clave);
       if (idx !== -1 && idx + 1 < activeRecord.fotos_obj.length) {
          const nextFoto = activeRecord.fotos_obj[idx + 1];
-         new Image().src = nextFoto.proxy_url || nextFoto.url;
+         new Image().src = nextFoto.url;
       }
     }
 

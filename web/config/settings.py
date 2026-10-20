@@ -87,7 +87,8 @@ import dj_database_url
 _default_db = dj_database_url.config(
     env='DATABASE_URL',
     default=f'sqlite:///{BOT_DIR / "bot_calidad.db"}',
-    conn_max_age=60,  # Connection pooling: reusar conexiones por 60s
+    # ASGI creates request-scoped threads; persistent connections exhaust PostgreSQL.
+    conn_max_age=0,
 )
 
 DATABASES = {

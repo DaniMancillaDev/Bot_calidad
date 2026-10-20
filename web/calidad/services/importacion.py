@@ -10,6 +10,29 @@ from django.conf import settings
 from django.utils import timezone
 
 
+def extraer_numeros_fotos(rango_str):
+    import re
+
+    nums = []
+    if not str(rango_str or '').strip():
+        return nums
+
+    rangos = re.findall(r'(\d+)\s*-\s*(\d+)', str(rango_str))
+    for inicio, fin in rangos:
+        nums.extend(range(int(inicio), int(fin) + 1))
+
+    sin_rangos = re.sub(r'\d+\s*-\s*\d+', ' ', str(rango_str))
+    nums.extend(int(n) for n in re.findall(r'\d+', sin_rangos))
+    return nums
+
+
+def numero_desde_nombre_foto(nombre):
+    import re
+
+    m = re.search(r'\d+', Path(nombre).stem)
+    return int(m.group()) if m else None
+
+
 def explotar_fila(fila_dict):
     import re
     import copy
@@ -102,7 +125,7 @@ def parsear_excel(file_obj):
             if j < len(headers):
                 val = str(cell).strip() if cell is not None else ""
                 fila_dict[headers[j]] = val
-                
+
         filas.extend(explotar_fila(fila_dict))
         
     return filas
@@ -165,7 +188,7 @@ def extraer_zip_seguro(file_obj, dest_folder: Path):
             # Ignorar directorios y archivos ocultos/macOS
             if file_info.is_dir() or file_info.filename.startswith('__MACOSX') or '/.' in file_info.filename:
                 continue
-                
+
             ext = os.path.splitext(file_info.filename)[1].lower()
             if ext in valid_extensions:
                 # Aplanar ruta: solo tomar el nombre del archivo
@@ -210,23 +233,10 @@ def generar_estado_inicial(filas, fotos_dict, session_id):
     for fid, foto in fotos_dict.items():
         foto["url"] = base_url + foto["filename"]
         
-    def _parsear_rango(rango_str):
-        nums = []
-        try:
-            rangos = re.findall(r'(\d+)\s*-\s*(\d+)', str(rango_str))
-            for i, f in rangos:
-                nums.extend(range(int(i), int(f) + 1))
-            sueltos = re.findall(r'(?<!-)\b\d+\b(?!-)', str(rango_str))
-            for s in sueltos:
-                nums.append(int(s))
-        except Exception:
-            pass
-        return nums
-
     # Auto-matching muy básico
     for fila in filas:
         valores_fila = " ".join([str(v).lower() for v in fila.values()]).replace(".jpg", "").replace(".jpeg", "").replace(".png", "")
-        rango_nums = _parsear_rango(fila.get('fotos_rango', ''))
+        rango_nums = extraer_numeros_fotos(fila.get('fotos_rango', ''))
         
         fotos_a_asignar = []
         for fid in list(fotos_huerfanas): # Copia de la lista para poder iterar y remover
@@ -237,7 +247,7 @@ def generar_estado_inicial(filas, fotos_dict, session_id):
             if rango_nums:
                 try:
                     # Intenta extraer un número del nombre del archivo (ej. 041.jpg -> 41)
-                    num_foto = int(re.search(r'\d+', nombre_base).group())
+                    num_foto = numero_desde_nombre_foto(nombre_base)
                     if num_foto in rango_nums:
                         matched_by_range = True
                 except Exception:
@@ -292,11 +302,38 @@ def commit_importacion(session_data, user):
     final_dir.mkdir(parents=True, exist_ok=True)
     
     fotos_paths_para_celery = []
+
+    for row in registros_data:
+        fotos_asignadas = list(row.get('fotos_asignadas', []))
+        esperadas = extraer_numeros_fotos(row.get('fotos_rango', ''))
+        asignadas = []
+        for foto_id in fotos_asignadas:
+            foto_meta = fotos_dict.get(foto_id)
+            if not foto_meta:
+                continue
+            filename = foto_meta['filename']
+            if not (temp_dir / filename).exists():
+                raise ValueError(f"Archivo de evidencia no encontrado durante importación: {filename}")
+            num = numero_desde_nombre_foto(foto_meta.get('original_name') or filename)
+            if num is not None:
+                asignadas.append(num)
+
+        if esperadas:
+            faltantes = [n for n in esperadas if n not in asignadas]
+            extras = [n for n in asignadas if n not in esperadas]
+            if faltantes or extras:
+                fila = row.get('numero_fila_excel', row.get('id', '?'))
+                raise ValueError(
+                    f"Fila {fila}: rango de fotos {row.get('fotos_rango')} no coincide "
+                    f"con evidencias asignadas. Faltan: {faltantes or 'ninguna'}; "
+                    f"sobran: {extras or 'ninguna'}."
+                )
     
     with transaction.atomic():
         lote = ImportacionLote.objects.create(usuario=user)
         
         for row in registros_data:
+            fotos_asignadas = list(row.get('fotos_asignadas', []))
             # Crear registro
             reg = RegistroDefecto.objects.create(
                 user_id=user_id,
@@ -316,7 +353,7 @@ def commit_importacion(session_data, user):
             
             # Asociar fotos
             orden = 1
-            for foto_id in row.get('fotos_asignadas', []):
+            for foto_id in fotos_asignadas:
                 foto_meta = fotos_dict.get(foto_id)
                 if not foto_meta:
                     continue
@@ -326,20 +363,22 @@ def commit_importacion(session_data, user):
                 dst_path = final_dir / filename
                 
                 # Mover el archivo (si existe)
-                if src_path.exists():
-                    # Usamos copy para que si falla la transacción no perdamos el original
-                    shutil.copy2(src_path, dst_path)
-                    fotos_paths_para_celery.append(str(dst_path))
-                    
-                    # Guardar la ruta relativa que el sistema espera ('fotos/USER_ID/ARCHIVO.jpg')
-                    rel_path = f"fotos/{user_id}/{filename}"
-                    EvidenciaFotografica.objects.create(
-                        registro=reg,
-                        ruta_archivo=rel_path,
-                        orden=orden,
-                        es_portada=(orden == 1)
-                    )
-                    orden += 1
+                if not src_path.exists():
+                    raise ValueError(f"Archivo de evidencia no encontrado durante importación: {filename}")
+
+                # Usamos copy para que si falla la transacción no perdamos el original
+                shutil.copy2(src_path, dst_path)
+                fotos_paths_para_celery.append(str(dst_path))
+
+                # Guardar la ruta relativa que el sistema espera ('fotos/USER_ID/ARCHIVO.jpg')
+                rel_path = f"fotos/{user_id}/{filename}"
+                EvidenciaFotografica.objects.create(
+                    registro=reg,
+                    ruta_archivo=rel_path,
+                    orden=orden,
+                    es_portada=(orden == 1)
+                )
+                orden += 1
 
     # Fuera de la transacción, limpiar temporal y lanzar task
     if temp_dir.exists():

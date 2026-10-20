@@ -147,7 +147,13 @@ class RegistroDefecto(models.Model):
             nums = sorted(list(set(self.fotos_nums)))
         elif self.fotos:
             try:
-                nums = sorted(list(set(int(x) for x in re.findall(r'\d+', str(self.fotos)))))
+                fotos_str = str(self.fotos)
+                nums = []
+                for inicio_rango, fin_rango in re.findall(r'(\d+)\s*-\s*(\d+)', fotos_str):
+                    nums.extend(range(int(inicio_rango), int(fin_rango) + 1))
+                sin_rangos = re.sub(r'\d+\s*-\s*\d+', ' ', fotos_str)
+                nums.extend(int(x) for x in re.findall(r'\d+', sin_rangos))
+                nums = sorted(list(set(nums)))
             except Exception:
                 pass
         

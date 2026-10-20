@@ -103,6 +103,30 @@ def importacion_update_ajax(request):
             photo_id = data.get('photo_id')
             source_id = data.get('source_id')
             target_id = data.get('target_id')
+            source_order = data.get('source_order')
+            target_order = data.get('target_order')
+            target_index = data.get('target_index')
+
+            def set_order(list_id, ordered_ids):
+                if ordered_ids is None:
+                    return
+                clean = []
+                for fid in ordered_ids:
+                    if fid and fid not in clean:
+                        clean.append(fid)
+                if list_id == 'huerfanas':
+                    estado['fotos_huerfanas'] = clean
+                    return
+                for row in estado['registros']:
+                    if row['id'] == list_id:
+                        row['fotos_asignadas'] = clean
+                        return
+
+            if source_id == target_id and target_order is not None:
+                set_order(target_id, target_order)
+                request.session['importacion_activa'] = estado
+                request.session.modified = True
+                return JsonResponse({"status": "ok"})
             
             # Quitar del origen
             if source_id == 'huerfanas':
@@ -122,8 +146,14 @@ def importacion_update_ajax(request):
                 for row in estado['registros']:
                     if row['id'] == target_id:
                         if photo_id not in row['fotos_asignadas']:
-                            row['fotos_asignadas'].append(photo_id)
+                            if isinstance(target_index, int):
+                                row['fotos_asignadas'].insert(target_index, photo_id)
+                            else:
+                                row['fotos_asignadas'].append(photo_id)
                         break
+
+            set_order(source_id, source_order)
+            set_order(target_id, target_order)
                         
         elif action == 'EDIT_RECORD':
             record_id = data.get('record_id')

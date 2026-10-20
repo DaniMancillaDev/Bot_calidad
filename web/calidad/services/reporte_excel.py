@@ -456,7 +456,13 @@ def generate_excel(
                     m = _re.match(r'^(\d+)', real_path.name)
                     num_for_rot = int(m.group(1)) if m else ev.id
                     clave_rotacion = f"{ev.registro.user_id}_{num_for_rot}"
-                    angle = rotaciones.get(clave_rotacion) or rotaciones.get(str(clave_rotacion)) or 0
+                    if clave_rotacion in rotaciones:
+                        angle = rotaciones[clave_rotacion]
+                    elif str(clave_rotacion) in rotaciones:
+                        angle = rotaciones[str(clave_rotacion)]
+                    else:
+                        # La DB es la fuente de verdad después de refrescar la página.
+                        angle = ev.angulo_rotacion or 0
                     
                     meta = {
                         "photo_id": ev.id,
@@ -536,4 +542,3 @@ def generate_excel(
 
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
-

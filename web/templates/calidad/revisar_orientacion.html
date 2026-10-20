@@ -767,8 +767,12 @@
     // si reutilizan los mismos números de fotos
     const fotosAsociadas = fotosPreviewData.filter(f => f.registro_id === reg.id);
     
-    // Opcional: ordenar fotosAsociadas para que coincida con el orden de fotos_nums si es necesario
-    fotosAsociadas.sort((a, b) => a.numero - b.numero);
+    // El orden persistido en EvidenciaFotografica es la fuente de verdad.
+    fotosAsociadas.sort((a, b) => {
+      const ordenA = a.orden ?? Number.MAX_SAFE_INTEGER;
+      const ordenB = b.orden ?? Number.MAX_SAFE_INTEGER;
+      return (ordenA - ordenB) || (a.numero - b.numero);
+    });
 
     // Find the first valid photo to be the cover
     const validPhotos = fotosAsociadas.filter(f => !f.excluida);
@@ -798,6 +802,10 @@
   let zoomLevel = 1, panX = 0, panY = 0;
   let isDragging = false, startX = 0, startY = 0;
   let carouselSortable = null;  // track instance to destroy on re-init
+  const pendingPersistence = new Set();
+  const orderSaveQueues = new Map();
+  const rotationSaveQueues = new Map();
+  let recordOrderSaveQueue = Promise.resolve();
 
   const recordListEl = document.getElementById('record-list');
   const carouselEl = document.getElementById('carousel');
@@ -933,13 +941,25 @@
               return idxA - idxB;
             });
             // Actualizar fotos_nums — excluir fotos marcadas para no colarlas en el payload
-            activeRecord.fotos_nums = activeRecord.fotos_obj.filter(f => !f.excluida).map(f => parseInt(f.clave.split('_')[1]));
+            activeRecord.fotos_nums = activeRecord.fotos_obj
+              .filter(f => !f.excluida)
+              .map(f => f.numero);
             const validPhotos = activeRecord.fotos_obj.filter(f => !f.excluida);
             const coverPhoto = validPhotos.length > 0 ? validPhotos[0] : (activeRecord.fotos_obj.length > 0 ? activeRecord.fotos_obj[0] : null);
             activeRecord.portada_url = coverPhoto ? (coverPhoto.thumb_url || coverPhoto.url) : null;
             // Reflejar en registrosRaw
             const regRaw = registrosRaw.find(r => r.id === activeRecord.id);
             if (regRaw) regRaw.fotos_nums = activeRecord.fotos_nums;
+
+            try {
+              await persistOrdenFotos(activeRecord);
+            } catch (e) {
+              console.error('No se pudo guardar el orden de fotos:', e);
+              if (activeRecord === reg) {
+                saveInd.textContent = 'Error al guardar el orden';
+                saveInd.className = 'save-indicator err';
+              }
+            }
           }
         });
       }
@@ -1068,7 +1088,14 @@
     if (!activePhoto) return;
     activePhoto.angulo = (((activePhoto.angulo || 0) + delta) % 360 + 360) % 360;
     applyTransform();
-    persistRotacion(activePhoto);
+    const foto = activePhoto;
+    persistRotacion(foto).catch(e => {
+      console.error('No se pudo guardar la orientación:', e);
+      if (activePhoto === foto) {
+        saveInd.textContent = 'Error al guardar orientación';
+        saveInd.className = 'save-indicator err';
+      }
+    });
   }
 
   async function toggleExcluirFoto() {
@@ -1124,15 +1151,71 @@
 
   async function persistRotacion(foto) {
     if (!foto.evidencia_id) return; // legacy sin EvidenciaFotografica — solo en sesión
-    try {
-      await fetch(`/api/v2/evidencias/${foto.evidencia_id}/rotar/`, {
+    const evidenciaId = foto.evidencia_id;
+    const previous = rotationSaveQueues.get(evidenciaId) || Promise.resolve();
+    const request = previous.catch(() => {}).then(async () => {
+      const res = await fetch(`/api/v2/evidencias/${evidenciaId}/rotar/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
         body: JSON.stringify({ angulo_rotacion: foto.angulo }),
       });
-    } catch (e) {
-      console.warn('persistRotacion error:', e);
-    }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    });
+    rotationSaveQueues.set(evidenciaId, request);
+    trackPersistence(request);
+    await request;
+  }
+
+  function trackPersistence(promise) {
+    pendingPersistence.add(promise);
+    promise.then(
+      () => pendingPersistence.delete(promise),
+      () => pendingPersistence.delete(promise),
+    );
+    return promise;
+  }
+
+  async function persistOrdenRegistros(orderIds) {
+    const previous = recordOrderSaveQueue;
+    const request = previous.catch(() => {}).then(async () => {
+      const params = new URLSearchParams();
+      params.set('order', orderIds.join(','));
+      const revId = new URLSearchParams(window.location.search).get('rev_id');
+      if (revId) params.set('rev_id', revId);
+
+      const res = await fetch('{% url "revisar_orientacion" %}', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+          'X-CSRFToken': getCookie('csrftoken'),
+        },
+        body: params.toString(),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    });
+    recordOrderSaveQueue = request;
+    trackPersistence(request);
+    await request;
+  }
+
+  async function persistOrdenFotos(reg) {
+    const evidenciaIds = reg.fotos_obj
+      .map(foto => foto.evidencia_id)
+      .filter(Boolean);
+    if (!evidenciaIds.length) return;
+
+    const previous = orderSaveQueues.get(reg.id) || Promise.resolve();
+    const request = previous.catch(() => {}).then(async () => {
+      const res = await fetch(`/api/v2/registros/${reg.id}/`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+        body: JSON.stringify({ evidencias_order: evidenciaIds }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    });
+    orderSaveQueues.set(reg.id, request);
+    trackPersistence(request);
+    await request;
   }
 
   // ponytail: FASE 2.1 - Excluir registro completo
@@ -1285,10 +1368,6 @@
     const btn = document.getElementById('btn-generar');
     if (btn.disabled) return; // Prevent double clicks
 
-    if (activeRecord) {
-      await guardarMetadatos();
-    }
-
     const overlay = document.getElementById('loading-overlay');
     const msg = document.getElementById('status-msg');
     const btnText = document.getElementById('btn-generar-text');
@@ -1298,6 +1377,14 @@
     if (btnText) btnText.textContent = 'Generando...';
     overlay.style.display = 'flex';
     msg.textContent = '';
+
+    try {
+      if (activeRecord) {
+        await guardarMetadatos();
+      }
+
+      // No exportar mientras haya un drag o una rotación pendiente de guardar.
+      await Promise.all([...pendingPersistence]);
 
     // Respetar el filtro de búsqueda activo: exportar solo los registros visibles
     const registrosParaExportar = getRegistrosVisibles();
@@ -1318,7 +1405,6 @@
       };
     });
 
-    try {
       const queryParams = window.location.search;
       const res = await fetch(`{% url 'generar_excel' %}${queryParams}`, {
         method: 'POST',
@@ -1451,8 +1537,14 @@
       handle: '.drag-handle',
       forceFallback: true,
       fallbackOnBody: true,
-      onEnd: function (evt) {
+      onEnd: async function (evt) {
         const currentIds = Array.from(recordListEl.children).map(c => c.dataset.id);
+        const visibleIds = new Set(currentIds);
+        let visibleIndex = 0;
+        const nextIds = appData.map(record => {
+          if (!visibleIds.has(String(record.id))) return record.id;
+          return currentIds[visibleIndex++];
+        });
 
         const sortByDom = (a, b) => {
           let idxA = currentIds.indexOf(String(a.id));
@@ -1464,6 +1556,16 @@
 
         appData.sort(sortByDom);
         registrosRaw.sort(sortByDom);
+
+        try {
+          await persistOrdenRegistros(nextIds);
+          saveInd.textContent = 'Orden guardado';
+          saveInd.className = 'save-indicator ok';
+        } catch (e) {
+          console.error('No se pudo guardar el orden de registros:', e);
+          saveInd.textContent = 'Error al guardar el orden';
+          saveInd.className = 'save-indicator err';
+        }
       }
     });
   }

@@ -1,6 +1,7 @@
 import json
 import logging
 from django.http import JsonResponse
+from django.db import transaction
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from calidad.models import RegistroDefecto, EvidenciaFotografica
@@ -68,6 +69,26 @@ def api_registro_detail(request, registro_id):
         if update_fields:
             registro.save(update_fields=update_fields)
 
+        if 'evidencias_order' in data:
+            evidencias_order = [int(ev_id) for ev_id in data.get('evidencias_order', [])]
+            actuales = list(registro.evidencias_v2.order_by('orden', 'id').values_list('id', flat=True))
+            if (
+                len(evidencias_order) != len(set(evidencias_order))
+                or not set(evidencias_order).issubset(actuales)
+            ):
+                return JsonResponse({'status': 'error', 'message': 'El orden enviado no coincide con las evidencias del registro'}, status=400)
+
+            # Las evidencias excluidas no se muestran en la página, pero deben
+            # conservar un orden válido. Se dejan al final si no vienen en el
+            # payload visible.
+            evidencias_order += [ev_id for ev_id in actuales if ev_id not in evidencias_order]
+            with transaction.atomic():
+                for idx, ev_id in enumerate(evidencias_order, start=1):
+                    EvidenciaFotografica.objects.filter(id=ev_id, registro=registro).update(
+                        orden=idx,
+                        es_portada=(idx == 1),
+                    )
+
         # Transición de estado centralizada
         if 'estado_revision' in data:
             nuevo_estado = data['estado_revision']
@@ -125,14 +146,31 @@ def api_evidencia_detail(request, evidencia_id):
             evidencia = EvidenciaFotografica.objects.get(id=evidencia_id)
             if not get_registros_permitidos(request.user).filter(id=evidencia.registro_id).exists():
                 return JsonResponse({'status': 'error', 'message': 'Evidencia no encontrada'}, status=404)
-                
+
             data = json.loads(request.body)
             if 'registro_id' in data:
                 if not get_registros_permitidos(request.user).filter(id=data['registro_id']).exists():
                     return JsonResponse({'status': 'error', 'message': 'Registro destino no encontrado'}, status=404)
-                evidencia.registro_id = int(data['registro_id'])
-                evidencia.save(update_fields=['registro_id'])
-                
+                destino_id = int(data['registro_id'])
+                with transaction.atomic():
+                    origen_id = evidencia.registro_id
+                    destino = RegistroDefecto.objects.select_for_update().get(id=destino_id)
+                    max_orden = EvidenciaFotografica.objects.filter(registro=destino).select_for_update().order_by('-orden').values_list('orden', flat=True).first() or 0
+                    tiene_portada = EvidenciaFotografica.objects.filter(registro=destino, es_portada=True).exclude(id=evidencia.id).exists()
+                    evidencia.registro = destino
+                    evidencia.orden = max_orden + 1
+                    evidencia.es_portada = not tiene_portada
+                    evidencia.save(update_fields=['registro', 'orden', 'es_portada'])
+                    if origen_id != destino_id and not EvidenciaFotografica.objects.filter(registro_id=origen_id, es_portada=True).exists():
+                        primera = EvidenciaFotografica.objects.filter(registro_id=origen_id).order_by('orden', 'id').first()
+                        if primera:
+                            primera.es_portada = True
+                            primera.save(update_fields=['es_portada'])
+
+            if 'orden' in data:
+                evidencia.orden = int(data['orden'])
+                evidencia.save(update_fields=['orden'])
+
             return JsonResponse({'status': 'success'})
         except EvidenciaFotografica.DoesNotExist:
             return JsonResponse({'status': 'error', 'message': 'Evidencia no encontrada'}, status=404)

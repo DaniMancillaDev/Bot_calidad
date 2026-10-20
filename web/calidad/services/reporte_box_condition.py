@@ -3,7 +3,7 @@ import io
 import shutil
 import tempfile
 from pathlib import Path
-from PIL import Image
+from PIL import Image, ImageOps
 import openpyxl
 from openpyxl.drawing.image import Image as OpenpyxlImage
 from openpyxl.styles import Alignment, Font
@@ -60,18 +60,17 @@ def box_condition_group_key(r, duty, translator):
     
     modelo = (r.modelo or "").strip().upper()
     pn = (r.numero_parte or "").strip().upper()
-    linea = (r.linea or "").strip().upper()
     
     # Normalización del defecto usando el catálogo existente
     translation = translator.translate(r.descripcion, "")
     defecto = translation['defect_en'].upper() if translation else str(r.descripcion).strip().upper()
     
-    return (modelo, pn, linea, defecto, duty)
+    return (modelo, pn, defecto, duty)
 
 def generate_box_condition_excel(registros_orm, template_path, fotos_dir, output_path, translator=None):
     """
     Genera el reporte aislado Daily Tracking Box Condition.
-    1 línea consolidada por grupo (mismo modelo, defecto normalizado, línea, PN y DUTY).
+    Una fila por modelo, PN, defecto y DUTY, con las lineas combinadas.
     """
     from datetime import datetime
     
@@ -93,6 +92,20 @@ def generate_box_condition_excel(registros_orm, template_path, fotos_dir, output
         target_ws = wb['23-09-26'] if '23-09-26' in wb.sheetnames else wb.active
         
     ws = target_ws
+    fotos_ws = wb['Fotos Box Condition'] if 'Fotos Box Condition' in wb.sheetnames else wb.create_sheet('Fotos Box Condition')
+    fotos_ws._images.clear()
+    fotos_ws.delete_rows(1, fotos_ws.max_row)
+    fotos_ws.append(['Grupo', 'Registro ID', 'Modelo', 'PN', 'Linea', 'Defecto', 'Duty', 'Archivo', 'Evidencia'])
+    fotos_ws.column_dimensions['A'].width = 12
+    fotos_ws.column_dimensions['B'].width = 12
+    fotos_ws.column_dimensions['C'].width = 18
+    fotos_ws.column_dimensions['D'].width = 18
+    fotos_ws.column_dimensions['E'].width = 14
+    fotos_ws.column_dimensions['F'].width = 28
+    fotos_ws.column_dimensions['G'].width = 14
+    fotos_ws.column_dimensions['H'].width = 28
+    fotos_ws.column_dimensions['I'].width = 28
+    image_buffers = []
 
 
 
@@ -124,14 +137,19 @@ def generate_box_condition_excel(registros_orm, template_path, fotos_dir, output
             grupos[clave] = {
                 'modelo': clave[0],
                 'pn': clave[1],
-                'linea': clave[2],
-                'defecto': clave[3],
-                'duty': clave[4],
+                'linea': '',
+                'lineas': [],
+                'defecto': clave[2],
+                'duty': clave[3],
                 'cantidad': 0,
                 'turno': (r.turno or "").strip().upper(),
                 'registros': []
             }
             
+        linea = (r.linea or '').strip().upper()
+        if linea and linea not in grupos[clave]['lineas']:
+            grupos[clave]['lineas'].append(linea)
+        grupos[clave]['linea'] = '/'.join(grupos[clave]['lineas'])
         grupos[clave]['cantidad'] += int(r.cantidad) if r.cantidad else 1
         grupos[clave]['registros'].append(r)
 
@@ -172,14 +190,13 @@ def generate_box_condition_excel(registros_orm, template_path, fotos_dir, output
             c.alignment = align
             c.font = font
         
-        # ponytail: Recopilar hasta 4 evidencias para no dejar solo 1 foto, pero tampoco saturar
-        evidencias_portada = []
+        evidencias_grupo = []
         for r in grupo['registros']:
             for ev in r.evidencias_v2.all():
                 if not (isinstance(ev.metadatos, dict) and ev.metadatos.get('excluida')):
-                    evidencias_portada.append(ev)
-                    if len(evidencias_portada) >= 15: break
-            if len(evidencias_portada) >= 15: break
+                    evidencias_grupo.append(ev)
+
+        evidencias_portada = evidencias_grupo[:15]
                 
         if evidencias_portada:
             from django.conf import settings
@@ -195,6 +212,7 @@ def generate_box_condition_excel(registros_orm, template_path, fotos_dir, output
                 if foto_path.exists():
                     try:
                         with Image.open(foto_path) as im:
+                            im = ImageOps.exif_transpose(im)
                             orig_w, orig_h = im.size
                             # Tamaño mucho más grande (200x200) para claridad y zoom
                             TARGET_SIZE = 200
@@ -212,6 +230,7 @@ def generate_box_condition_excel(registros_orm, template_path, fotos_dir, output
                             
                             im_resized = im_resized.convert('RGB')
                             img_byte_arr = io.BytesIO()
+                            image_buffers.append(img_byte_arr)
                             im_resized.save(img_byte_arr, format='JPEG', quality=85, optimize=True)
                             img_byte_arr.seek(0)
                             
@@ -240,9 +259,51 @@ def generate_box_condition_excel(registros_orm, template_path, fotos_dir, output
                 # Ajustar el ancho de la columna si la tira es más larga (solo lo ensanchará para el más largo)
                 if ws.column_dimensions['L'].width is None or ws.column_dimensions['L'].width < col_width:
                     ws.column_dimensions['L'].width = col_width
+
+        for ev in evidencias_grupo:
+            from django.conf import settings
+            ev_path_str = ev.ruta_archivo
+            if ev_path_str.startswith('media_files/'): ev_path_str = ev_path_str[12:]
+            elif ev_path_str.startswith('/media_files/'): ev_path_str = ev_path_str[13:]
+            foto_path = Path(settings.MEDIA_ROOT) / ev_path_str.lstrip('/')
+            if not foto_path.exists():
+                continue
+
+            fotos_ws.cell(row=current_foto_row, column=1).value = group_id_str
+            fotos_ws.cell(row=current_foto_row, column=2).value = ev.registro_id
+            fotos_ws.cell(row=current_foto_row, column=3).value = grupo['modelo']
+            fotos_ws.cell(row=current_foto_row, column=4).value = grupo['pn']
+            fotos_ws.cell(row=current_foto_row, column=5).value = grupo['linea']
+            fotos_ws.cell(row=current_foto_row, column=6).value = grupo['defecto']
+            fotos_ws.cell(row=current_foto_row, column=7).value = grupo['duty']
+            fotos_ws.cell(row=current_foto_row, column=8).value = foto_path.name
+            fotos_ws.row_dimensions[current_foto_row].height = 120
+
+            try:
+                with Image.open(foto_path) as im:
+                    im = ImageOps.exif_transpose(im)
+                    if ev.angulo_rotacion:
+                        im = im.rotate(-ev.angulo_rotacion, expand=True)
+                    orig_w, orig_h = im.size
+                    ratio = min(150 / orig_w, 150 / orig_h)
+                    disp_w = max(1, int(orig_w * ratio))
+                    disp_h = max(1, int(orig_h * ratio))
+                    im_resized = im.resize((disp_w, disp_h), Image.Resampling.LANCZOS).convert('RGB')
+                    img_byte_arr = io.BytesIO()
+                    image_buffers.append(img_byte_arr)
+                    im_resized.save(img_byte_arr, format='JPEG', quality=85, optimize=True)
+                    img_byte_arr.seek(0)
+
+                    xl_img = OpenpyxlImage(img_byte_arr)
+                    marker = AnchorMarker(col=8, colOff=pixels_to_EMU(MARGIN_PX), row=current_foto_row - 1, rowOff=pixels_to_EMU(MARGIN_PX))
+                    size = XDRPositiveSize2D(pixels_to_EMU(disp_w), pixels_to_EMU(disp_h))
+                    xl_img.anchor = OneCellAnchor(_from=marker, ext=size)
+                    fotos_ws.add_image(xl_img)
+            except Exception as e:
+                logger.exception(f"Error procesando imagen {foto_path} para hoja de evidencias: {e}")
+
+            current_foto_row += 1
         
         current_row += 1
         
     wb.save(output_path)
-
-

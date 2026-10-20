@@ -510,18 +510,16 @@
         const itemEl = evt.item;  // elemento arrastrado
         const fromList = evt.from;
         const toList = evt.to;
-        
-        // Si no cambió de lista, no hacemos nada lógico
-        if (fromList === toList) return;
-        
         const photoId = itemEl.dataset.photoId;
         const sourceId = fromList.dataset.recordId;
         const targetId = toList.dataset.recordId;
-        
+        const sourceOrder = Array.from(fromList.querySelectorAll('.photo-card')).map(el => el.dataset.photoId);
+        const targetOrder = Array.from(toList.querySelectorAll('.photo-card')).map(el => el.dataset.photoId);
+        const targetIndex = targetOrder.indexOf(photoId);
 
-        
-        // 1. Actualizar state en RAM (Optimistic UI)
-        moverFotoEnEstado(photoId, sourceId, targetId);
+        // 1. Actualizar state en RAM (Optimistic UI), incluso si solo cambió el orden interno.
+        aplicarOrdenEnEstado(sourceId, sourceOrder);
+        aplicarOrdenEnEstado(targetId, targetOrder);
         
         // Actualizar contadores visuales
         document.getElementById('count-huerfanas').textContent = state.fotos_huerfanas.length;
@@ -531,26 +529,21 @@
             action: 'MOVE_PHOTO',
             photo_id: photoId,
             source_id: sourceId,
-            target_id: targetId
+            target_id: targetId,
+            source_order: sourceOrder,
+            target_order: targetOrder,
+            target_index: targetIndex
         });
     }
     
-    function moverFotoEnEstado(photoId, sourceId, targetId) {
-        // Quitar del origen
-        if (sourceId === 'huerfanas') {
-            state.fotos_huerfanas = state.fotos_huerfanas.filter(id => id !== photoId);
-        } else {
-            const row = state.registros.find(r => r.id === sourceId);
-            if (row) row.fotos_asignadas = row.fotos_asignadas.filter(id => id !== photoId);
+    function aplicarOrdenEnEstado(listId, orderedIds) {
+        const clean = Array.from(new Set(orderedIds.filter(Boolean)));
+        if (listId === 'huerfanas') {
+            state.fotos_huerfanas = clean;
+            return;
         }
-        
-        // Poner en destino
-        if (targetId === 'huerfanas') {
-            state.fotos_huerfanas.push(photoId);
-        } else {
-            const row = state.registros.find(r => r.id === targetId);
-            if (row) row.fotos_asignadas.push(photoId);
-        }
+        const row = state.registros.find(r => r.id === listId);
+        if (row) row.fotos_asignadas = clean;
     }
 
     function eliminarRegistro(recordId) {
