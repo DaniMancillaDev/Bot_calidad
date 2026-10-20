@@ -21,6 +21,8 @@ La copia recuperada fue comparada por SHA-256 con los árboles dentro de los con
 
 `web` es la referencia funcional elegida para consolidar `web`, `celery` y `shared`. El `celery` runtime es anterior y contiene regresiones de seguridad: elimina comprobaciones de autenticación de varios endpoints y usa URLs públicas `/media/` en vez del proxy protegido. No se incorporó ese árbol sobre la base web.
 
+La comparación completa no encontró funciones de producción exclusivas del árbol `celery`: sus archivos adicionales son pruebas o diagnóstico (`test_db.py`, `test_excel_v2.py`, `test_importacion_aislamiento.py`, `test_isolation.py` y `test_patch.py`). Las tareas Celery, modelos, migraciones funcionales y servicios necesarios están presentes en la variante web consolidada. Las rutas públicas y los endpoints sin autorización se consideran regresiones y no se restauran.
+
 La rama base pública comparte gran parte del código con el runtime web. Los cambios runtime se integraron de manera explícita en modelos, API, importación, sincronización de evidencias, reportes, tareas, configuración, vistas y plantillas.
 
 ## Arquitectura actual
@@ -57,7 +59,9 @@ Se requieren variables para Django, PostgreSQL, Redis, Telegram, URL/puerto de w
 
 ## Construcción y despliegue
 
-`Dockerfile` construye la imagen web/Celery con Python 3.13, `uv`, Tesseract y `libpq-dev`. `Dockerfile.bot` construye el proceso Telegram. El Compose original de GitHub usa `build:` y `.env`; el Compose desplegado usa imágenes fijadas para web/Celery y `latest` para bot. Esa diferencia debe resolverse antes de convertir el repositorio en fuente única de despliegue.
+`Dockerfile` construye la imagen web/Celery con Python 3.13, `uv`, Tesseract y `libpq-dev`. `Dockerfile.bot` construye el proceso Telegram. Las imágenes base de Python y `uv` están fijadas por digest; ambas imágenes aceptan `SOURCE_COMMIT` y lo escriben en `org.opencontainers.image.revision`. [`scripts/build_images.sh`](../scripts/build_images.sh) construye las dos imágenes con etiquetas locales derivadas del commit y no hace push.
+
+El Compose original de GitHub usa `build:` y `.env`; el Compose desplegado usa imágenes fijadas para web/Celery y `latest` para bot. Esa diferencia debe resolverse antes de convertir el repositorio en fuente única de despliegue.
 
 No se ejecutaron migraciones ni despliegues durante esta consolidación.
 
@@ -77,8 +81,10 @@ Ejecutadas en el árbol consolidado o en una copia archivada de la rama, siempre
 - `django check`: correcto, sin errores.
 - `django check --deploy`: tres advertencias, `security.W004`, `security.W008` y `security.W009`.
 - `makemigrations --check --dry-run`: `No changes detected`.
-- Suite Django descubierta automáticamente: 12 pruebas, todas correctas.
-- Suite `calidad.tests_v2` y workspace seleccionada: 14 pruebas, 8 correctas, 4 fallos y 2 errores. La suite v2 espera endpoints sin autenticación aunque el código base ya devuelve 401, y sus pruebas de dual-write dependen de que un worker Celery ejecute `sync_evidencias_task` durante el test; no se corrigieron automáticamente.
+- Suite Django completa explícita (`calidad.tests`, `calidad.tests_concurrency`, `calidad.tests_v2` y workspace): 23 pruebas, todas correctas.
+- Suite de utilidades compartidas: 12 pruebas, todas correctas.
+- `calidad.tests_v2` ahora comprueba sesión autenticada, rechazo anónimo, URLs de media protegidas, dual-write con ejecución explícita de la tarea y una transición realmente inválida.
+- Catálogo: JSON válido y pruebas de las entradas añadidas por el runtime web.
 - Construcción aislada con `Dockerfile` y `Dockerfile.bot`: correcta con etiquetas temporales, eliminadas después de la verificación.
 
 Los tests con PostgreSQL 16 y Redis 7 temporales se ejecutaron en puertos locales efímeros y ambos contenedores fueron detenidos y eliminados. No se usó PostgreSQL, Redis, media ni volúmenes de producción.
@@ -88,9 +94,8 @@ Los tests con PostgreSQL 16 y Redis 7 temporales se ejecutaron en puertos locale
 - Resolver de forma definitiva las diferencias entre `web` y `celery`.
 - Revisar scripts de diagnóstico recuperados que escriben en bases de datos o dependen de rutas personales.
 - Los 19 artefactos binarios temporales rastreados por GitHub se retiraron de esta rama y quedaron excluidos por `.gitignore`; permanecen recuperables desde `origin/feature/v2.1.0-ui-galeria-optimizaciones` y su historial.
-- Fijar la imagen del bot por digest.
-- Añadir procedencia de build y commit a las imágenes.
-- Revisar/actualizar `calidad.tests_v2` para que refleje la autenticación actual y controle explícitamente la tarea asíncrona de dual-write.
+- Revisar antes de producción la fijación de paquetes APT y la política de publicación de etiquetas.
+- Comparar el catálogo consolidado con las decisiones funcionales del equipo; el árbol web es un superconjunto compatible del catálogo del bot recuperado.
 - No iniciar aún la integración WhatsApp.
 
 Los scripts auxiliares que solo estaban en las imágenes se conservaron fuera de esta rama en `/mnt/Orto/bot_calidad_runtime_scripts_quarantine_20261019/`; su clasificación está en `docs/RECOVERED_RUNTIME_SCRIPTS.md`.

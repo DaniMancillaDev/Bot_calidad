@@ -1,28 +1,52 @@
 import json
+import shutil
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
+
 from django.test import TestCase, Client
-from django.utils import timezone
+from django.test.utils import override_settings
 from django.contrib.auth.models import User
 from django.urls import reverse
 from calidad.models import RegistroDefecto, EvidenciaFotografica, EstadoRevision
+from calidad.tasks import sync_evidencias_task
 from shared.infrastructure.database.django_registro_repository import DjangoRegistroRepository
 
 class Fase1BackendV2Tests(TestCase):
     def setUp(self):
         self.client = Client()
+        self.user = User.objects.create_user(
+            username="v2-supervisor",
+            password="test-pass",
+            is_superuser=True,
+        )
+        self.client.force_login(self.user)
+
+        self.media_root = Path(tempfile.mkdtemp(prefix="bot_calidad_tests_v2_"))
+        self.addCleanup(shutil.rmtree, self.media_root, ignore_errors=True)
+        fotos_dir = self.media_root / "fotos" / "999"
+        fotos_dir.mkdir(parents=True)
+        for foto_num in (101, 102):
+            (fotos_dir / f"{foto_num:03d}.jpg").write_bytes(b"test-image")
+
         # Crear un registro inicial con Dual-Write usando el repositorio
         repo = DjangoRegistroRepository()
-        repo.guardar(
-            fotos=[101, 102],
-            modelo="TEST_MODEL",
-            linea="T01",
-            cantidad=5,
-            responsable="QA",
-            descripcion="Fallo de inyección",
-            user_id=999,
-            turno="A",
-            departamento="IQA",
-            numero_parte="P-TEST"
-        )
+        with override_settings(MEDIA_ROOT=self.media_root):
+            with patch("calidad.tasks.sync_evidencias_task.delay") as enqueue:
+                repo.guardar(
+                    fotos=[101, 102],
+                    modelo="TEST_MODEL",
+                    linea="T01",
+                    cantidad=5,
+                    responsable="QA",
+                    descripcion="Fallo de inyección",
+                    user_id=999,
+                    turno="A",
+                    departamento="IQA",
+                    numero_parte="P-TEST"
+                )
+                enqueue.assert_called_once()
+                sync_evidencias_task.run(enqueue.call_args.args[0])
         self.registro = RegistroDefecto.objects.filter(modelo="TEST_MODEL").last()
 
     def test_dual_write_success(self):
@@ -57,7 +81,12 @@ class Fase1BackendV2Tests(TestCase):
         self.registro.save()
         
         with self.assertRaises(ValueError):
-            self.registro.rechazar(comentarios="Rechazo desde aprobado") # Aprobado a Rechazado no está permitido
+            self.registro.transitar_estado(EstadoRevision.REVISADO) # Aprobado a revisado no está permitido
+
+    def test_api_rejects_anonymous_requests(self):
+        anonymous = Client()
+        response = anonymous.get('/api/v2/lotes/')
+        self.assertEqual(response.status_code, 401)
             
     def test_api_get_lotes(self):
         """Valida el endpoint de obtención de lotes."""
@@ -71,7 +100,7 @@ class Fase1BackendV2Tests(TestCase):
         lote = data['lotes'][0]
         self.assertIn("T01", lote['id'])
         self.assertEqual(lote['cantidad_registros'], 1)
-        self.assertEqual(lote['portada_url'], "/media/fotos/999/101.jpg")
+        self.assertEqual(lote['portada_url'], "/media-protegida/fotos/999/101.jpg")
 
     def test_api_get_registros_por_lote(self):
         """Valida obtener registros de un lote específico."""
