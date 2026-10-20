@@ -11,6 +11,14 @@ Se compararon por SHA-256 y por entrada:
 
 El catálogo consolidado coincide exactamente con el catálogo web recuperado. El catálogo Celery también coincide salvo la entrada `bracket`; el catálogo bot es anterior y no contiene varias traducciones añadidas posteriormente.
 
+Hashes SHA-256 de los archivos comparados:
+
+```text
+web/runtime y consolidado: dbfe510653ed728e239c431c96e78f32189dc724911723692f28a7f29afd3614
+celery/runtime:           02e848f13faee1bcd35efeb175a3a5a60ee482eb32a457d43fe252de5b4291b7
+bot/runtime:              68083b45582346d7a6a0406890283b167d778c620445617503a27f0c02157c25
+```
+
 ## Conteo por sección
 
 | Sección | Web | Celery | Bot | Consolidado |
