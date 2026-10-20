@@ -37,9 +37,28 @@ const receiver = new WhatsAppReceiver({
   maxBytes: config.maxBytes,
   logger,
 })
-outbox.start(config.pollMs)
+if (!config.discoveryOnly) outbox.start(config.pollMs)
 
 let reconnectTimer
+let discoveryStarted = false
+async function discoverGroups(socket) {
+  if (discoveryStarted) return
+  discoveryStarted = true
+  try {
+    const groups = await socket.groupFetchAllParticipating()
+    for (const group of Object.values(groups).sort((left, right) => String(left.subject || '').localeCompare(String(right.subject || '')))) {
+      if (!group.id) continue
+      console.log(`GROUP\t${JSON.stringify(group.subject || '')}\t${group.id}`)
+    }
+    await session.release()
+    process.exit(0)
+  } catch (error) {
+    logger.error({ err: error }, 'WhatsApp group discovery failed')
+    await session.release()
+    process.exit(1)
+  }
+}
+
 async function connect() {
   const socket = makeWASocket({
     auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, logger) },
@@ -49,9 +68,10 @@ async function connect() {
   })
   receiver.setMediaUpdater(message => socket.updateMediaMessage(message))
   socket.ev.on('creds.update', saveCreds)
-  socket.ev.on('messages.upsert', event => receiver.handleUpsert(event))
+  if (!config.discoveryOnly) socket.ev.on('messages.upsert', event => receiver.handleUpsert(event))
   socket.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
     if (qr && config.qrInTerminal) qrcode.generate(qr, { small: true })
+    if (connection === 'open' && config.discoveryOnly) void discoverGroups(socket)
     if (connection !== 'close') return
     const status = lastDisconnect?.error?.output?.statusCode
     if (status === DisconnectReason.loggedOut) {

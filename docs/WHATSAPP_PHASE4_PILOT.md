@@ -16,6 +16,12 @@ El piloto usa un único grupo configurado por `WA_PILOT_ALLOWED_GROUP_ID`.
 eventos históricos, otros grupos, mensajes propios y contenidos no fotográficos
 se descartan. El adaptador no envía mensajes ni marca presencia.
 
+Para identificar el grupo sin habilitar ingesta existe
+`WA_PILOT_DISCOVERY_ONLY=true`. En ese modo no se registra `messages.upsert`, no
+se descarga multimedia y solo se imprimen nombre/JID de los grupos
+participantes. La consulta de grupos es la operación de metadatos de Baileys;
+no se muestran participantes ni mensajes.
+
 La red no publica PostgreSQL, Redis ni el endpoint de ingesta. Django se liga
 solo a `127.0.0.1:18080` (configurable) para permitir una prueba local; no es
 una exposición a Internet. La conexión saliente del adaptador es necesaria
@@ -83,6 +89,40 @@ No realizar estos pasos todavía. Requieren confirmación explícita del operado
 La cuenta dedicada reduce el impacto operativo, pero Baileys no es la API
 oficial de WhatsApp. La cuenta puede ser desconectada o restringida y la
 compatibilidad del protocolo debe comprobarse durante el piloto.
+
+Para una cuenta personal temporal, el QR debe mostrarse con un contenedor
+efímero y no con `up -d`; así su salida no queda retenida en los logs del
+servicio:
+
+```fish
+set -l pilot_env /ruta/privada/whatsapp-pilot.env
+docker compose --env-file $pilot_env --profile pilot \
+  -p bot_calidad_wa_pilot -f docker-compose.whatsapp-pilot.yml \
+  run --rm --no-deps whatsapp-adapter
+```
+
+El archivo privado debe contener temporalmente
+`WA_PILOT_ENABLED=true`, `WA_PILOT_DISCOVERY_ONLY=true` y
+`WA_PILOT_SHOW_QR=true`, con `WA_PILOT_ALLOWED_GROUP_ID` vacío. El proceso
+termina después de imprimir los grupos; se debe restaurar
+`WA_PILOT_SHOW_QR=false` y dejar `WA_PILOT_DISCOVERY_ONLY=false` antes de
+habilitar recepción.
+
+Comandos fish para la infraestructura local:
+
+```fish
+set -l pilot_env /ruta/privada/whatsapp-pilot.env
+set -l pilot_compose docker compose --env-file $pilot_env --profile pilot -p bot_calidad_wa_pilot -f docker-compose.whatsapp-pilot.yml
+$pilot_compose up -d postgres redis web celery
+$pilot_compose ps -a
+$pilot_compose stop
+```
+
+La interfaz queda disponible en
+`http://127.0.0.1:18080/login/` y la bandeja en
+`http://127.0.0.1:18080/evidencias-pendientes/`. El acceso requiere un usuario
+web autenticado con superusuario o con `PerfilUsuario`; los remitentes de
+WhatsApp no necesitan cuentas web.
 
 ## Procedimiento de prueba controlado
 

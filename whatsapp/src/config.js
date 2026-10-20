@@ -14,6 +14,7 @@ export function configFromEnv(env = process.env) {
   const config = {
     enabled,
     groups,
+    discoveryOnly: boolean(env.WHATSAPP_DISCOVERY_ONLY),
     sessionDir: env.WHATSAPP_SESSION_DIR || '/app/data/whatsapp_session',
     queueDir: env.WHATSAPP_QUEUE_DIR || '/app/data/whatsapp_queue',
     ingestUrl: env.WHATSAPP_INGEST_URL || 'http://web:8000/api/v1/whatsapp/ingest/',
@@ -25,7 +26,7 @@ export function configFromEnv(env = process.env) {
     httpTimeoutMs: positiveInt(env.WHATSAPP_HTTP_TIMEOUT_MS, 30 * 1000),
     qrInTerminal: boolean(env.WHATSAPP_QR_IN_TERMINAL),
   }
-  if (enabled && !groups.size) throw new Error('WHATSAPP_ALLOWED_GROUP_IDS is required when WhatsApp is enabled')
+  if (enabled && !groups.size && !config.discoveryOnly) throw new Error('WHATSAPP_ALLOWED_GROUP_IDS is required when WhatsApp is enabled')
   if (enabled && !config.ingestKey) throw new Error('WHATSAPP_INGEST_API_KEY is required when WhatsApp is enabled')
   return config
 }

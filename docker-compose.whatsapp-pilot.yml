@@ -119,6 +119,7 @@ services:
     environment:
       # El valor por defecto mantiene el adaptador inerte aunque el perfil se active.
       WHATSAPP_ENABLED: ${WA_PILOT_ENABLED:-false}
+      WHATSAPP_DISCOVERY_ONLY: ${WA_PILOT_DISCOVERY_ONLY:-false}
       WHATSAPP_ALLOWED_GROUP_IDS: ${WA_PILOT_ALLOWED_GROUP_ID:-}
       WHATSAPP_INGEST_URL: http://web:8000/api/v1/whatsapp/ingest/
       WHATSAPP_INGEST_API_KEY: ${WA_PILOT_INGEST_KEY:?WA_PILOT_INGEST_KEY is required}
