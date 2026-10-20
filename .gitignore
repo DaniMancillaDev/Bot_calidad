@@ -40,6 +40,8 @@ scratch.py
 scratch/
 fotos/
 media/
+media_files/temp_reports/
+media_files/workspace/tmp/
 move_photos*.bat
 rename_photos.bat
 revert_photos.bat
