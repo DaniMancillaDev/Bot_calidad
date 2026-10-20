@@ -404,6 +404,7 @@ class PendingEvidence(models.Model):
         related_name='pending_evidences',
     )
     sender_whatsapp_id = models.CharField(max_length=255, blank=True, default='')
+    sender_alt_whatsapp_id = models.CharField(max_length=255, blank=True, default='')
     caption = models.TextField(blank=True, default='')
     message_at = models.DateTimeField(null=True, blank=True)
     received_at = models.DateTimeField(auto_now_add=True)
@@ -434,6 +435,7 @@ class PendingEvidence(models.Model):
         indexes = [
             models.Index(fields=['source_group_id', 'status'], name='pending_evidence_group_idx'),
             models.Index(fields=['sender_whatsapp_id'], name='pending_evidence_sender_idx'),
+            models.Index(fields=['sender_alt_whatsapp_id'], name='pending_ev_alt_sender_idx'),
             models.Index(fields=['received_at'], name='pending_evidence_received_idx'),
             models.Index(fields=['group', 'status'], name='pending_ev_assign_idx'),
         ]

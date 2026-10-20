@@ -1,0 +1,72 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: wa_adapter_test
+      POSTGRES_USER: wa_adapter_test
+      POSTGRES_PASSWORD: ${WA_ADAPTER_TEST_DB_PASSWORD:?WA_ADAPTER_TEST_DB_PASSWORD is required}
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wa_adapter_test -d wa_adapter_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    networks: [wa_adapter_test]
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    networks: [wa_adapter_test]
+
+  django:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SOURCE_COMMIT: whatsapp-adapter-isolated-test
+    environment:
+      DATABASE_URL: postgresql://wa_adapter_test:${WA_ADAPTER_TEST_DB_PASSWORD:?WA_ADAPTER_TEST_DB_PASSWORD is required}@postgres:5432/wa_adapter_test
+      CELERY_BROKER_URL: redis://redis:6379/15
+      CELERY_RESULT_BACKEND: redis://redis:6379/15
+      DJANGO_SECRET_KEY: ${WA_ADAPTER_TEST_DJANGO_SECRET_KEY:?WA_ADAPTER_TEST_DJANGO_SECRET_KEY is required}
+      DJANGO_DEBUG: "True"
+      WHATSAPP_INGEST_API_KEY: ${WA_ADAPTER_TEST_INGEST_KEY:?WA_ADAPTER_TEST_INGEST_KEY is required}
+      WHATSAPP_ALLOWED_GROUP_IDS: 120363000000@g.us
+      WHATSAPP_PENDING_ROOT: /app/data/whatsapp_pending
+    command: ["sh", "-c", ".venv/bin/python web/manage.py migrate --noinput && .venv/bin/gunicorn --bind 0.0.0.0:8000 --workers 1 --timeout 30 --pythonpath web config.wsgi:application"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/login/')"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    networks: [wa_adapter_test]
+
+  adapter-test:
+    build:
+      context: ./whatsapp
+      dockerfile: Dockerfile
+    environment:
+      WA_TEST_INGEST_URL: http://django:8000/api/v1/whatsapp/ingest/
+      WA_TEST_INGEST_KEY: ${WA_ADAPTER_TEST_INGEST_KEY:?WA_ADAPTER_TEST_INGEST_KEY is required}
+    command: ["node", "test/integration.mjs"]
+    depends_on:
+      django:
+        condition: service_healthy
+    networks: [wa_adapter_test]
+
+networks:
+  wa_adapter_test:
+    name: bot_calidad_wa_adapter_test_net
+    driver: bridge
+    internal: true

@@ -47,6 +47,7 @@ class WhatsAppIngestTests(TestCase):
             'message_id': 'message-1',
             'media_index': '0',
             'sender_id': 'contact@s.whatsapp.net',
+            'sender_alt_id': 'contact-alt@lid',
             'sender_name': 'Inspector',
             'caption': 'Defecto en contenedor',
             'message_at': '2026-10-19T10:20:30Z',
@@ -70,6 +71,7 @@ class WhatsAppIngestTests(TestCase):
         self.assertEqual(evidence.caption, 'Defecto en contenedor')
         self.assertEqual(evidence.source_group_id, 'group-1')
         self.assertEqual(evidence.sender_whatsapp_id, 'contact@s.whatsapp.net')
+        self.assertEqual(evidence.sender_alt_whatsapp_id, 'contact-alt@lid')
         self.assertIsNone(evidence.sender.phone_number)
         self.assertTrue((Path(self.temp_dir) / evidence.file_path).is_file())
         self.assertEqual(len(evidence.sha256), 64)
