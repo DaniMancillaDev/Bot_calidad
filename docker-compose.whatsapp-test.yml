@@ -32,6 +32,7 @@ services:
       dockerfile: Dockerfile
       args:
         SOURCE_COMMIT: whatsapp-phase1-isolated-test
+        INSTALL_DEV: "true"
     environment:
       DATABASE_URL: postgresql://wa_test:${WA_TEST_DB_PASSWORD:?WA_TEST_DB_PASSWORD is required}@postgres:5432/wa_test
       CELERY_BROKER_URL: redis://redis:6379/15

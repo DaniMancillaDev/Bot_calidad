@@ -1,6 +1,7 @@
 FROM python:3.13-slim@sha256:9d2e5553305c7c7b0097999bb17187c69b921ccd6bc9d40e4bb5ebe652c00285
 
 ARG SOURCE_COMMIT=unknown
+ARG INSTALL_DEV=false
 LABEL org.opencontainers.image.title="Bot de Calidad web/celery" \
       org.opencontainers.image.revision="$SOURCE_COMMIT"
 
@@ -20,10 +21,12 @@ COPY --from=ghcr.io/astral-sh/uv:latest@sha256:b485bd65cc2cf1c9a93b3554012c9c377
 # Copiar dependencias primero para cache de capas
 COPY pyproject.toml uv.lock ./
 
-# Instalar dependencias de producción
-RUN uv sync --frozen --no-dev
+# Producción omite pytest; el runner aislado puede pedir el grupo de desarrollo.
+RUN if [ "$INSTALL_DEV" = "true" ]; then uv sync --frozen; else uv sync --frozen --no-dev; fi
 
-# Copiar código fuente de la web
+# La imagen común también contiene el cliente Telegram requerido por las
+# dependencias compartidas y por la suite completa.
+COPY bot/ bot/
 COPY web/ web/
 COPY shared/ shared/
 COPY plantilla_reporte.xlsx ./

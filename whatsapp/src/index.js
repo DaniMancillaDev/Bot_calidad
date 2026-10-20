@@ -2,7 +2,6 @@ import makeWASocket, {
   DisconnectReason,
   downloadMediaMessage,
   makeCacheableSignalKeyStore,
-  useMultiFileAuthState,
 } from '@whiskeysockets/baileys'
 import pino from 'pino'
 import qrcode from 'qrcode-terminal'
@@ -10,6 +9,7 @@ import { mkdir } from 'node:fs/promises'
 import { configFromEnv } from './config.js'
 import { PersistentOutbox } from './outbox.js'
 import { WhatsAppReceiver } from './receiver.js'
+import { openPersistentSession } from './session.js'
 
 const config = configFromEnv()
 if (!config.enabled) {
@@ -18,7 +18,8 @@ if (!config.enabled) {
 }
 
 const logger = pino({ level: process.env.WHATSAPP_LOG_LEVEL || 'warn' })
-const { state, saveCreds } = await useMultiFileAuthState(config.sessionDir)
+const session = await openPersistentSession(config.sessionDir)
+const { state, saveCreds } = session
 const outbox = await new PersistentOutbox({
   directory: config.queueDir,
   ingestUrl: config.ingestUrl,
@@ -64,4 +65,11 @@ async function connect() {
 }
 
 await mkdir(config.queueDir, { recursive: true, mode: 0o700 })
+const shutdown = async () => {
+  clearTimeout(reconnectTimer)
+  await session.release()
+  process.exit(0)
+}
+process.once('SIGINT', shutdown)
+process.once('SIGTERM', shutdown)
 await connect()

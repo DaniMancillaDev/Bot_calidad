@@ -120,6 +120,32 @@ test('recovers a staged file after restart without exposing a half-written queue
   assert.equal(recovered.items.get('staged').state, 'pending')
 })
 
+test('requeues an HTTP delivery interrupted by an adapter restart', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'bot-calidad-wa-restart-'))
+  const first = await makeReceiver()
+  first.queue.directory = join(root, 'queue')
+  await first.queue.init()
+  await first.receiver.handleUpsert({ type: 'notify', messages: [image('restart-delivery')] })
+  const item = [...first.queue.items.values()][0]
+  item.state = 'sending'
+  await first.queue.persist()
+
+  const recovered = await new PersistentOutbox({ directory: first.queue.directory, fetchImpl: async () => new Response('{}', { status: 201 }) }).init()
+  assert.equal(recovered.items.get(item.key).state, 'pending')
+  await recovered.processDue()
+  assert.equal(recovered.items.get(item.key).state, 'delivered')
+})
+
+test('keeps different senders as separate source events in one group', async () => {
+  const { receiver, queue } = await makeReceiver()
+  await receiver.handleUpsert({ type: 'notify', messages: [
+    image('sender-one', { key: { id: 'sender-one', remoteJid: '120363000000@g.us', participant: 'one@lid', participantAlt: '' } }),
+    image('sender-two', { key: { id: 'sender-two', remoteJid: '120363000000@g.us', participant: 'two@lid', participantAlt: '' } }),
+  ] })
+  assert.equal(queue.items.size, 2)
+  assert.deepEqual([...queue.items.values()].map(item => item.fields.sender_id).sort(), ['one@lid', 'two@lid'])
+})
+
 test('times out a hung Django request and leaves the item retryable', async () => {
   const root = await mkdtemp(join(tmpdir(), 'bot-calidad-wa-timeout-'))
   const queue = await new PersistentOutbox({

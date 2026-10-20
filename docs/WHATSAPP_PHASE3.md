@@ -14,10 +14,14 @@ puede cambiar el protocolo, cerrar sesiones o restringir el número.
 
 La documentación oficial exige Node.js 20 o superior, recomienda persistir las
 credenciales fuera del árbol fuente y advierte que useMultiFileAuthState es una
-solución sencilla, no un almacén de sesión de producción. Esta fase usa esa
-utilidad para un único piloto porque permite QR, reinicios y el menor número de
-piezas. El siguiente escalón es implementar un AuthenticationState durable en
-base de datos o almacenamiento secreto.
+solución sencilla, no un almacén de sesión de producción. La integración añade
+un lock exclusivo de proceso, permisos 0700/0600, validación de JSON y
+recuperación de locks huérfanos para evitar dos procesos usando la misma sesión.
+Esto mejora el piloto de una sola instancia, pero no convierte el almacén de
+archivos en un backend transaccional: una corrupción de credenciales detiene el
+adaptador y requiere restaurar un respaldo o retirar manualmente la sesión. El
+siguiente escalón para producción es implementar un AuthenticationState durable
+en base de datos o almacenamiento secreto.
 
 ## Flujo
 
@@ -78,10 +82,14 @@ cola persistente, fallos de red, timeout, confirmación 200/201, actualización
 de medios expirados y fallos de descarga.
 docker-compose.whatsapp-adapter-test.yml levanta PostgreSQL 16, Redis 7,
 Django y un cliente Node temporal en una red y almacenamiento temporales;
-prueba migraciones y el endpoint real sin Baileys ni WhatsApp.
+prueba migraciones y el endpoint real sin Baileys ni WhatsApp. El runner
+docker-compose.whatsapp-test.yml usa `INSTALL_DEV=true` para incluir pytest;
+la imagen de producción conserva `INSTALL_DEV=false` y no instala dependencias
+de desarrollo.
 
 La prueba no demuestra recuperación de mensajes que WhatsApp nunca vuelva a
 entregar tras una desconexión. Baileys no ofrece una garantía de captura
 histórica absoluta; append se descarta intencionadamente. La conciliación de
 mensajes, el almacén de sesión basado en DB y la prueba piloto con una cuenta
-dedicada siguen pendientes.
+dedicada siguen pendientes. La suite también simula reinicio durante staging y
+entrega HTTP, timeout, duplicados, medios expirados y remitentes distintos.

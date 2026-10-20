@@ -7,7 +7,7 @@
   },
   "scripts": {
     "start": "node src/index.js",
-    "test": "node --test test/adapter.test.js",
+    "test": "node --test test/*.test.js",
     "test:integration": "node test/integration.mjs"
   },
   "dependencies": {
