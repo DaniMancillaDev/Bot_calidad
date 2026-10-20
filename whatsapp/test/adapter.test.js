@@ -119,3 +119,20 @@ test('recovers a staged file after restart without exposing a half-written queue
   const recovered = await new PersistentOutbox({ directory }).init()
   assert.equal(recovered.items.get('staged').state, 'pending')
 })
+
+test('times out a hung Django request and leaves the item retryable', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'bot-calidad-wa-timeout-'))
+  const queue = await new PersistentOutbox({
+    directory: join(root, 'queue'), httpTimeoutMs: 1, retryBaseMs: 1,
+    fetchImpl: async (_url, { signal }) => new Promise((resolve, reject) => {
+      signal.addEventListener('abort', () => reject(new Error('aborted')))
+    }),
+  }).init()
+  const receiver = new WhatsAppReceiver({
+    groups: new Set(['120363000000@g.us']), queue, mediaDir: join(root, 'media'), maxBytes: 1024,
+    downloadMediaMessage: async () => Buffer.from('image'), logger: { error() {} },
+  })
+  await receiver.handleUpsert({ type: 'notify', messages: [image('timeout')] })
+  await queue.processDue()
+  assert.equal([...queue.items.values()][0].state, 'failed')
+})

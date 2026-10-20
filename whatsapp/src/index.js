@@ -25,6 +25,7 @@ const outbox = await new PersistentOutbox({
   ingestKey: config.ingestKey,
   retryBaseMs: config.retryBaseMs,
   retryMaxMs: config.retryMaxMs,
+  httpTimeoutMs: config.httpTimeoutMs,
   logger,
 }).init()
 const receiver = new WhatsAppReceiver({

@@ -7,12 +7,13 @@ const FILE = 'outbox.json'
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
 export class PersistentOutbox {
-  constructor({ directory, ingestUrl, ingestKey, retryBaseMs = 1000, retryMaxMs = 900000, fetchImpl = fetch, logger = console }) {
+  constructor({ directory, ingestUrl, ingestKey, retryBaseMs = 1000, retryMaxMs = 900000, httpTimeoutMs = 30000, fetchImpl = fetch, logger = console }) {
     this.directory = directory
     this.ingestUrl = ingestUrl
     this.ingestKey = ingestKey
     this.retryBaseMs = retryBaseMs
     this.retryMaxMs = retryMaxMs
+    this.httpTimeoutMs = httpTimeoutMs
     this.fetchImpl = fetchImpl
     this.logger = logger
     this.items = new Map()
@@ -121,12 +122,19 @@ export class PersistentOutbox {
     for (const [name, value] of Object.entries(item.fields)) body.append(name, String(value ?? ''))
     const bytes = await readFile(item.filePath)
     body.append('file', new Blob([bytes], { type: item.fields.mime_type }), 'original')
-    const response = await this.fetchImpl(this.ingestUrl, {
-      method: 'POST',
-      headers: { 'X-WhatsApp-Ingest-Key': this.ingestKey },
-      body,
-    })
-    if (![200, 201].includes(response.status)) throw new Error(`Django ingest returned HTTP ${response.status}`)
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), this.httpTimeoutMs)
+    try {
+      const response = await this.fetchImpl(this.ingestUrl, {
+        method: 'POST',
+        headers: { 'X-WhatsApp-Ingest-Key': this.ingestKey },
+        body,
+        signal: controller.signal,
+      })
+      if (![200, 201].includes(response.status)) throw new Error(`Django ingest returned HTTP ${response.status}`)
+    } finally {
+      clearTimeout(timeout)
+    }
   }
 
   async processDue(now = Date.now()) {

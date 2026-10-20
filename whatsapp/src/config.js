@@ -22,6 +22,7 @@ export function configFromEnv(env = process.env) {
     retryBaseMs: positiveInt(env.WHATSAPP_RETRY_BASE_MS, 1000),
     retryMaxMs: positiveInt(env.WHATSAPP_RETRY_MAX_MS, 15 * 60 * 1000),
     pollMs: positiveInt(env.WHATSAPP_QUEUE_POLL_MS, 1000),
+    httpTimeoutMs: positiveInt(env.WHATSAPP_HTTP_TIMEOUT_MS, 30 * 1000),
     qrInTerminal: boolean(env.WHATSAPP_QR_IN_TERMINAL),
   }
   if (enabled && !groups.size) throw new Error('WHATSAPP_ALLOWED_GROUP_IDS is required when WhatsApp is enabled')
