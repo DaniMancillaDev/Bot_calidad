@@ -1,4 +1,8 @@
-FROM python:3.13-slim
+FROM python:3.13-slim@sha256:9d2e5553305c7c7b0097999bb17187c69b921ccd6bc9d40e4bb5ebe652c00285
+
+ARG SOURCE_COMMIT=unknown
+LABEL org.opencontainers.image.title="Bot de Calidad web/celery" \
+      org.opencontainers.image.revision="$SOURCE_COMMIT"
 
 # Dependencias del sistema (Tesseract OCR para generación de Excel con imágenes)
 RUN apt-get update && \
@@ -11,7 +15,7 @@ RUN apt-get update && \
 WORKDIR /app
 
 # Instalar uv
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:latest@sha256:b485bd65cc2cf1c9a93b3554012c9c3778cf7b1b5fd3d3096ce9e1226c97e1e6 /uv /uvx /bin/
 
 # Copiar dependencias primero para cache de capas
 COPY pyproject.toml uv.lock ./
