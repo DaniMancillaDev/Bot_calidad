@@ -108,6 +108,8 @@ services:
       redis:
         condition: service_healthy
     command: ["uv", "run", "celery", "-A", "calidad.celery_app", "worker", "--loglevel=info", "--concurrency=2"]
+    healthcheck:
+      disable: true
 
   whatsapp-adapter:
     profiles: [pilot]
