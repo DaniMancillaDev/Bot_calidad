@@ -67,27 +67,30 @@ La restauración de código runtime puede hacerse desde el snapshot Git local y 
 
 ## Pruebas
 
-Realizadas hasta ahora:
+Ejecutadas en el árbol consolidado o en una copia archivada de la rama, siempre fuera de los contenedores y volúmenes de producción:
 
 - Parseo AST de Python sin iniciar Django ni conectarse a servicios.
 - `git diff --check` sobre la consolidación.
 - Comparación de hashes contra los contenedores.
 
-Pendientes en entorno aislado:
+- `uv lock --check`: correcto; el entorno aislado instaló 74 paquetes.
+- `django check`: correcto, sin errores.
+- `django check --deploy`: tres advertencias, `security.W004`, `security.W008` y `security.W009`.
+- `makemigrations --check --dry-run`: `No changes detected`.
+- Suite Django descubierta automáticamente: 12 pruebas, todas correctas.
+- Suite `calidad.tests_v2` y workspace seleccionada: 14 pruebas, 8 correctas, 4 fallos y 2 errores. La suite v2 espera endpoints sin autenticación aunque el código base ya devuelve 401, y sus pruebas de dual-write dependen de que un worker Celery ejecute `sync_evidencias_task` durante el test; no se corrigieron automáticamente.
+- Construcción aislada con `Dockerfile` y `Dockerfile.bot`: correcta con etiquetas temporales, eliminadas después de la verificación.
 
-- `uv sync --frozen --no-dev`.
-- `django check`.
-- Validación de migraciones sin PostgreSQL real.
-- Tests unitarios y de regresión con SQLite temporal o una base aislada.
-- Construcción de imágenes sin usar Compose ni volúmenes de producción.
+Los tests con PostgreSQL 16 y Redis 7 temporales se ejecutaron en puertos locales efímeros y ambos contenedores fueron detenidos y eliminados. No se usó PostgreSQL, Redis, media ni volúmenes de producción.
 
 ## Cambios todavía pendientes
 
 - Resolver de forma definitiva las diferencias entre `web` y `celery`.
 - Revisar scripts de diagnóstico recuperados que escriben en bases de datos o dependen de rutas personales.
-- Retirar del historial de publicación los artefactos binarios ya existentes en `media_files/` si se confirma que contienen datos de producción.
+- Los 19 artefactos binarios temporales rastreados por GitHub se retiraron de esta rama y quedaron excluidos por `.gitignore`; permanecen recuperables desde `origin/feature/v2.1.0-ui-galeria-optimizaciones` y su historial.
 - Fijar la imagen del bot por digest.
 - Añadir procedencia de build y commit a las imágenes.
+- Revisar/actualizar `calidad.tests_v2` para que refleje la autenticación actual y controle explícitamente la tarea asíncrona de dual-write.
 - No iniciar aún la integración WhatsApp.
 
 Los scripts auxiliares que solo estaban en las imágenes se conservaron fuera de esta rama en `/mnt/Orto/bot_calidad_runtime_scripts_quarantine_20261019/`; su clasificación está en `docs/RECOVERED_RUNTIME_SCRIPTS.md`.
