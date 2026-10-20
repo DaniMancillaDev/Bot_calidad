@@ -8,14 +8,30 @@ function safeError(error) {
 }
 
 export class WhatsAppReceiver {
-  constructor({ groups, queue, mediaDir, downloadMediaMessage, maxBytes, logger = console }) {
+  constructor({ groups, queue, mediaDir, downloadMediaMessage, updateMediaMessage = null, maxBytes, logger = console }) {
     this.groups = groups
     this.queue = queue
     this.mediaDir = mediaDir
     this.downloadMediaMessage = downloadMediaMessage
+    this.updateMediaMessage = updateMediaMessage
     this.maxBytes = maxBytes
     this.logger = logger
     this.chain = Promise.resolve()
+  }
+
+  setMediaUpdater(updateMediaMessage) {
+    this.updateMediaMessage = updateMediaMessage
+  }
+
+  async download(image) {
+    try {
+      return await this.downloadMediaMessage(image.message, 'buffer', {})
+    } catch (error) {
+      const status = error?.status || error?.output?.statusCode
+      if (!this.updateMediaMessage || ![404, 410].includes(status)) throw error
+      const refreshed = await this.updateMediaMessage(image.message)
+      return this.downloadMediaMessage(refreshed, 'buffer', {})
+    }
   }
 
   handleUpsert({ messages = [], type }) {
@@ -57,7 +73,7 @@ export class WhatsAppReceiver {
 
     let bytes
     try {
-      bytes = await this.downloadMediaMessage(image.message, 'buffer', {})
+      bytes = await this.download(image)
       if (!Buffer.isBuffer(bytes) || bytes.length === 0 || bytes.length > this.maxBytes) throw new Error('downloaded media is empty or too large')
     } catch (error) {
       await this.queue.addDownloadFailure({ key, fields, error })

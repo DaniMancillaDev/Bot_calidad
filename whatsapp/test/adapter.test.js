@@ -136,3 +136,24 @@ test('times out a hung Django request and leaves the item retryable', async () =
   await queue.processDue()
   assert.equal([...queue.items.values()][0].state, 'failed')
 })
+
+test('refreshes expired media once through Baileys before recording failure', async () => {
+  let downloads = 0
+  let refreshes = 0
+  const root = await mkdtemp(join(tmpdir(), 'bot-calidad-wa-refresh-'))
+  const queue = await new PersistentOutbox({ directory: join(root, 'queue') }).init()
+  const receiver = new WhatsAppReceiver({
+    groups: new Set(['120363000000@g.us']), queue, mediaDir: join(root, 'media'), maxBytes: 1024,
+    downloadMediaMessage: async message => {
+      downloads += 1
+      if (downloads === 1) throw Object.assign(new Error('expired'), { status: 410 })
+      return Buffer.from(message.refreshed ? 'image' : 'wrong')
+    },
+    updateMediaMessage: async message => { refreshes += 1; return { ...message, refreshed: true } },
+    logger: { error() {} },
+  })
+  await receiver.handleUpsert({ type: 'notify', messages: [image('refresh')] })
+  assert.equal(refreshes, 1)
+  assert.equal(downloads, 2)
+  assert.equal([...queue.items.values()][0].state, 'pending')
+})

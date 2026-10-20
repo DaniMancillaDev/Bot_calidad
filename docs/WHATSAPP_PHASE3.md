@@ -28,6 +28,11 @@ incluidos envoltorios efímeros/view-once. La descarga ocurre inmediatamente y
 tiene límite de tamaño. Cada archivo entra en una cola local persistente antes
 de enviarse a POST /api/v1/whatsapp/ingest/.
 
+Si la descarga responde con un error de medio expirado (404/410), el adaptador
+solicita una actualización mediante updateMediaMessage una sola vez y vuelve a
+descargar inmediatamente. Si esa recuperación falla, conserva el evento como
+download_failed para una redeliveración posterior.
+
 La clave de idempotencia es grupo + ID de mensaje + posición del medio. La cola
 conserva metadatos y el archivo hasta recibir HTTP 200 o 201 de Django; un 200
 de duplicado también confirma que Django ya lo recibió. Los estados sending
@@ -69,7 +74,8 @@ dedicado y la clave inyectada por un gestor de secretos.
 ## Pruebas
 
 npm test cubre mensajes simulados, historial, allowlist, LID/JID, duplicados,
-cola persistente, fallos de red, confirmación 200/201 y fallos de descarga.
+cola persistente, fallos de red, timeout, confirmación 200/201, actualización
+de medios expirados y fallos de descarga.
 docker-compose.whatsapp-adapter-test.yml levanta PostgreSQL 16, Redis 7,
 Django y un cliente Node temporal en una red y almacenamiento temporales;
 prueba migraciones y el endpoint real sin Baileys ni WhatsApp.

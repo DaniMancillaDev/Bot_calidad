@@ -46,6 +46,7 @@ async function connect() {
     syncFullHistory: false,
     logger,
   })
+  receiver.setMediaUpdater(message => socket.updateMediaMessage(message))
   socket.ev.on('creds.update', saveCreds)
   socket.ev.on('messages.upsert', event => receiver.handleUpsert(event))
   socket.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
