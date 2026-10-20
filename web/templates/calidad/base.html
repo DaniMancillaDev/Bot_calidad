@@ -601,6 +601,11 @@
       <span class="link-text">Galería de Evidencias</span>
     </a>
 
+    <a href="{% url 'pending_evidence' %}" class="nav-link {% if seccion == 'pending_evidence' %}active{% endif %}">
+      <span class="material-symbols-outlined icon">photo_library</span>
+      <span class="link-text">Pendientes WhatsApp</span>
+    </a>
+
     <a href="{% url 'gestionar_diccionario' %}" class="nav-link {% if seccion == 'diccionario' %}active{% endif %}">
       <span class="material-symbols-outlined icon">dictionary</span>
       <span class="link-text">Diccionario</span>
