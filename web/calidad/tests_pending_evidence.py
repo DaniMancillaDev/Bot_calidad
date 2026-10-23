@@ -147,6 +147,9 @@ class PendingEvidenceWebTests(TestCase):
         self.assertContains(response, 'Tandas recibidas')
         self.assertContains(response, 'wa-batches-list')
         self.assertContains(response, 'Incorporar tanda completa')
+        html = response.content.decode()
+        self.assertLess(html.index('wa-batches-title'), html.index('wa-viewer-title'))
+        self.assertLess(html.index('wa-viewer-title'), html.index('wa-drafts-title'))
         self.assertEqual({e.id for batch in batches for e in batch['evidences']}, {first.id, second.id, legacy.id})
 
     def test_draft_workspace_api_assigns_saves_and_removes_evidence(self):
