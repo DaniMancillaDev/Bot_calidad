@@ -295,6 +295,20 @@ class PendingEvidenceWebTests(TestCase):
         self.assertEqual(evidence.exclusion_reason, '')
         self.assertTrue((self.pending_root / evidence.file_path).is_file())
 
+    def test_unassigned_evidence_can_be_excluded_without_a_draft(self):
+        evidence = self.add_evidence(message_id='exclude-from-batch')
+
+        response = self.client.post(
+            reverse('exclude_pending_evidence'),
+            {'evidence_ids': [str(evidence.id)], 'exclusion_reason': 'Imagen incorrecta'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        evidence.refresh_from_db()
+        self.assertTrue(evidence.is_excluded)
+        self.assertEqual(evidence.exclusion_reason, 'Imagen incorrecta')
+        self.assertTrue((self.pending_root / evidence.file_path).is_file())
+
     def test_draft_workspace_api_keeps_other_operator_draft_private(self):
         other = User.objects.create_user('draft-owner', password='test-pass')
         PerfilUsuario.objects.create(usuario=other)

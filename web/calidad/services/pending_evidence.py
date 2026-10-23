@@ -212,6 +212,35 @@ def restore_unassigned_evidence(user, evidence_ids):
     return evidences
 
 
+def exclude_unassigned_evidence(user, evidence_ids, reason=''):
+    """Exclude available evidence without assigning it to a draft."""
+    ids = list(dict.fromkeys(evidence_ids))
+    if not ids:
+        raise PendingEvidenceError('Selecciona al menos una fotografía.')
+    with transaction.atomic():
+        evidences = list(PendingEvidence.objects.select_for_update().filter(
+            id__in=ids,
+            status=PendingEvidence.STATUS_READY,
+            group__isnull=True,
+            is_excluded=False,
+        ))
+        if len(evidences) != len(ids):
+            raise PendingEvidenceConflict('Una o más fotografías ya no están disponibles para excluir.')
+        now = timezone.now()
+        reason = str(reason).strip()[:255] or 'Excluida por el operador.'
+        for evidence in evidences:
+            evidence.is_excluded = True
+            evidence.exclusion_reason = reason
+            evidence.excluded_at = now
+            evidence.excluded_by = user
+            evidence.draft_order = 0
+        PendingEvidence.objects.bulk_update(
+            evidences,
+            ['is_excluded', 'exclusion_reason', 'excluded_at', 'excluded_by', 'draft_order'],
+        )
+    return evidences
+
+
 def _normalise_group_fields(fields):
     model = str(fields.get('model', '')).strip()
     line = str(fields.get('line', '')).strip()

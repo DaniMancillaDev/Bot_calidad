@@ -22,6 +22,7 @@ from .services.pending_evidence import (
     create_empty_pending_group,
     create_pending_group,
     confirm_pending_group,
+    exclude_unassigned_evidence,
     restore_unassigned_evidence,
     update_pending_group,
 )
@@ -330,6 +331,22 @@ def restore_pending_evidence_view(request):
         restore_unassigned_evidence(
             request.user,
             _parse_ids(request.POST.getlist('evidence_ids')),
+        )
+        return JsonResponse({'ok': True})
+    except (PendingEvidenceError, ValueError) as exc:
+        return JsonResponse({'error': str(exc)}, status=409)
+
+
+@login_required
+@require_POST
+def exclude_pending_evidence_view(request):
+    if not _has_pending_access(request.user):
+        return JsonResponse({'error': 'No tienes acceso a las evidencias pendientes.'}, status=403)
+    try:
+        exclude_unassigned_evidence(
+            request.user,
+            _parse_ids(request.POST.getlist('evidence_ids')),
+            request.POST.get('exclusion_reason', ''),
         )
         return JsonResponse({'ok': True})
     except (PendingEvidenceError, ValueError) as exc:
