@@ -120,6 +120,8 @@ def pending_evidence(request):
             return redirect('pending_evidence')
 
     source_group_filter = request.GET.get('grupo_origen', '').strip()
+    sender_filter = request.GET.get('remitente', '').strip()
+    order_filter = request.GET.get('orden', 'recent').strip()
     allowed_groups = getattr(settings, 'WHATSAPP_ALLOWED_GROUP_IDS', frozenset())
     if not source_group_filter and len(allowed_groups) == 1:
         source_group_filter = next(iter(allowed_groups))
@@ -130,7 +132,11 @@ def pending_evidence(request):
             group__isnull=True,
         )
         .select_related('sender')
-        .order_by('-message_at', '-received_at')
+        .order_by(*(
+            ['message_at', 'received_at']
+            if order_filter == 'oldest'
+            else ['-message_at', '-received_at']
+        ))
     )
     pending_source_groups = list(
         PendingEvidence.objects.filter(
@@ -140,6 +146,10 @@ def pending_evidence(request):
     )
     if source_group_filter:
         available_query = available_query.filter(source_group_id=source_group_filter)
+    if sender_filter:
+        available_query = available_query.filter(
+            Q(sender_whatsapp_id=sender_filter) | Q(sender__whatsapp_id=sender_filter),
+        )
     available_batches = _pending_batches(list(available_query))
     available_page = Paginator(available_batches, 30).get_page(request.GET.get('page'))
     available = [evidence for batch in available_page.object_list for evidence in batch['evidences']]
@@ -152,15 +162,14 @@ def pending_evidence(request):
         .prefetch_related('evidences__sender')
         .order_by('-created_at')
     )
-    visible_group_evidences = []
     for group in groups:
         group.pending_evidences = list(group.evidences.all())
         _add_image_urls(group.pending_evidences)
-        visible_group_evidences.extend(group.pending_evidences)
 
     contacts = list(
         WhatsAppContact.objects.filter(
-            pending_evidences__in=available + visible_group_evidences,
+            pending_evidences__status=PendingEvidence.STATUS_READY,
+            pending_evidences__group__isnull=True,
         ).distinct().order_by('display_name', 'id')
     )
     selected_group = request.GET.get('grupo', '')
@@ -171,6 +180,8 @@ def pending_evidence(request):
         'available_batches': available_page.object_list,
         'pending_source_groups': pending_source_groups,
         'selected_source_group': source_group_filter,
+        'selected_sender': sender_filter,
+        'selected_order': order_filter,
         'pending_page': available_page,
         'pending_groups': groups,
         'pending_contacts': contacts,

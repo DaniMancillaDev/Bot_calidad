@@ -145,7 +145,24 @@ class PendingEvidenceWebTests(TestCase):
         self.assertEqual(sorted(len(batch['evidences']) for batch in batches), [1, 2])
         self.assertContains(response, 'Álbum · 2 fotografías')
         self.assertContains(response, 'Envío individual · 1 fotografías')
+        self.assertContains(response, 'pending-batch-grid')
+        self.assertContains(response, 'pending-dialog')
+        self.assertContains(response, 'Revisar tanda')
+        self.assertContains(response, 'pending-selection-count')
         self.assertEqual({e.id for batch in batches for e in batch['evidences']}, {first.id, second.id, legacy.id})
+
+    def test_pending_page_can_filter_by_sender_and_order(self):
+        first = self.add_evidence(sender_id='first@lid', message_id='first-photo')
+        self.add_evidence(sender_id='second@lid', message_id='second-photo')
+
+        response = self.client.get(
+            reverse('pending_evidence'),
+            {'grupo_origen': 'group-1', 'remitente': 'first@lid', 'orden': 'oldest'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        visible = [evidence for batch in response.context['available_batches'] for evidence in batch['evidences']]
+        self.assertEqual([evidence.id for evidence in visible], [first.id])
 
     def test_operation_panel_exposes_pending_whatsapp_evidence(self):
         self.add_evidence()

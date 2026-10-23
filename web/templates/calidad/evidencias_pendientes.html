@@ -5,56 +5,72 @@
 
 {% block extra_head %}
 <style>
-  .pending-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:18px; flex-wrap:wrap; }
-  .pending-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(210px, 1fr)); gap:14px; }
-  .pending-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
-  .pending-open { display:block; width:100%; padding:0; border:0; background:#0b0d12; cursor:zoom-in; }
-  .pending-card img { width:100%; height:170px; object-fit:cover; display:block; background:#0b0d12; }
-  .pending-card-body { padding:12px; display:grid; gap:7px; }
-  .pending-card-body label { display:flex; align-items:flex-start; gap:8px; cursor:pointer; }
-  .pending-card-body input[type=checkbox] { margin-top:3px; accent-color:var(--accent); }
-  .pending-meta { color:var(--text-muted); font-size:.78rem; line-height:1.4; }
-  .pending-caption { min-height:2.2em; color:var(--text); font-size:.82rem; }
+  .pending-toolbar { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:18px; flex-wrap:wrap; }
+  .pending-toolbar h2 { font-size:1.1rem; margin-bottom:5px; }
+  .pending-toolbar-actions { display:flex; gap:10px; align-items:end; flex-wrap:wrap; }
+  .pending-toolbar-actions form { display:grid; grid-template-columns:auto minmax(150px, 1fr) auto minmax(150px, 1fr) auto minmax(140px, 1fr); gap:4px 7px; align-items:center; }
+  .pending-toolbar-actions select { min-width:190px; }
+  .pending-meta { color:var(--text-muted); font-size:.78rem; line-height:1.45; }
   .pending-link { color:var(--accent); text-decoration:none; }
   .pending-link:hover { text-decoration:underline; }
   .pending-section { margin-top:28px; }
   .pending-section h2 { font-size:1rem; margin-bottom:12px; }
+  .pending-button { border:0; border-radius:8px; padding:9px 14px; cursor:pointer; color:#fff; background:var(--accent); font:inherit; font-weight:600; }
+  .pending-button:hover, .pending-button:focus-visible { filter:brightness(1.1); }
+  .pending-button.secondary { background:var(--surface2); }
+  .pending-empty { color:var(--text-muted); padding:32px 24px; text-align:center; border:1px dashed var(--border); border-radius:var(--radius); }
+  .pending-batch-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(250px, 1fr)); gap:14px; }
+  .pending-batch-card { display:flex; flex-direction:column; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; min-width:0; }
+  .pending-cover-button { display:block; width:100%; padding:0; border:0; background:#080a0f; cursor:zoom-in; }
+  .pending-cover-button:focus-visible { outline:3px solid var(--accent); outline-offset:-3px; }
+  .pending-cover { width:100%; height:185px; object-fit:cover; display:block; }
+  .pending-batch-card-body { display:grid; gap:8px; padding:14px; }
+  .pending-batch-card-title { display:flex; justify-content:space-between; gap:8px; align-items:start; }
+  .pending-batch-card-title strong { font-size:.9rem; }
+  .pending-status { color:var(--success); font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+  .pending-batch-count { color:#fff; background:var(--accent); border-radius:999px; padding:3px 8px; font-size:.72rem; white-space:nowrap; }
+  .pending-batch-card-actions { display:flex; gap:8px; margin-top:4px; }
+  .pending-batch-card-actions .pending-button { flex:1; }
+  .pending-selection-bar { position:sticky; bottom:14px; z-index:5; display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:18px; padding:12px 14px; background:rgba(26,29,46,.96); border:1px solid var(--accent); border-radius:10px; box-shadow:0 8px 28px rgba(0,0,0,.3); }
+  .pending-selection-count { color:#fff; font-weight:600; }
+  .pending-dialog { width:min(920px, calc(100vw - 28px)); max-height:min(88vh, 820px); padding:0; border:1px solid var(--border); border-radius:14px; background:var(--surface); color:var(--text); box-shadow:0 22px 70px rgba(0,0,0,.6); }
+  .pending-dialog::backdrop { background:rgba(7,10,18,.82); backdrop-filter:blur(4px); }
+  .pending-dialog-head { display:flex; justify-content:space-between; gap:12px; align-items:start; padding:18px 20px; border-bottom:1px solid var(--border); }
+  .pending-dialog-head h3 { margin:0 0 4px; font-size:1.05rem; }
+  .pending-dialog-close { width:34px; height:34px; border:1px solid var(--border); border-radius:8px; background:var(--surface2); color:var(--text); cursor:pointer; font-size:1.2rem; }
+  .pending-dialog-body { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:12px; padding:18px 20px; overflow:auto; max-height:calc(88vh - 150px); }
+  .pending-photo-tile { display:grid; gap:7px; min-width:0; }
+  .pending-photo-button { display:block; width:100%; padding:0; border:2px solid transparent; border-radius:10px; overflow:hidden; background:#080a0f; cursor:zoom-in; }
+  .pending-photo-button:hover, .pending-photo-button:focus-visible { border-color:var(--accent); }
+  .pending-photo-button img { display:block; width:100%; aspect-ratio:1; object-fit:cover; }
+  .pending-photo-tile label { display:flex; gap:7px; align-items:start; color:var(--text); font-size:.78rem; cursor:pointer; }
+  .pending-photo-tile input { margin-top:2px; accent-color:var(--accent); }
+  .pending-dialog-foot { display:flex; justify-content:space-between; gap:12px; align-items:center; padding:14px 20px; border-top:1px solid var(--border); background:var(--surface2); }
+  .pending-review { display:grid; grid-template-columns:minmax(0, 1.35fr) minmax(280px, .65fr); gap:18px; align-items:stretch; }
   .pending-group { border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); padding:16px; margin-bottom:16px; }
   .pending-group-head { display:flex; justify-content:space-between; gap:12px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
-  .pending-review { display:grid; grid-template-columns:minmax(0, 1.35fr) minmax(280px, .65fr); gap:18px; align-items:stretch; }
   .pending-viewer { min-width:0; background:#0f1117; border:1px solid var(--border); border-radius:12px; overflow:hidden; }
   .pending-main-stage { min-height:300px; display:flex; align-items:center; justify-content:center; padding:18px; background:#080a0f; position:relative; }
   .pending-main-stage img { max-width:100%; max-height:390px; width:auto; height:auto; object-fit:contain; cursor:zoom-in; border-radius:8px; }
   .pending-main-nav { position:absolute; top:50%; transform:translateY(-50%); width:38px; height:38px; border:1px solid var(--border); border-radius:50%; background:rgba(15,23,42,.86); color:#fff; cursor:pointer; z-index:1; }
-  .pending-main-nav:hover { background:var(--accent); }
+  .pending-main-nav:hover, .pending-main-nav:focus-visible { background:var(--accent); }
   .pending-main-nav.prev { left:12px; }
   .pending-main-nav.next { right:12px; }
   .pending-photo-info { padding:10px 14px; border-top:1px solid var(--border); color:var(--text-muted); font-size:.78rem; line-height:1.45; min-height:58px; }
   .pending-carousel { display:flex; gap:10px; overflow-x:auto; padding:14px; background:#0f1117; }
   .pending-carousel-thumb { flex:0 0 72px; width:72px; height:62px; padding:0; border:2px solid transparent; border-radius:8px; overflow:hidden; background:#080a0f; cursor:pointer; opacity:.62; }
-  .pending-carousel-thumb:hover, .pending-carousel-thumb.active { border-color:var(--accent); opacity:1; }
+  .pending-carousel-thumb:hover, .pending-carousel-thumb:focus-visible, .pending-carousel-thumb.active { border-color:var(--accent); opacity:1; }
   .pending-carousel-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
   .pending-inspector { border:1px solid var(--border); border-radius:12px; background:var(--surface2); padding:16px; display:flex; flex-direction:column; }
   .pending-inspector h3 { margin:0 0 4px; font-size:1rem; }
   .pending-inspector .pending-meta { margin-bottom:14px; }
   .pending-fields { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; }
   .pending-fields label { display:grid; gap:5px; color:var(--text-muted); font-size:.78rem; }
-  .pending-fields input, .pending-fields textarea, .contact-form input { width:100%; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:9px; font:inherit; }
+  .pending-fields input, .pending-fields textarea, .contact-form input, .pending-toolbar-actions select { width:100%; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:9px; font:inherit; }
+  .pending-fields input:focus, .pending-fields textarea:focus, .contact-form input:focus, .pending-toolbar-actions select:focus { border-color:var(--accent); outline:3px solid rgba(99,102,241,.25); }
   .pending-fields textarea { min-height:70px; resize:vertical; }
   .pending-fields .wide { grid-column:1 / -1; }
   .pending-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:14px; }
-  .pending-button { border:0; border-radius:8px; padding:9px 14px; cursor:pointer; color:#fff; background:var(--accent); font:inherit; }
-  .pending-button:hover { filter:brightness(1.1); }
-  .pending-button.secondary { background:var(--surface2); }
-  .pending-empty { color:var(--text-muted); padding:24px; text-align:center; border:1px dashed var(--border); border-radius:var(--radius); }
-  .pending-batch { border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); padding:16px; margin-bottom:16px; }
-  .pending-batch-head { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
-  .pending-batch-review { margin:0; }
-  .pending-batch-inspector { justify-content:center; }
-  .pending-batch-thumb-wrap { position:relative; flex:0 0 72px; }
-  .pending-batch-thumb-wrap .pending-carousel-thumb { display:block; }
-  .pending-batch-check { display:block; text-align:center; padding-top:4px; }
-  .pending-batch-check input { accent-color:var(--accent); }
   .contacts-list { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:10px; }
   .contact-form { display:flex; gap:8px; align-items:center; }
   .contact-form input { min-width:0; }
@@ -63,13 +79,13 @@
   .pending-modal-content { position:relative; display:flex; flex-direction:column; align-items:center; max-width:92vw; max-height:90vh; }
   .pending-modal-content img { max-width:86vw; max-height:78vh; object-fit:contain; border-radius:8px; box-shadow:0 16px 48px rgba(0,0,0,.6); }
   .pending-modal-nav { position:absolute; top:50%; transform:translateY(-50%); width:46px; height:46px; border:1px solid var(--border); border-radius:50%; background:rgba(15,23,42,.86); color:#fff; cursor:pointer; z-index:2; }
-  .pending-modal-nav:hover { background:var(--accent); }
+  .pending-modal-nav:hover, .pending-modal-nav:focus-visible { background:var(--accent); }
   .pending-modal-nav.prev { left:-58px; }
   .pending-modal-nav.next { right:-58px; }
   .pending-modal-info { margin-top:14px; padding:10px 18px; border:1px solid var(--border); border-radius:10px; background:rgba(15,23,42,.9); color:#f8fafc; font-size:.82rem; max-width:80vw; }
   .pending-modal-close { position:fixed; top:24px; right:28px; width:40px; height:40px; border:1px solid var(--border); border-radius:8px; background:rgba(15,23,42,.85); color:#fff; cursor:pointer; }
   @media (max-width:850px) { .pending-review { grid-template-columns:1fr; } }
-  @media (max-width:700px) { .pending-fields { grid-template-columns:1fr; } .pending-fields .wide { grid-column:auto; } .pending-modal-nav.prev { left:10px; } .pending-modal-nav.next { right:10px; } }
+  @media (max-width:700px) { .pending-fields { grid-template-columns:1fr; } .pending-fields .wide { grid-column:auto; } .pending-modal-nav.prev { left:10px; } .pending-modal-nav.next { right:10px; } .pending-selection-bar { align-items:stretch; flex-direction:column; } .pending-dialog-body { grid-template-columns:repeat(2, minmax(0, 1fr)); } .pending-toolbar-actions form { grid-template-columns:auto 1fr; } }
 </style>
 {% endblock %}
 
@@ -81,10 +97,10 @@
 <section class="card">
   <div class="pending-toolbar">
     <div>
-      <h2 style="font-size:1.05rem; margin-bottom:4px;">Bandeja de recepción</h2>
-      <p class="pending-meta">Selecciona fotografías y crea un grupo manual. Todavía no se crea ningún registro definitivo.</p>
+      <h2>Bandeja de recepción</h2>
+      <p class="pending-meta">Revisa una tanda, selecciona sus fotografías y después prepara el registro. Nada se confirma automáticamente.</p>
     </div>
-    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+    <div class="pending-toolbar-actions">
       <form method="get">
         <label class="pending-meta" for="pending-group-filter">Grupo</label>
         <select id="pending-group-filter" name="grupo_origen" onchange="this.form.submit()">
@@ -95,6 +111,20 @@
           </option>
           {% endfor %}
         </select>
+        <label class="pending-meta" for="pending-sender-filter">Remitente</label>
+        <select id="pending-sender-filter" name="remitente" onchange="this.form.submit()">
+          <option value="">Todos</option>
+          {% for contact in pending_contacts %}
+          <option value="{{ contact.whatsapp_id }}"{% if selected_sender == contact.whatsapp_id %} selected{% endif %}>
+            {{ contact.display_name|default:contact.whatsapp_id }}
+          </option>
+          {% endfor %}
+        </select>
+        <label class="pending-meta" for="pending-order-filter">Orden</label>
+        <select id="pending-order-filter" name="orden" onchange="this.form.submit()">
+          <option value="recent"{% if selected_order != 'oldest' %} selected{% endif %}>Más recientes</option>
+          <option value="oldest"{% if selected_order == 'oldest' %} selected{% endif %}>Más antiguas</option>
+        </select>
       </form>
       {% if available_evidences %}<button type="button" class="pending-button secondary" onclick="seleccionarTodas()">Seleccionar todas</button>{% endif %}
     </div>
@@ -104,62 +134,71 @@
   <form method="post" id="selection-form">
     {% csrf_token %}
     <input type="hidden" name="action" value="create_group">
+    <div class="pending-batch-grid">
+      {% for batch in available_batches %}
+      {% with first_evidence=batch.evidences|first %}
+      <article class="pending-batch-card">
+        <button type="button" class="pending-cover-button" onclick="abrirTanda('{{ batch.dom_id }}')" aria-haspopup="dialog" aria-controls="{{ batch.dom_id }}-dialog">
+          <img class="pending-cover" src="{{ first_evidence.thumbnail_url }}" loading="lazy" alt="Portada de {{ batch.label|lower }}">
+        </button>
+        <div class="pending-batch-card-body">
+          <div class="pending-batch-card-title">
+            <strong>{{ batch.label }}</strong>
+            <span><span class="pending-status">Lista</span> <span class="pending-batch-count">{{ batch.evidences|length }} foto{{ batch.evidences|length|pluralize }}</span></span>
+          </div>
+          <div class="pending-meta">{{ batch.sender_label }} · {{ batch.message_at|date:'Y-m-d H:i' }}</div>
+          <div class="pending-meta">{{ batch.source_group_name|default:batch.source_group_id }}</div>
+          <div class="pending-batch-card-actions">
+            <button type="button" class="pending-button" onclick="abrirTanda('{{ batch.dom_id }}')">Revisar tanda</button>
+            <button type="button" class="pending-button secondary" onclick="seleccionarTanda('{{ batch.dom_id }}')">Seleccionar</button>
+          </div>
+        </div>
+      </article>
+      {% endwith %}
+      {% endfor %}
+    </div>
+
     {% for batch in available_batches %}
-    {% with first_evidence=batch.evidences|first %}
-    <article class="pending-batch" id="{{ batch.dom_id }}">
-      <div class="pending-batch-head">
+    <dialog class="pending-dialog" id="{{ batch.dom_id }}-dialog" aria-labelledby="{{ batch.dom_id }}-title">
+      <div class="pending-dialog-head">
         <div>
-          <strong>{{ batch.label }} · {{ batch.evidences|length }} fotografías</strong>
-          <div class="pending-meta">{{ batch.source_group_name|default:batch.source_group_id }} · {{ batch.message_at|date:'Y-m-d H:i' }} · {{ batch.sender_label }}</div>
+          <h3 id="{{ batch.dom_id }}-title">{{ batch.label }} · {{ batch.evidences|length }} fotografías</h3>
+          <p class="pending-meta">{{ batch.source_group_name|default:batch.source_group_id }} · {{ batch.message_at|date:'Y-m-d H:i' }} · {{ batch.sender_label }}</p>
         </div>
-        <button type="button" class="pending-button secondary" onclick="seleccionarTanda('{{ batch.dom_id }}')">Seleccionar tanda</button>
+        <button type="button" class="pending-dialog-close" onclick="cerrarTanda('{{ batch.dom_id }}')" aria-label="Cerrar revisión">×</button>
       </div>
-      <div class="pending-review pending-batch-review">
-        <div class="pending-viewer" id="{{ batch.dom_id }}-viewer">
-          <div class="pending-main-stage">
-            <button type="button" class="pending-main-nav prev" onclick="cambiarColeccionPendiente('{{ batch.dom_id }}-viewer', -1)" aria-label="Fotografía anterior">‹</button>
-            <img data-pending-main-for="{{ batch.dom_id }}-viewer" src="{{ first_evidence.thumbnail_url }}" alt="Evidencia de WhatsApp" onclick="abrirModalPendiente('{{ batch.dom_id }}-viewer', 0)">
-            <button type="button" class="pending-main-nav next" onclick="cambiarColeccionPendiente('{{ batch.dom_id }}-viewer', 1)" aria-label="Fotografía siguiente">›</button>
-          </div>
-          <div class="pending-photo-info" data-pending-info-for="{{ batch.dom_id }}-viewer">
-            <strong>{{ first_evidence.sender.display_name|default:first_evidence.sender_whatsapp_id|default:'Remitente desconocido' }}</strong>
-            · {{ first_evidence.message_at|default:first_evidence.received_at|date:'Y-m-d H:i' }}<br>
-            {{ first_evidence.caption|default:'Sin caption'|truncatechars:180 }}
-          </div>
-          <div class="pending-carousel" aria-label="Fotografías de la tanda">
-            {% for evidence in batch.evidences %}
-            <div class="pending-batch-thumb-wrap">
-              <button type="button" class="pending-carousel-thumb{% if forloop.first %} active{% endif %}" data-pending-photo
-                data-thumb="{{ evidence.thumbnail_url }}" data-original="{{ evidence.original_url }}"
-                data-sender="{{ evidence.sender.display_name|default:evidence.sender_whatsapp_id|default:'Remitente desconocido' }}"
-                data-caption="{{ evidence.caption|default:'Sin caption' }}" data-meta="{{ evidence.message_at|default:evidence.received_at|date:'Y-m-d H:i' }}"
-                onclick="seleccionarColeccionPendiente('{{ batch.dom_id }}-viewer', {{ forloop.counter0 }})"
-                aria-label="Fotografía {{ forloop.counter }}">
-                <img src="{{ evidence.thumbnail_url }}" loading="lazy" alt="Miniatura {{ forloop.counter }}">
-              </button>
-              <label class="pending-batch-check"><input type="checkbox" name="evidence_ids" value="{{ evidence.id }}" aria-label="Seleccionar fotografía {{ forloop.counter }}"></label>
-            </div>
-            {% endfor %}
-          </div>
-        </div>
-        <aside class="pending-inspector pending-batch-inspector">
-          <h3>{{ batch.label }}</h3>
-          <p class="pending-meta">{{ batch.evidences|length }} fotografías · {{ batch.sender_label }}<br>{{ batch.source_group_name|default:batch.source_group_id }}<br>{{ batch.message_at|date:'Y-m-d H:i' }}</p>
-          <p class="pending-meta">La tanda conserva la asociación entregada por WhatsApp. Puedes combinarla manualmente con otras tandas.</p>
-        </aside>
+      <div class="pending-dialog-body" id="{{ batch.dom_id }}-collection" aria-label="Fotografías de la tanda">
+        {% for evidence in batch.evidences %}
+        <article class="pending-photo-tile">
+          <button type="button" class="pending-photo-button" data-pending-photo
+            data-thumb="{{ evidence.thumbnail_url }}" data-original="{{ evidence.original_url }}"
+            data-sender="{{ evidence.sender.display_name|default:evidence.sender_whatsapp_id|default:'Remitente desconocido' }}"
+            data-caption="{{ evidence.caption|default:'Sin caption' }}" data-meta="{{ evidence.message_at|default:evidence.received_at|date:'Y-m-d H:i' }}"
+            onclick="abrirModalPendiente('{{ batch.dom_id }}-collection', {{ forloop.counter0 }})">
+            <img src="{{ evidence.thumbnail_url }}" loading="lazy" alt="Fotografía {{ forloop.counter }} de la tanda">
+          </button>
+          <label><input type="checkbox" name="evidence_ids" value="{{ evidence.id }}" data-pending-checkbox> Incluir en el registro</label>
+          <span class="pending-meta">{{ evidence.sender.display_name|default:evidence.sender_whatsapp_id|default:'Remitente desconocido' }}<br>{{ evidence.message_at|default:evidence.received_at|date:'Y-m-d H:i' }}</span>
+        </article>
+        {% endfor %}
       </div>
-    </article>
-    {% endwith %}
+      <div class="pending-dialog-foot">
+        <span class="pending-meta">Puedes combinar esta selección con otras tandas.</span>
+        <button type="button" class="pending-button" onclick="seleccionarTanda('{{ batch.dom_id }}'); cerrarTanda('{{ batch.dom_id }}')">Seleccionar toda la tanda</button>
+      </div>
+    </dialog>
     {% endfor %}
-    <div class="pending-actions">
-      <button type="submit" class="pending-button">Crear grupo con selección</button>
+
+    <div class="pending-selection-bar" aria-live="polite">
+      <span class="pending-selection-count"><strong id="pending-selection-count">0</strong> fotografías seleccionadas</span>
+      <button type="submit" class="pending-button">Preparar registro</button>
     </div>
   </form>
   {% if pending_page.has_other_pages %}
   <div class="pending-actions" style="justify-content:center;">
-    {% if pending_page.has_previous %}<a class="pending-link" href="?page={{ pending_page.previous_page_number }}{% if selected_source_group %}&grupo_origen={{ selected_source_group|urlencode }}{% endif %}">← Anteriores</a>{% endif %}
+    {% if pending_page.has_previous %}<a class="pending-link" href="?page={{ pending_page.previous_page_number }}{% if selected_source_group %}&grupo_origen={{ selected_source_group|urlencode }}{% endif %}{% if selected_sender %}&remitente={{ selected_sender|urlencode }}{% endif %}{% if selected_order == 'oldest' %}&orden=oldest{% endif %}">← Anteriores</a>{% endif %}
     <span class="pending-meta">Página {{ pending_page.number }} de {{ pending_page.paginator.num_pages }}</span>
-    {% if pending_page.has_next %}<a class="pending-link" href="?page={{ pending_page.next_page_number }}{% if selected_source_group %}&grupo_origen={{ selected_source_group|urlencode }}{% endif %}">Siguientes →</a>{% endif %}
+    {% if pending_page.has_next %}<a class="pending-link" href="?page={{ pending_page.next_page_number }}{% if selected_source_group %}&grupo_origen={{ selected_source_group|urlencode }}{% endif %}{% if selected_sender %}&remitente={{ selected_sender|urlencode }}{% endif %}{% if selected_order == 'oldest' %}&orden=oldest{% endif %}">Siguientes →</a>{% endif %}
   </div>
   {% endif %}
   {% else %}
@@ -295,6 +334,16 @@ function abrirColeccionPendiente(id, index) {
   abrirModalPendiente(id, index);
 }
 
+function abrirTanda(id) {
+  const dialog = document.getElementById(`${id}-dialog`);
+  if (dialog && !dialog.open) dialog.showModal();
+}
+
+function cerrarTanda(id) {
+  const dialog = document.getElementById(`${id}-dialog`);
+  if (dialog?.open) dialog.close();
+}
+
 function abrirModalPendiente(id, index) {
   pendingModalState.items = coleccionPendiente(id);
   pendingModalState.index = index;
@@ -341,15 +390,33 @@ document.getElementById('pending-photo-modal').addEventListener('click', event =
 });
 
 function seleccionarTodas() {
-  const boxes = [...document.querySelectorAll('#selection-form input[name="evidence_ids"]')];
+  const boxes = [...document.querySelectorAll('#selection-form [data-pending-checkbox]')];
   const shouldSelect = boxes.some(box => !box.checked);
   boxes.forEach(box => { box.checked = shouldSelect; });
+  actualizarSeleccionPendiente();
 }
 
 function seleccionarTanda(id) {
-  const batch = document.getElementById(id);
-  if (!batch) return;
-  batch.querySelectorAll('input[name="evidence_ids"]').forEach(box => { box.checked = true; });
+  const dialog = document.getElementById(`${id}-dialog`);
+  if (!dialog) return;
+  dialog.querySelectorAll('[data-pending-checkbox]').forEach(box => { box.checked = true; });
+  actualizarSeleccionPendiente();
 }
+
+function actualizarSeleccionPendiente() {
+  const count = document.getElementById('pending-selection-count');
+  if (!count) return;
+  count.textContent = document.querySelectorAll('#selection-form [data-pending-checkbox]:checked').length;
+}
+
+document.querySelectorAll('#selection-form [data-pending-checkbox]').forEach(box => {
+  box.addEventListener('change', actualizarSeleccionPendiente);
+});
+
+document.querySelectorAll('.pending-dialog').forEach(dialog => {
+  dialog.addEventListener('click', event => {
+    if (event.target === dialog) dialog.close();
+  });
+});
 </script>
 {% endblock %}
