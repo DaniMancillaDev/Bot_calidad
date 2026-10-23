@@ -9,6 +9,8 @@ urlpatterns = [
     path('fotos/',              views.galeria_fotos,       name='galeria_fotos'),
     path('fotos/<int:numero>/', views.ver_foto,            name='ver_foto'),
     path('evidencias-pendientes/', views_pending.pending_evidence, name='pending_evidence'),
+    path('evidencias-pendientes/grupos/nuevo/', views_pending.create_pending_group_draft, name='create_pending_group_draft'),
+    path('evidencias-pendientes/grupos/<uuid:group_id>/actualizar/', views_pending.update_pending_group_view, name='update_pending_group'),
     path(
         'evidencias-pendientes/contactos/<int:contact_id>/',
         views_pending.rename_pending_contact,

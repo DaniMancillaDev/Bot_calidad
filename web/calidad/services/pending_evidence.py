@@ -29,6 +29,63 @@ class PendingEvidenceConflict(PendingEvidenceError):
     """The group or one of its files changed before this request completed."""
 
 
+def create_empty_pending_group(user):
+    """Create an editable draft without claiming evidence yet."""
+    return PendingEvidenceGroup.objects.create(operator=user, created_by=user)
+
+
+def update_pending_group(user, group_id, action, evidence_ids=(), fields=None):
+    """Persist draft assignments or fields without creating a definitive record."""
+    with transaction.atomic():
+        group = PendingEvidenceGroup.objects.select_for_update().get(pk=group_id)
+        if not user.is_superuser and group.operator_id != user.id:
+            raise PendingEvidenceError('No tienes permiso para editar este borrador.')
+        if group.status != PendingEvidenceGroup.STATUS_DRAFT:
+            raise PendingEvidenceConflict('Este borrador ya no está disponible.')
+
+        ids = list(dict.fromkeys(evidence_ids))
+        if action == 'add':
+            evidences = list(
+                PendingEvidence.objects.select_for_update().filter(
+                    id__in=ids,
+                    status=PendingEvidence.STATUS_READY,
+                    group__isnull=True,
+                )
+            )
+            if len(evidences) != len(ids):
+                raise PendingEvidenceConflict(
+                    'Una o más fotografías ya fueron asignadas a otro borrador.'
+                )
+            PendingEvidence.objects.filter(id__in=ids).update(group=group)
+        elif action == 'remove':
+            PendingEvidence.objects.select_for_update().filter(
+                id__in=ids,
+                group=group,
+            ).update(group=None)
+        elif action == 'save_fields':
+            values = fields or {}
+            quantity_raw = str(values.get('quantity', '')).strip()
+            quantity = None
+            if quantity_raw:
+                try:
+                    quantity = int(quantity_raw)
+                except ValueError as exc:
+                    raise PendingEvidenceError('La cantidad debe ser un número entero.') from exc
+                if quantity <= 0:
+                    raise PendingEvidenceError('La cantidad debe ser mayor que cero.')
+            group.model = str(values.get('model', '')).strip()[:255]
+            group.line = str(values.get('line', '')).strip()[:100]
+            group.quantity = quantity
+            group.responsible = str(values.get('responsible', '')).strip()[:100]
+            group.description = str(values.get('description', '')).strip()
+            group.save(update_fields=[
+                'model', 'line', 'quantity', 'responsible', 'description', 'updated_at',
+            ])
+        else:
+            raise PendingEvidenceError('Operación de borrador no reconocida.')
+    return group
+
+
 def _normalise_group_fields(fields):
     model = str(fields.get('model', '')).strip()
     line = str(fields.get('line', '')).strip()

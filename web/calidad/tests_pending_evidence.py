@@ -127,11 +127,11 @@ class PendingEvidenceWebTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'pending-review')
-        self.assertContains(response, 'pending-carousel')
-        self.assertContains(response, 'pending-photo-modal')
-        self.assertContains(response, 'Datos del registro')
-        self.assertContains(response, 'abrirModalPendiente')
+        self.assertContains(response, 'wa-workspace')
+        self.assertContains(response, 'Registros en preparación')
+        self.assertContains(response, 'Visor fotográfico')
+        self.assertContains(response, 'Envíos de WhatsApp')
+        self.assertContains(response, 'pending-work-data')
 
     def test_pending_page_groups_only_confirmed_batches_and_keeps_legacy_rows_separate(self):
         first = self.add_evidence(message_id='album-1', batch_key='album:one')
@@ -143,13 +143,63 @@ class PendingEvidenceWebTests(TestCase):
         self.assertEqual(response.status_code, 200)
         batches = response.context['available_batches']
         self.assertEqual(sorted(len(batch['evidences']) for batch in batches), [1, 2])
-        self.assertContains(response, 'Álbum · 2 fotografías')
-        self.assertContains(response, 'Envío individual · 1 fotografías')
-        self.assertContains(response, 'pending-batch-grid')
-        self.assertContains(response, 'pending-dialog')
-        self.assertContains(response, 'Revisar tanda')
-        self.assertContains(response, 'pending-selection-count')
+        self.assertContains(response, 'Visor fotográfico')
+        self.assertContains(response, 'Tandas recibidas')
+        self.assertContains(response, 'wa-batches-list')
+        self.assertContains(response, 'Incorporar tanda completa')
         self.assertEqual({e.id for batch in batches for e in batch['evidences']}, {first.id, second.id, legacy.id})
+
+    def test_draft_workspace_api_assigns_saves_and_removes_evidence(self):
+        evidence = self.add_evidence()
+
+        created = self.client.post(reverse('create_pending_group_draft'))
+        self.assertEqual(created.status_code, 201)
+        group_id = created.json()['group']['id']
+
+        assigned = self.client.post(
+            reverse('update_pending_group', args=[group_id]),
+            {'action': 'add', 'evidence_ids': [str(evidence.id)]},
+        )
+        self.assertEqual(assigned.status_code, 200)
+        self.assertEqual(assigned.json()['group']['evidence_ids'], [str(evidence.id)])
+
+        saved = self.client.post(
+            reverse('update_pending_group', args=[group_id]),
+            {
+                'action': 'save_fields',
+                'model': 'M-1',
+                'line': 'L-1',
+                'quantity': '2',
+                'responsible': 'QA',
+                'description': 'Defecto',
+            },
+        )
+        self.assertEqual(saved.status_code, 200)
+        group = PendingEvidenceGroup.objects.get(pk=group_id)
+        self.assertEqual((group.model, group.line, group.quantity, group.responsible), ('M-1', 'L-1', 2, 'QA'))
+
+        removed = self.client.post(
+            reverse('update_pending_group', args=[group_id]),
+            {'action': 'remove', 'evidence_ids': [str(evidence.id)]},
+        )
+        self.assertEqual(removed.status_code, 200)
+        evidence.refresh_from_db()
+        self.assertIsNone(evidence.group_id)
+
+    def test_draft_workspace_api_keeps_other_operator_draft_private(self):
+        other = User.objects.create_user('draft-owner', password='test-pass')
+        PerfilUsuario.objects.create(usuario=other)
+        group = PendingEvidenceGroup.objects.create(operator=other, created_by=other)
+        operator = User.objects.create_user('draft-reader', password='test-pass')
+        PerfilUsuario.objects.create(usuario=operator)
+        self.client.force_login(operator)
+        response = self.client.post(
+            reverse('update_pending_group', args=[group.id]),
+            {'action': 'save_fields', 'model': 'No autorizado'},
+        )
+        self.assertEqual(response.status_code, 409)
+        group.refresh_from_db()
+        self.assertEqual(group.model, '')
 
     def test_pending_page_can_filter_by_sender_and_order(self):
         first = self.add_evidence(sender_id='first@lid', message_id='first-photo')
