@@ -410,6 +410,17 @@ class PendingEvidence(models.Model):
     caption = models.TextField(blank=True, default='')
     message_at = models.DateTimeField(null=True, blank=True)
     received_at = models.DateTimeField(auto_now_add=True)
+    draft_order = models.PositiveIntegerField(default=0)
+    is_excluded = models.BooleanField(default=False)
+    exclusion_reason = models.CharField(max_length=255, blank=True, default='')
+    excluded_at = models.DateTimeField(null=True, blank=True)
+    excluded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='excluded_pending_evidences',
+    )
     processing_started_at = models.DateTimeField(null=True, blank=True)
     file_path = models.CharField(max_length=500, blank=True, default='')
     sha256 = models.CharField(max_length=64, blank=True, default='')
@@ -440,6 +451,8 @@ class PendingEvidence(models.Model):
             models.Index(fields=['sender_whatsapp_id'], name='pending_evidence_sender_idx'),
             models.Index(fields=['sender_alt_whatsapp_id'], name='pending_ev_alt_sender_idx'),
             models.Index(fields=['received_at'], name='pending_evidence_received_idx'),
+            models.Index(fields=['group', 'draft_order'], name='pending_ev_draft_order_idx'),
+            models.Index(fields=['is_excluded', 'status'], name='pending_ev_excluded_idx'),
             models.Index(fields=['group', 'status'], name='pending_ev_assign_idx'),
         ]
         ordering = ['-received_at', 'id']

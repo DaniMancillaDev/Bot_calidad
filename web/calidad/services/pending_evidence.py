@@ -34,6 +34,29 @@ def create_empty_pending_group(user):
     return PendingEvidenceGroup.objects.create(operator=user, created_by=user)
 
 
+def _normalise_draft_order(group):
+    evidences = list(
+        PendingEvidence.objects.select_for_update()
+        .filter(
+            group=group,
+            status=PendingEvidence.STATUS_READY,
+            is_excluded=False,
+        )
+        .order_by('draft_order', 'received_at', 'id')
+    )
+    for order, evidence in enumerate(evidences, start=1):
+        evidence.draft_order = order
+    if evidences:
+        PendingEvidence.objects.bulk_update(evidences, ['draft_order'])
+
+
+def _clear_exclusion(evidence):
+    evidence.is_excluded = False
+    evidence.exclusion_reason = ''
+    evidence.excluded_at = None
+    evidence.excluded_by = None
+
+
 def update_pending_group(user, group_id, action, evidence_ids=(), fields=None):
     """Persist draft assignments or fields without creating a definitive record."""
     with transaction.atomic():
@@ -44,24 +67,102 @@ def update_pending_group(user, group_id, action, evidence_ids=(), fields=None):
             raise PendingEvidenceConflict('Este borrador ya no está disponible.')
 
         ids = list(dict.fromkeys(evidence_ids))
+        if action in {'add', 'remove', 'exclude', 'restore', 'reorder'} and not ids:
+            raise PendingEvidenceError('Selecciona al menos una fotografía.')
         if action == 'add':
-            evidences = list(
-                PendingEvidence.objects.select_for_update().filter(
-                    id__in=ids,
-                    status=PendingEvidence.STATUS_READY,
-                    group__isnull=True,
-                )
-            )
+            evidences = list(PendingEvidence.objects.select_for_update().filter(
+                id__in=ids,
+                status=PendingEvidence.STATUS_READY,
+                group__isnull=True,
+                is_excluded=False,
+            ))
             if len(evidences) != len(ids):
                 raise PendingEvidenceConflict(
                     'Una o más fotografías ya fueron asignadas a otro borrador.'
                 )
-            PendingEvidence.objects.filter(id__in=ids).update(group=group)
+            next_order = (
+                PendingEvidence.objects.filter(group=group, is_excluded=False)
+                .order_by('-draft_order')
+                .values_list('draft_order', flat=True)
+                .first()
+                or 0
+            )
+            for evidence_id in ids:
+                next_order += 1
+                PendingEvidence.objects.filter(pk=evidence_id).update(
+                    group=group,
+                    draft_order=next_order,
+                )
         elif action == 'remove':
-            PendingEvidence.objects.select_for_update().filter(
+            evidences = list(PendingEvidence.objects.select_for_update().filter(
                 id__in=ids,
                 group=group,
-            ).update(group=None)
+            ))
+            if len(evidences) != len(ids):
+                raise PendingEvidenceConflict('Una o más fotografías ya no pertenecen a este borrador.')
+            for evidence in evidences:
+                _clear_exclusion(evidence)
+                evidence.group = None
+                evidence.draft_order = 0
+            if evidences:
+                PendingEvidence.objects.bulk_update(
+                    evidences,
+                    ['group', 'draft_order', 'is_excluded', 'exclusion_reason', 'excluded_at', 'excluded_by'],
+                )
+            _normalise_draft_order(group)
+        elif action == 'exclude':
+            reason = str((fields or {}).get('exclusion_reason', '')).strip()[:255]
+            evidences = list(PendingEvidence.objects.select_for_update().filter(
+                id__in=ids,
+                group=group,
+                status=PendingEvidence.STATUS_READY,
+                is_excluded=False,
+            ))
+            if len(evidences) != len(ids):
+                raise PendingEvidenceConflict('Una o más fotografías ya no están disponibles para excluir.')
+            now = timezone.now()
+            for evidence in evidences:
+                evidence.is_excluded = True
+                evidence.exclusion_reason = reason or 'Excluida por el operador.'
+                evidence.excluded_at = now
+                evidence.excluded_by = user
+            if evidences:
+                PendingEvidence.objects.bulk_update(
+                    evidences,
+                    ['is_excluded', 'exclusion_reason', 'excluded_at', 'excluded_by'],
+                )
+            _normalise_draft_order(group)
+        elif action == 'restore':
+            evidences = list(PendingEvidence.objects.select_for_update().filter(
+                id__in=ids,
+                group=group,
+                status=PendingEvidence.STATUS_READY,
+                is_excluded=True,
+            ))
+            if len(evidences) != len(ids):
+                raise PendingEvidenceConflict('Una o más fotografías ya no están excluidas de este borrador.')
+            for evidence in evidences:
+                _clear_exclusion(evidence)
+            if evidences:
+                PendingEvidence.objects.bulk_update(
+                    evidences,
+                    ['is_excluded', 'exclusion_reason', 'excluded_at', 'excluded_by'],
+                )
+            _normalise_draft_order(group)
+        elif action == 'reorder':
+            current_ids = list(
+                PendingEvidence.objects.select_for_update()
+                .filter(
+                    group=group,
+                    status=PendingEvidence.STATUS_READY,
+                    is_excluded=False,
+                )
+                .values_list('id', flat=True)
+            )
+            if len(ids) != len(current_ids) or set(ids) != set(current_ids):
+                raise PendingEvidenceConflict('El orden enviado no coincide con las fotografías del borrador.')
+            for order, evidence_id in enumerate(ids, start=1):
+                PendingEvidence.objects.filter(pk=evidence_id, group=group).update(draft_order=order)
         elif action == 'save_fields':
             values = fields or {}
             quantity_raw = str(values.get('quantity', '')).strip()
@@ -84,6 +185,31 @@ def update_pending_group(user, group_id, action, evidence_ids=(), fields=None):
         else:
             raise PendingEvidenceError('Operación de borrador no reconocida.')
     return group
+
+
+def restore_unassigned_evidence(user, evidence_ids):
+    """Make excluded, unassigned evidence available again without touching its file."""
+    ids = list(dict.fromkeys(evidence_ids))
+    if not ids:
+        raise PendingEvidenceError('Selecciona al menos una fotografía.')
+    with transaction.atomic():
+        evidences = list(PendingEvidence.objects.select_for_update().filter(
+            id__in=ids,
+            status=PendingEvidence.STATUS_READY,
+            group__isnull=True,
+            is_excluded=True,
+        ))
+        if len(evidences) != len(ids):
+            raise PendingEvidenceConflict('Una o más fotografías ya no están disponibles para recuperar.')
+        for evidence in evidences:
+            _clear_exclusion(evidence)
+            evidence.draft_order = 0
+        if evidences:
+            PendingEvidence.objects.bulk_update(
+                evidences,
+                ['is_excluded', 'exclusion_reason', 'excluded_at', 'excluded_by', 'draft_order'],
+            )
+    return evidences
 
 
 def _normalise_group_fields(fields):
@@ -169,7 +295,7 @@ def create_pending_group(user, evidence_ids):
         if len(evidences) != len(ids):
             raise PendingEvidenceError('Una o más fotografías ya no existen.')
         if any(
-            evidence.status != PendingEvidence.STATUS_READY or evidence.group_id
+            evidence.status != PendingEvidence.STATUS_READY or evidence.group_id or evidence.is_excluded
             for evidence in evidences
         ):
             raise PendingEvidenceConflict(
@@ -180,7 +306,11 @@ def create_pending_group(user, evidence_ids):
             operator=user,
             created_by=user,
         )
-        PendingEvidence.objects.filter(id__in=ids).update(group=group)
+        for order, evidence_id in enumerate(ids, start=1):
+            PendingEvidence.objects.filter(pk=evidence_id).update(
+                group=group,
+                draft_order=order,
+            )
     return group
 
 
@@ -200,14 +330,15 @@ def confirm_pending_group(user, group_id, fields):
             if group.status != PendingEvidenceGroup.STATUS_DRAFT:
                 raise PendingEvidenceConflict('Este grupo ya fue confirmado o archivado.')
 
-            evidences = list(
+            all_evidences = list(
                 PendingEvidence.objects.select_for_update()
                 .filter(group=group)
-                .order_by('received_at', 'id')
+                .order_by('is_excluded', 'draft_order', 'received_at', 'id')
             )
+            evidences = [evidence for evidence in all_evidences if not evidence.is_excluded]
             if not evidences or any(
                 evidence.status != PendingEvidence.STATUS_READY
-                for evidence in evidences
+                for evidence in all_evidences
             ):
                 raise PendingEvidenceConflict(
                     'Todas las fotografías deben estar listas antes de confirmar.'
@@ -266,8 +397,13 @@ def confirm_pending_group(user, group_id, fields):
                 'description', 'definitive_record', 'confirmed_by',
                 'confirmed_at', 'updated_at',
             ])
-            PendingEvidence.objects.filter(group=group).update(
+            PendingEvidence.objects.filter(group=group, is_excluded=False).update(
                 status=PendingEvidence.STATUS_ARCHIVED,
+                draft_order=0,
+            )
+            PendingEvidence.objects.filter(group=group, is_excluded=True).update(
+                group=None,
+                draft_order=0,
             )
 
             final_paths = [str(target) for _evidence, _relative, target in evidence_paths]

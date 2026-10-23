@@ -189,6 +189,112 @@ class PendingEvidenceWebTests(TestCase):
         evidence.refresh_from_db()
         self.assertIsNone(evidence.group_id)
 
+    def test_draft_order_exclusion_and_recovery_are_reversible(self):
+        first = self.add_evidence(message_id='order-1')
+        second = self.add_evidence(message_id='order-2')
+        third = self.add_evidence(message_id='order-3')
+        created = self.client.post(reverse('create_pending_group_draft'))
+        group_id = created.json()['group']['id']
+        ids = [str(first.id), str(second.id), str(third.id)]
+
+        self.client.post(
+            reverse('update_pending_group', args=[group_id]),
+            {'action': 'add', 'evidence_ids': ids},
+        )
+        reordered = [str(third.id), str(first.id), str(second.id)]
+        response = self.client.post(
+            reverse('update_pending_group', args=[group_id]),
+            {'action': 'reorder', 'evidence_ids': reordered},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['group']['included_evidence_ids'], reordered)
+        self.assertEqual(
+            list(PendingEvidence.objects.filter(group_id=group_id).order_by('draft_order').values_list('id', flat=True)),
+            [third.id, first.id, second.id],
+        )
+
+        response = self.client.post(
+            reverse('update_pending_group', args=[group_id]),
+            {
+                'action': 'exclude',
+                'evidence_ids': [str(first.id)],
+                'exclusion_reason': 'No corresponde',
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        first.refresh_from_db()
+        self.assertTrue(first.is_excluded)
+        self.assertEqual(first.exclusion_reason, 'No corresponde')
+
+        response = self.client.post(
+            reverse('update_pending_group', args=[group_id]),
+            {'action': 'restore', 'evidence_ids': [str(first.id)]},
+        )
+        self.assertEqual(response.status_code, 200)
+        first.refresh_from_db()
+        self.assertFalse(first.is_excluded)
+
+        self.client.post(
+            reverse('update_pending_group', args=[group_id]),
+            {'action': 'exclude', 'evidence_ids': [str(first.id)]},
+        )
+        self.client.post(
+            reverse('update_pending_group', args=[group_id]),
+            {'action': 'remove', 'evidence_ids': [str(first.id)]},
+        )
+        first.refresh_from_db()
+        self.assertIsNone(first.group_id)
+        self.assertFalse(first.is_excluded)
+        self.assertEqual(first.draft_order, 0)
+
+    def test_confirmation_preserves_draft_order_and_keeps_excluded_file_available(self):
+        first = self.add_evidence(message_id='confirm-1')
+        second = self.add_evidence(message_id='confirm-2')
+        third = self.add_evidence(message_id='confirm-3')
+        group = self.create_group(first, second, third)
+        self.client.post(
+            reverse('update_pending_group', args=[group.id]),
+            {'action': 'reorder', 'evidence_ids': [str(third.id), str(first.id), str(second.id)]},
+        )
+        self.client.post(
+            reverse('update_pending_group', args=[group.id]),
+            {'action': 'exclude', 'evidence_ids': [str(second.id)]},
+        )
+        with patch('calidad.tasks.generar_thumbnails_lote_task.delay'):
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.client.post(
+                    reverse('pending_evidence'), self.confirm_data(group)
+                )
+
+        self.assertEqual(response.status_code, 302)
+        record = RegistroDefecto.objects.get()
+        pending_ids = list(
+            record.evidencias_v2.order_by('orden').values_list('metadatos__pending_evidence_id', flat=True)
+        )
+        self.assertEqual(pending_ids, [str(third.id), str(first.id)])
+        second.refresh_from_db()
+        self.assertIsNone(second.group_id)
+        self.assertTrue(second.is_excluded)
+        self.assertTrue((self.pending_root / second.file_path).is_file())
+
+    def test_unassigned_excluded_evidence_can_be_restored(self):
+        evidence = self.add_evidence(message_id='excluded-unassigned')
+        PendingEvidence.objects.filter(pk=evidence.pk).update(
+            is_excluded=True,
+            exclusion_reason='Prueba reversible',
+        )
+
+        response = self.client.post(
+            reverse('restore_pending_evidence'),
+            {'evidence_ids': [str(evidence.id)]},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        evidence.refresh_from_db()
+        self.assertFalse(evidence.is_excluded)
+        self.assertEqual(evidence.exclusion_reason, '')
+        self.assertTrue((self.pending_root / evidence.file_path).is_file())
+
     def test_draft_workspace_api_keeps_other_operator_draft_private(self):
         other = User.objects.create_user('draft-owner', password='test-pass')
         PerfilUsuario.objects.create(usuario=other)

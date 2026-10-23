@@ -22,6 +22,7 @@ from .services.pending_evidence import (
     create_empty_pending_group,
     create_pending_group,
     confirm_pending_group,
+    restore_unassigned_evidence,
     update_pending_group,
 )
 
@@ -112,6 +113,9 @@ def _pending_evidence_payload(evidence):
         'group_id': str(evidence.group_id) if evidence.group_id else '',
         'group_name': evidence.source_group_name or evidence.source_group_id,
         'status': evidence.get_status_display(),
+        'draft_order': evidence.draft_order,
+        'excluded': evidence.is_excluded,
+        'exclusion_reason': evidence.exclusion_reason,
     }
 
 
@@ -119,6 +123,17 @@ def _pending_group_payload(group):
     evidences = getattr(group, 'pending_evidences', None)
     if evidences is None:
         evidences = list(group.evidences.all())
+    ordered = sorted(
+        evidences,
+        key=lambda evidence: (
+            evidence.is_excluded,
+            evidence.draft_order or 0,
+            evidence.received_at,
+            str(evidence.id),
+        ),
+    )
+    included = [evidence for evidence in ordered if not evidence.is_excluded]
+    excluded = [evidence for evidence in ordered if evidence.is_excluded]
     return {
         'id': str(group.id),
         'model': group.model,
@@ -127,7 +142,9 @@ def _pending_group_payload(group):
         'responsible': group.responsible,
         'description': group.description,
         'status': group.get_status_display(),
-        'evidence_ids': [str(evidence.id) for evidence in evidences],
+        'evidence_ids': [str(evidence.id) for evidence in ordered],
+        'included_evidence_ids': [str(evidence.id) for evidence in included],
+        'excluded_evidence_ids': [str(evidence.id) for evidence in excluded],
     }
 
 
@@ -179,6 +196,7 @@ def pending_evidence(request):
         visibility = Q()
     ready_query = PendingEvidence.objects.filter(
         status=PendingEvidence.STATUS_READY,
+        is_excluded=False,
     ).filter(visibility)
     available_query = (
         ready_query
@@ -214,6 +232,17 @@ def pending_evidence(request):
         group.pending_evidences = list(group.evidences.all())
         _add_image_urls(group.pending_evidences)
 
+    excluded = list(
+        PendingEvidence.objects.filter(
+            status=PendingEvidence.STATUS_READY,
+            is_excluded=True,
+            group__isnull=True,
+        ).filter(visibility)
+        .select_related('sender')
+        .order_by('-excluded_at', '-received_at')
+    )
+    _add_image_urls(excluded)
+
     contacts = list(
         WhatsAppContact.objects.filter(
             pending_evidences__in=ready_query,
@@ -224,6 +253,8 @@ def pending_evidence(request):
     for group in groups:
         for evidence in group.pending_evidences:
             payload_evidences[evidence.id] = _pending_evidence_payload(evidence)
+    for evidence in excluded:
+        payload_evidences[evidence.id] = _pending_evidence_payload(evidence)
     work_payload = {
         'evidences': list(payload_evidences.values()),
         'batches': [
@@ -238,6 +269,7 @@ def pending_evidence(request):
             for batch in available_page.object_list
         ],
         'groups': [_pending_group_payload(group) for group in groups],
+        'excluded': [_pending_evidence_payload(evidence) for evidence in excluded],
         'active_group': selected_group,
     }
     return render(request, 'calidad/evidencias_pendientes.html', {
@@ -253,6 +285,7 @@ def pending_evidence(request):
         'pending_page': available_page,
         'pending_groups': groups,
         'pending_contacts': contacts,
+        'excluded_evidences': excluded,
         'selected_group': selected_group,
         'seccion': 'pending_evidence',
     })
@@ -285,6 +318,21 @@ def update_pending_group_view(request, group_id):
         group.pending_evidences = list(group.evidences.all())
         return JsonResponse({'group': _pending_group_payload(group)})
     except (PendingEvidenceError, ValueError, PendingEvidenceGroup.DoesNotExist) as exc:
+        return JsonResponse({'error': str(exc)}, status=409)
+
+
+@login_required
+@require_POST
+def restore_pending_evidence_view(request):
+    if not _has_pending_access(request.user):
+        return JsonResponse({'error': 'No tienes acceso a las evidencias pendientes.'}, status=403)
+    try:
+        restore_unassigned_evidence(
+            request.user,
+            _parse_ids(request.POST.getlist('evidence_ids')),
+        )
+        return JsonResponse({'ok': True})
+    except (PendingEvidenceError, ValueError) as exc:
         return JsonResponse({'error': str(exc)}, status=409)
 
 
