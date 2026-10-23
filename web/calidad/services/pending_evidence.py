@@ -189,6 +189,7 @@ def confirm_pending_group(user, group_id, fields):
                         'pending_evidence_id': str(evidence.id),
                         'source_group_id': evidence.source_group_id,
                         'source_message_id': evidence.source_message_id,
+                        'receipt_batch_key': evidence.receipt_batch_key,
                         'sender_whatsapp_id': evidence.sender_whatsapp_id,
                     },
                 )

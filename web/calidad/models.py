@@ -395,6 +395,8 @@ class PendingEvidence(models.Model):
     source_group_id = models.CharField(max_length=255)
     source_group_name = models.CharField(max_length=255, blank=True, default='')
     source_message_id = models.CharField(max_length=255)
+    # Stable source batch; blank means legacy evidence with no known association.
+    receipt_batch_key = models.CharField(max_length=255, blank=True, default='')
     media_index = models.PositiveIntegerField(default=0)
     sender = models.ForeignKey(
         WhatsAppContact,
@@ -434,6 +436,7 @@ class PendingEvidence(models.Model):
         ]
         indexes = [
             models.Index(fields=['source_group_id', 'status'], name='pending_evidence_group_idx'),
+            models.Index(fields=['source_group_id', 'receipt_batch_key', 'status'], name='pending_ev_batch_idx'),
             models.Index(fields=['sender_whatsapp_id'], name='pending_evidence_sender_idx'),
             models.Index(fields=['sender_alt_whatsapp_id'], name='pending_ev_alt_sender_idx'),
             models.Index(fields=['received_at'], name='pending_evidence_received_idx'),

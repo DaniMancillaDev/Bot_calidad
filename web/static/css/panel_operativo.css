@@ -197,6 +197,53 @@ th:hover .sort-icon {
   text-align: center !important;
 }
 
+.evidence-cell {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  max-width: 100%;
+}
+
+.evidence-thumbs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  max-width: 150px;
+}
+
+.evidence-thumb {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+.evidence-more {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--surface2);
+  color: var(--text);
+  font-size: 0.8rem;
+  text-decoration: none;
+}
+
+.evidence-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: #86efac;
+  font-size: 0.68rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.evidence-source .material-symbols-outlined {
+  font-size: 0.82rem;
+}
+
 .badge-evidencia {
   display: inline-flex;
   align-items: center;
@@ -491,4 +538,3 @@ tr.agrupada {
 .new-row {
   animation: flashNew 2.5s ease-out;
 }
-

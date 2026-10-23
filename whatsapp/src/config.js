@@ -15,6 +15,7 @@ export function configFromEnv(env = process.env) {
     enabled,
     groups,
     discoveryOnly: boolean(env.WHATSAPP_DISCOVERY_ONLY),
+    acceptOwnMessages: boolean(env.WHATSAPP_ACCEPT_OWN_MESSAGES),
     sessionDir: env.WHATSAPP_SESSION_DIR || '/app/data/whatsapp_session',
     queueDir: env.WHATSAPP_QUEUE_DIR || '/app/data/whatsapp_queue',
     ingestUrl: env.WHATSAPP_INGEST_URL || 'http://web:8000/api/v1/whatsapp/ingest/',

@@ -309,14 +309,14 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
       <!-- Encabezado del grupo -->
       <div class="user-group-header" onclick="toggleGroup('{{ grupo.grouper|default:'none' }}')" style="cursor:pointer; background: var(--surface); padding: 12px 16px; border: 1px solid var(--border); border-radius: var(--radius); display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; transition: background 0.2s;">
         <div style="display:flex; align-items:center; gap:8px;">
-          <span id="icon-{{ grupo.grouper|default:'none' }}" class="material-symbols-outlined" style="font-size:1.25rem; color:var(--text-muted); transition:transform .2s;">chevron_right</span>
+          <span id="icon-{{ grupo.grouper|default:'none' }}" class="material-symbols-outlined" style="font-size:1.25rem; color:var(--text-muted); transition:transform .2s;">{% if forloop.first %}expand_more{% else %}chevron_right{% endif %}</span>
           <strong style="font-size:1.1rem;">Usuario: {{ grupo.list.0.nombre_usuario }} <span style="color:var(--text-muted); font-size:0.9rem;">(ID: {{ grupo.grouper|default:'Ninguno' }})</span></strong>
         </div>
         <span class="badge" style="background: var(--surface2); padding: 4px 10px; border-radius: 12px; font-size: 0.85rem; font-weight: 600;">{{ grupo.list|length }} registros</span>
       </div>
 
       <!-- Contenedor colapsable -->
-      <div class="table-wrapper" id="table-{{ grupo.grouper|default:'none' }}" style="display: none;">
+      <div class="table-wrapper" id="table-{{ grupo.grouper|default:'none' }}" style="display: {% if forloop.first %}block{% else %}none{% endif %};">
         <table>
           <thead>
             <tr>
@@ -378,6 +378,31 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
       if (icon) icon.textContent = 'chevron_right';
     }
   }
+
+  // Keep the report list current after a WhatsApp group is confirmed.
+  (() => {
+    let lastId = Number('{{ latest_record_id|default:"0" }}');
+    let timer = null;
+
+    async function checkForNewRecords() {
+      if (document.hidden) return;
+      try {
+        const response = await fetch(`/api/check_updates/?last_id=${lastId}`, { cache: 'no-store' });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (data.has_updates && data.max_id > lastId) {
+          lastId = data.max_id;
+          window.location.reload();
+        }
+      } catch (error) {
+        console.warn('Actualización de reportes no disponible:', error);
+      }
+    }
+
+    timer = window.setInterval(checkForNewRecords, 10000);
+    document.addEventListener('visibilitychange', checkForNewRecords);
+    window.addEventListener('pagehide', () => window.clearInterval(timer), { once: true });
+  })();
 </script>
 
 {% endblock %}

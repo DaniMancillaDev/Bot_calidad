@@ -45,6 +45,7 @@ class WhatsAppIngestTests(TestCase):
             'group_id': 'group-1',
             'group_name': 'Incoming 2024',
             'message_id': 'message-1',
+            'receipt_batch_key': 'album:test-batch',
             'media_index': '0',
             'sender_id': 'contact@s.whatsapp.net',
             'sender_alt_id': 'contact-alt@lid',
@@ -71,6 +72,7 @@ class WhatsAppIngestTests(TestCase):
         self.assertEqual(evidence.caption, 'Defecto en contenedor')
         self.assertEqual(evidence.source_group_id, 'group-1')
         self.assertEqual(evidence.sender_whatsapp_id, 'contact@s.whatsapp.net')
+        self.assertEqual(evidence.receipt_batch_key, 'album:test-batch')
         self.assertEqual(evidence.sender_alt_whatsapp_id, 'contact-alt@lid')
         self.assertIsNone(evidence.sender.phone_number)
         self.assertTrue((Path(self.temp_dir) / evidence.file_path).is_file())
@@ -109,6 +111,12 @@ class WhatsAppIngestTests(TestCase):
         self.assertEqual(second.status_code, 200)
         self.assertTrue(second.json()['duplicate'])
         self.assertEqual(PendingEvidence.objects.count(), 1)
+
+    def test_missing_batch_key_gets_a_stable_individual_key(self):
+        first = self.post_image(message_id='message-without-batch', receipt_batch_key='')
+        self.assertEqual(first.status_code, 201)
+        evidence = PendingEvidence.objects.get()
+        self.assertTrue(evidence.receipt_batch_key.startswith('message:'))
 
     def test_two_senders_can_share_one_pending_evidence_group(self):
         first = self.post_image(message_id='message-a', sender_id='a@lid', sender_name='A')

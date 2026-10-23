@@ -8,19 +8,25 @@ function safeError(error) {
 }
 
 export class WhatsAppReceiver {
-  constructor({ groups, queue, mediaDir, downloadMediaMessage, updateMediaMessage = null, maxBytes, logger = console }) {
+  constructor({ groups, queue, mediaDir, downloadMediaMessage, updateMediaMessage = null, maxBytes, acceptOwnMessages = false, logger = console }) {
     this.groups = groups
     this.queue = queue
     this.mediaDir = mediaDir
     this.downloadMediaMessage = downloadMediaMessage
     this.updateMediaMessage = updateMediaMessage
     this.maxBytes = maxBytes
+    this.acceptOwnMessages = acceptOwnMessages
+    this.getGroupName = async groupId => groupId
     this.logger = logger
     this.chain = Promise.resolve()
   }
 
   setMediaUpdater(updateMediaMessage) {
     this.updateMediaMessage = updateMediaMessage
+  }
+
+  setGroupNameResolver(getGroupName) {
+    this.getGroupName = getGroupName
   }
 
   async download(image) {
@@ -35,23 +41,32 @@ export class WhatsAppReceiver {
   }
 
   handleUpsert({ messages = [], type }) {
-    // Baileys uses notify for live messages; append is history/replay and is ignored.
-    if (type !== 'notify') return this.chain
+    // Baileys emits messages sent by this device as append; history remains ignored.
+    const ownAppend = type === 'append' && this.acceptOwnMessages
+    if (type !== 'notify' && !ownAppend) return this.chain
+    const acceptedMessages = ownAppend ? messages.filter(message => message.key?.fromMe) : messages
     this.chain = this.chain.then(async () => {
-      for (const message of messages) await this.handleMessage(message)
+      for (const message of acceptedMessages) await this.handleMessage(message)
     }).catch(error => this.logger.error?.('WhatsApp message processing failed', safeError(error)))
     return this.chain
   }
 
   async handleMessage(message) {
-    const image = extractImage(message)
+    const image = extractImage(message, new Date(), { allowFromMe: this.acceptOwnMessages })
     if (!image || !this.groups.has(image.groupId)) return { ignored: true }
+    let groupName = image.groupId
+    try {
+      groupName = await this.getGroupName(image.groupId) || groupName
+    } catch (error) {
+      this.logger.warn?.('WhatsApp group metadata unavailable; using group ID', safeError(error))
+    }
     const key = queueKey(image)
     const fields = {
       group_id: image.groupId,
-      group_name: image.groupId,
+      group_name: groupName,
       message_id: image.messageId,
       media_index: image.mediaIndex,
+      receipt_batch_key: image.receiptBatchKey,
       sender_id: image.senderId,
       sender_alt_id: image.senderAltId,
       sender_name: image.senderName,
@@ -91,6 +106,7 @@ export class WhatsAppReceiver {
       await writeFile(temporary, bytes, { mode: 0o600 })
       await rename(temporary, finalPath)
       const item = await this.queue.activate(key, { ...fields, sha256: digest, size_bytes: bytes.length })
+      this.logger.info?.({ batchType: image.receiptBatchType, batchKey: image.receiptBatchKey, mediaIndex: image.mediaIndex }, 'WhatsApp image accepted')
       return { item, duplicate: false }
     } catch (error) {
       await rm(directory, { recursive: true, force: true })

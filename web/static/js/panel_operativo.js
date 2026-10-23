@@ -53,6 +53,8 @@ class PanelOperativo {
         
         this.floatingActionBar = document.getElementById('floating-action-bar');
         this.selectionCountText = document.getElementById('selection-count-text');
+        this.pendingEvidenceAlert = document.getElementById('pending-evidence-alert');
+        this.pendingEvidenceCount = document.getElementById('pending-evidence-count');
 
         // Edit form fields
         this.editId = document.getElementById('edit-id');
@@ -280,26 +282,29 @@ class PanelOperativo {
 
             const fotosParam = encodeURIComponent(r.fotos_rango || r.fotos_str || '');
             const hasFotos = (r.fotos_nums && r.fotos_nums.length > 0) || (r.fotos_rango && r.fotos_rango !== '—');
+            const whatsappLabel = r.whatsapp_evidence_count > 0
+                ? `<span class="evidence-source" title="${r.whatsapp_evidence_count} evidencia${r.whatsapp_evidence_count !== 1 ? 's' : ''} recibida${r.whatsapp_evidence_count !== 1 ? 's' : ''} por WhatsApp"><span class="material-symbols-outlined">chat</span>WhatsApp${r.whatsapp_sender_count > 1 ? ` · ${r.whatsapp_sender_count} remitentes` : ''}</span>`
+                : '';
             
             // ponytail: Renderizar thumbnails reales si existen, sino fallback a badge.
             let fotosBadge = '';
             if (r.fotos_preview && r.fotos_preview.length > 0) {
-                fotosBadge = `<div style="display:flex; gap:4px; overflow-x:auto; max-width:150px;">`;
+                fotosBadge = `<div class="evidence-cell"><div class="evidence-thumbs">`;
                 r.fotos_preview.slice(0, 3).forEach(f => {
                     fotosBadge += `<a href="${f.url}" target="_blank" onclick="event.stopPropagation();" title="Ver foto">
-                                     <img src="${f.thumb_url}" style="height:32px; border-radius:4px; object-fit:cover;">
+                                     <img src="${f.thumb_url}" class="evidence-thumb" alt="Evidencia fotográfica">
                                    </a>`;
                 });
                 if (r.fotos_preview.length > 3) {
-                    fotosBadge += `<a href="/fotos/?q=${fotosParam}" target="_blank" onclick="event.stopPropagation();" style="display:flex; align-items:center; background:var(--surface2); padding:0 6px; border-radius:4px; font-size:0.8rem; color:var(--text); text-decoration:none;">+${r.fotos_preview.length - 3}</a>`;
+                    fotosBadge += `<a href="/fotos/?q=${fotosParam}" target="_blank" onclick="event.stopPropagation();" class="evidence-more">+${r.fotos_preview.length - 3}</a>`;
                 }
-                fotosBadge += `</div>`;
+                fotosBadge += `</div>${whatsappLabel}</div>`;
             } else if (hasFotos) {
                 fotosBadge = `
-                    <a href="/fotos/?q=${fotosParam}" target="_blank" onclick="event.stopPropagation();" title="Ver evidencias fotográficas" class="badge-evidencia">
+                    <div class="evidence-cell"><a href="/fotos/?q=${fotosParam}" target="_blank" onclick="event.stopPropagation();" title="Ver evidencias fotográficas" class="badge-evidencia">
                         <span class="material-symbols-outlined" style="font-size:0.95rem;">photo_library</span>
                         <span>${fotosStr}</span>
-                    </a>`;
+                    </a>${whatsappLabel}</div>`;
             } else {
                 fotosBadge = `<span style="color:var(--text-muted); font-size:0.85rem;">—</span>`;
             }
@@ -756,10 +761,17 @@ class PanelOperativo {
             if (res.status === 304) return; 
             
             const data = await res.json();
+            this.updatePendingEvidenceCount(data.pending_evidence_count);
             if (data.has_updates && data.nuevos_count > 0) {
                 this.fetchNuevos(); // Auto inject silently
             }
         } catch(e) { console.warn("Polling falló:", e); }
+    }
+
+    updatePendingEvidenceCount(count) {
+        const value = Number(count) || 0;
+        if (this.pendingEvidenceCount) this.pendingEvidenceCount.textContent = value;
+        if (this.pendingEvidenceAlert) this.pendingEvidenceAlert.style.display = value ? 'flex' : 'none';
     }
 
     async fetchNuevos() {

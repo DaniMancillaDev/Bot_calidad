@@ -8,6 +8,7 @@ services:
       POSTGRES_DB: ${WA_PILOT_DB_NAME:-bot_calidad_pilot}
       POSTGRES_USER: ${WA_PILOT_DB_USER:-bot_calidad_pilot}
       POSTGRES_PASSWORD: ${WA_PILOT_DB_PASSWORD:?WA_PILOT_DB_PASSWORD is required}
+    restart: unless-stopped
     volumes:
       - wa_pilot_postgres_data:/var/lib/postgresql/data
     networks: [wa_pilot]
@@ -28,6 +29,7 @@ services:
       - "yes"
       - --requirepass
       - ${WA_PILOT_REDIS_PASSWORD:?WA_PILOT_REDIS_PASSWORD is required}
+    restart: unless-stopped
     volumes:
       - wa_pilot_redis_data:/data
     networks: [wa_pilot]
@@ -56,12 +58,11 @@ services:
       WHATSAPP_PENDING_ROOT: /app/data/whatsapp_pending
       WHATSAPP_MAX_IMAGE_BYTES: ${WA_PILOT_MAX_IMAGE_BYTES:-26214400}
       PYTHONPATH: /app/web
+    restart: unless-stopped
     volumes:
       - wa_pilot_media:/app/media_files
       - wa_pilot_web_data:/app/data
       - wa_pilot_static:/app/static_collected
-    ports:
-      - "127.0.0.1:${WA_PILOT_WEB_PORT:-18080}:8000"
     networks: [wa_pilot]
     depends_on:
       postgres:
@@ -82,6 +83,23 @@ services:
       timeout: 5s
       retries: 12
       start_period: 20s
+
+  # El túnel local termina aquí para servir estáticos y reenviar Django.
+  # No comparte el Nginx, red ni volúmenes de producción.
+  nginx:
+    profiles: [pilot]
+    image: nginx:alpine
+    volumes:
+      - ./nginx/nginx.whatsapp-pilot.conf:/etc/nginx/nginx.conf:ro
+      - wa_pilot_media:/app/media_files:ro
+      - wa_pilot_static:/usr/share/nginx/html/static:ro
+    ports:
+      - "127.0.0.1:${WA_PILOT_WEB_PORT:-18080}:80"
+    networks: [wa_pilot]
+    depends_on:
+      web:
+        condition: service_healthy
+    restart: unless-stopped
 
   celery:
     profiles: [pilot]
@@ -108,6 +126,7 @@ services:
       redis:
         condition: service_healthy
     command: ["uv", "run", "celery", "-A", "calidad.celery_app", "worker", "--loglevel=info", "--concurrency=2"]
+    restart: unless-stopped
     healthcheck:
       disable: true
 
@@ -120,11 +139,12 @@ services:
       # El valor por defecto mantiene el adaptador inerte aunque el perfil se active.
       WHATSAPP_ENABLED: ${WA_PILOT_ENABLED:-false}
       WHATSAPP_DISCOVERY_ONLY: ${WA_PILOT_DISCOVERY_ONLY:-false}
+      WHATSAPP_ACCEPT_OWN_MESSAGES: ${WA_PILOT_ACCEPT_OWN_MESSAGES:-false}
       WHATSAPP_ALLOWED_GROUP_IDS: ${WA_PILOT_ALLOWED_GROUP_ID:-}
       WHATSAPP_INGEST_URL: http://web:8000/api/v1/whatsapp/ingest/
       WHATSAPP_INGEST_API_KEY: ${WA_PILOT_INGEST_KEY:?WA_PILOT_INGEST_KEY is required}
-      WHATSAPP_SESSION_DIR: /app/data/whatsapp_session
-      WHATSAPP_QUEUE_DIR: /app/data/whatsapp_queue
+      WHATSAPP_SESSION_DIR: ${WA_PILOT_SESSION_DIR:-/app/data/whatsapp_session}
+      WHATSAPP_QUEUE_DIR: ${WA_PILOT_QUEUE_DIR:-/app/data/whatsapp_queue}
       WHATSAPP_QR_IN_TERMINAL: ${WA_PILOT_SHOW_QR:-false}
       WHATSAPP_LOG_LEVEL: ${WA_PILOT_LOG_LEVEL:-warn}
       WHATSAPP_MAX_IMAGE_BYTES: ${WA_PILOT_MAX_IMAGE_BYTES:-26214400}
@@ -134,8 +154,7 @@ services:
     depends_on:
       web:
         condition: service_healthy
-    # No auto-restart: enabling the adapter must be an explicit operator action.
-    restart: "no"
+    restart: unless-stopped
 
 volumes:
   wa_pilot_postgres_data:

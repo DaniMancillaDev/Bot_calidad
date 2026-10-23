@@ -168,8 +168,9 @@ export class PersistentOutbox {
   }
 
   start(pollMs) {
-    const timer = setInterval(() => this.processDue().catch(() => {}), pollMs)
-    timer.unref?.()
+    const timer = setInterval(() => this.processDue().catch(error => {
+      this.logger.error?.('WhatsApp outbox processing failed', String(error?.message || 'unknown error').slice(0, 300))
+    }), pollMs)
     return timer
   }
 

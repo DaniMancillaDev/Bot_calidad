@@ -18,3 +18,19 @@ test('normal enabled mode still requires an allowlist', () => {
     /WHATSAPP_ALLOWED_GROUP_IDS is required/,
   )
 })
+
+test('own messages are rejected unless explicitly enabled', () => {
+  const disabled = configFromEnv({
+    WHATSAPP_ENABLED: 'true',
+    WHATSAPP_ALLOWED_GROUP_IDS: 'group-1',
+    WHATSAPP_INGEST_API_KEY: 'key',
+  })
+  const enabled = configFromEnv({
+    WHATSAPP_ENABLED: 'true',
+    WHATSAPP_ALLOWED_GROUP_IDS: 'group-1',
+    WHATSAPP_INGEST_API_KEY: 'key',
+    WHATSAPP_ACCEPT_OWN_MESSAGES: 'true',
+  })
+  assert.equal(disabled.acceptOwnMessages, false)
+  assert.equal(enabled.acceptOwnMessages, true)
+})

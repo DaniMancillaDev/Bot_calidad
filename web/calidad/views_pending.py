@@ -59,6 +59,35 @@ def _add_image_urls(evidences):
     return evidences
 
 
+def _pending_batches(evidences):
+    batches = {}
+    for evidence in evidences:
+        # Legacy rows have no trustworthy album relation; keep each one isolated.
+        key = evidence.receipt_batch_key or f'legacy:{evidence.id}'
+        batch = batches.setdefault(key, {
+            'key': key,
+            'evidences': [],
+            'source_group_id': evidence.source_group_id,
+            'source_group_name': evidence.source_group_name,
+            'message_at': evidence.message_at or evidence.received_at,
+            'senders': set(),
+        })
+        batch['evidences'].append(evidence)
+        sender = evidence.sender.display_name if evidence.sender else ''
+        batch['senders'].add(sender or evidence.sender_whatsapp_id or 'Remitente desconocido')
+
+    result = []
+    for index, batch in enumerate(batches.values()):
+        sender_names = sorted(batch.pop('senders'))
+        batch['sender_label'] = sender_names[0] if len(sender_names) == 1 else f'{len(sender_names)} remitentes'
+        batch['sender_count'] = len(sender_names)
+        batch['label'] = 'Álbum' if batch['key'].startswith('album:') else 'Envío individual'
+        batch['dom_id'] = f'pending-batch-{index}'
+        _add_image_urls(batch['evidences'])
+        result.append(batch)
+    return result
+
+
 @login_required
 @require_http_methods(['GET', 'POST'])
 def pending_evidence(request):
@@ -90,6 +119,11 @@ def pending_evidence(request):
             messages.error(request, str(exc))
             return redirect('pending_evidence')
 
+    source_group_filter = request.GET.get('grupo_origen', '').strip()
+    allowed_groups = getattr(settings, 'WHATSAPP_ALLOWED_GROUP_IDS', frozenset())
+    if not source_group_filter and len(allowed_groups) == 1:
+        source_group_filter = next(iter(allowed_groups))
+
     available_query = (
         PendingEvidence.objects.filter(
             status=PendingEvidence.STATUS_READY,
@@ -98,8 +132,18 @@ def pending_evidence(request):
         .select_related('sender')
         .order_by('-message_at', '-received_at')
     )
-    available_page = Paginator(available_query, 60).get_page(request.GET.get('page'))
-    available = list(available_page.object_list)
+    pending_source_groups = list(
+        PendingEvidence.objects.filter(
+            status=PendingEvidence.STATUS_READY,
+            group__isnull=True,
+        ).values('source_group_id', 'source_group_name').distinct().order_by('source_group_name', 'source_group_id')
+    )
+    if source_group_filter:
+        available_query = available_query.filter(source_group_id=source_group_filter)
+    available_batches = _pending_batches(list(available_query))
+    available_page = Paginator(available_batches, 30).get_page(request.GET.get('page'))
+    available = [evidence for batch in available_page.object_list for evidence in batch['evidences']]
+    available_total = sum(len(batch['evidences']) for batch in available_batches)
     groups = list(
         PendingEvidenceGroup.objects.filter(
             status=PendingEvidenceGroup.STATUS_DRAFT,
@@ -122,7 +166,11 @@ def pending_evidence(request):
     selected_group = request.GET.get('grupo', '')
     return render(request, 'calidad/evidencias_pendientes.html', {
         'available_evidences': _add_image_urls(available),
-        'available_total': available_page.paginator.count,
+        'available_total': available_total,
+        'available_batch_total': len(available_batches),
+        'available_batches': available_page.object_list,
+        'pending_source_groups': pending_source_groups,
+        'selected_source_group': source_group_filter,
         'pending_page': available_page,
         'pending_groups': groups,
         'pending_contacts': contacts,

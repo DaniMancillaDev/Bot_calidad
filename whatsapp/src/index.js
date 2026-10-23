@@ -1,6 +1,7 @@
 import makeWASocket, {
   DisconnectReason,
   downloadMediaMessage,
+  fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
 } from '@whiskeysockets/baileys'
 import pino from 'pino'
@@ -10,7 +11,9 @@ import { configFromEnv } from './config.js'
 import { PersistentOutbox } from './outbox.js'
 import { WhatsAppReceiver } from './receiver.js'
 import { openPersistentSession } from './session.js'
+import { installSignalSessionLogFilter } from './logging.js'
 
+installSignalSessionLogFilter()
 const config = configFromEnv()
 if (!config.enabled) {
   console.log('WhatsApp adapter disabled (set WHATSAPP_ENABLED=true to enable)')
@@ -34,6 +37,7 @@ const receiver = new WhatsAppReceiver({
   queue: outbox,
   mediaDir: config.queueDir + '/media',
   downloadMediaMessage,
+  acceptOwnMessages: config.acceptOwnMessages,
   maxBytes: config.maxBytes,
   logger,
 })
@@ -41,6 +45,17 @@ if (!config.discoveryOnly) outbox.start(config.pollMs)
 
 let reconnectTimer
 let discoveryStarted = false
+let baileysVersion
+let baileysVersionLoaded = false
+const groupNames = new Map()
+
+async function getGroupName(socket, groupId) {
+  if (groupNames.has(groupId)) return groupNames.get(groupId)
+  const metadata = await socket.groupMetadata(groupId)
+  const name = String(metadata.subject || '').trim() || groupId
+  groupNames.set(groupId, name)
+  return name
+}
 async function discoverGroups(socket) {
   if (discoveryStarted) return
   discoveryStarted = true
@@ -60,27 +75,52 @@ async function discoverGroups(socket) {
 }
 
 async function connect() {
+  if (!baileysVersionLoaded) {
+    baileysVersionLoaded = true
+    try {
+      const latest = await fetchLatestBaileysVersion()
+      baileysVersion = latest.version
+    } catch (error) {
+      logger.warn({ err: error }, 'Baileys version lookup failed; using the installed default')
+    }
+  }
   const socket = makeWASocket({
+    ...(baileysVersion ? { version: baileysVersion } : {}),
     auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, logger) },
     markOnlineOnConnect: false,
     syncFullHistory: false,
     logger,
   })
   receiver.setMediaUpdater(message => socket.updateMediaMessage(message))
-  socket.ev.on('creds.update', saveCreds)
-  if (!config.discoveryOnly) socket.ev.on('messages.upsert', event => receiver.handleUpsert(event))
-  socket.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
-    if (qr && config.qrInTerminal) qrcode.generate(qr, { small: true })
-    if (connection === 'open' && config.discoveryOnly) void discoverGroups(socket)
-    if (connection !== 'close') return
-    const status = lastDisconnect?.error?.output?.statusCode
-    if (status === DisconnectReason.loggedOut) {
-      logger.error('WhatsApp session logged out; manual re-pairing is required')
-      return
+  receiver.setGroupNameResolver(groupId => getGroupName(socket, groupId))
+  socket.ev.process(async events => {
+    // Baileys can emit creds.update immediately before the 515 restart.
+    // Awaiting this in the same event processor prevents reconnecting with stale auth.
+    if (events['creds.update']) await saveCreds()
+
+    if (events['connection.update']) {
+      const { connection, lastDisconnect, qr } = events['connection.update']
+      if (qr && config.qrInTerminal) qrcode.generate(qr, { small: true })
+      if (connection === 'open') {
+        console.log('CONNECTION\topen')
+        if (config.discoveryOnly) void discoverGroups(socket)
+      }
+      if (connection === 'close') {
+        const status = lastDisconnect?.error?.output?.statusCode
+        console.log(`CONNECTION\tclose\tstatus=${status ?? 'unknown'}`)
+        if (status === DisconnectReason.loggedOut) {
+          logger.error('WhatsApp session logged out; manual re-pairing is required')
+        } else {
+          clearTimeout(reconnectTimer)
+          const delay = status === DisconnectReason.restartRequired ? 0 : 3000
+          reconnectTimer = setTimeout(() => connect().catch(error => logger.error({ err: error }, 'WhatsApp reconnect failed')), delay)
+        }
+      }
     }
-    clearTimeout(reconnectTimer)
-    reconnectTimer = setTimeout(() => connect().catch(error => logger.error({ err: error }, 'WhatsApp reconnect failed')), 3000)
-    reconnectTimer.unref?.()
+
+    if (!config.discoveryOnly && events['messages.upsert']) {
+      await receiver.handleUpsert(events['messages.upsert'])
+    }
   })
 }
 

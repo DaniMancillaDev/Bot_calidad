@@ -14,7 +14,7 @@ from django.db.models import Count, Q
 from django.conf import settings
 from django.http import Http404, HttpResponse, JsonResponse
 from django.views.decorators.http import require_POST
-from .models import RegistroDefecto, PerfilUsuario, EstadoRevision
+from .models import RegistroDefecto, PerfilUsuario, EstadoRevision, PendingEvidence
 from calidad.utils import get_best_image_path
 
 # ============================================================
@@ -53,6 +53,37 @@ def get_registros_permitidos(user):
         )
 
     return RegistroDefecto.objects.none()
+
+
+def _get_allowed_storage_ids(user):
+    """Acepta carpetas históricas de Telegram y carpetas nuevas de Django."""
+    if user.is_superuser:
+        return None
+    if not hasattr(user, 'perfil'):
+        return set()
+
+    perfiles = PerfilUsuario.objects.filter(
+        turno=user.perfil.turno,
+        departamento=user.perfil.departamento,
+    )
+    ids = set(perfiles.values_list('usuario_id', flat=True))
+    ids.update(
+        value for value in perfiles.values_list('telegram_user_id', flat=True)
+        if value is not None
+    )
+    return ids
+
+
+def _get_pending_evidence_count(user):
+    """Cuenta evidencias WhatsApp disponibles para la bandeja del usuario."""
+    from .views_pending import _has_pending_access
+
+    if not _has_pending_access(user):
+        return 0
+    return PendingEvidence.objects.filter(
+        status=PendingEvidence.STATUS_READY,
+        group__isnull=True,
+    ).count()
 
 
 
@@ -360,9 +391,12 @@ def reportes(request):
     for r in registros:
         r.nombre_usuario = nombres_dict.get(r.user_id, "Desconocido")
 
+    latest_record_id = base_qs.order_by('-id').values_list('id', flat=True).first() or 0
+
     context = {
         'registros':    registros,
         'total_registros': len(registros),
+        'latest_record_id': latest_record_id,
         'lineas':       lineas,
         'responsables': responsables,
         'preset_activo': rango_activo,
@@ -422,17 +456,8 @@ def serve_protected_media(request, subpath):
             raise Http404("Ruta no permitida")
         
         if not request.user.is_superuser:
-            # El usuario puede ver archivos de operadores de su mismo turno/depto
-            if not hasattr(request.user, 'perfil'):
-                raise Http404("Sin perfil de usuario")
-            
-            perfil = request.user.perfil
-            allowed_user_ids = set(
-                PerfilUsuario.objects.filter(
-                    turno=perfil.turno,
-                    departamento=perfil.departamento
-                ).values_list('telegram_user_id', flat=True)
-            )
+            # Acepta tanto el ID histórico de Telegram como el ID Django.
+            allowed_user_ids = _get_allowed_storage_ids(request.user)
             if path_user_id not in allowed_user_ids:
                 raise Http404("Sin permiso para este archivo")
     elif parts[0] == 'importaciones_temp':
@@ -481,11 +506,7 @@ def ver_foto(request, numero):
         usuarios_permitidos = None  # Admin puede ver todos
     else:
         if hasattr(request.user, 'perfil'):
-            usuarios_perfil = PerfilUsuario.objects.filter(
-                turno=request.user.perfil.turno,
-                departamento=request.user.perfil.departamento
-            ).values_list('telegram_user_id', flat=True)
-            usuarios_permitidos = set(usuarios_perfil)
+            usuarios_permitidos = _get_allowed_storage_ids(request.user)
         else:
             usuarios_permitidos = set()
 
@@ -723,8 +744,13 @@ def _enrich_galeria_registros(object_list):
             if m:
                 num_display = int(m.group(1))
 
-            thumb_src = f"{thumbs_url}{reg.user_id}/{filename}" if filename in thumbs_set else f"{proxies_url}{reg.user_id}/{filename}"
             orig_src = f"/media-protegida/{path}"
+            if filename in thumbs_set:
+                thumb_src = f"{thumbs_url}{reg.user_id}/{filename}"
+            elif filename in proxies_set:
+                thumb_src = f"{proxies_url}{reg.user_id}/{filename}"
+            else:
+                thumb_src = orig_src
 
             fotos_data.append({
                 'num': num_display,
@@ -959,12 +985,23 @@ def _build_fotos_en_disco(registros_data):
         evs_por_registro[ev.registro_id].append(ev)
 
     for r in registros_data:
+        evs = evs_por_registro.get(r['id'], [])
+        whatsapp_evs = [
+            ev for ev in evs
+            if isinstance(ev.metadatos, dict)
+            and ev.metadatos.get('source') == PendingEvidence.SOURCE_WHATSAPP
+        ]
+        r['whatsapp_evidence_count'] = len(whatsapp_evs)
+        r['whatsapp_sender_count'] = len({
+            ev.metadatos.get('sender_whatsapp_id') for ev in whatsapp_evs
+            if ev.metadatos.get('sender_whatsapp_id')
+        })
+
         user_id = r.get('user_id')
         if not user_id:
             continue
             
         user_folder = fotos_dir / str(user_id)
-        evs = evs_por_registro.get(r['id'], [])
         
         # ponytail: Detectar V2 para limpiar rangos falsos (ej. fotos="1" -> [1])
         has_v2 = False
@@ -1100,7 +1137,6 @@ def _build_fotos_preview(fotos_en_disco, evidencias_qs):
 
         thumb_src = f"{thumbs_url}{user_id}/{filename}" if has_thumb else (f"{proxies_url}{user_id}/{filename}" if has_proxy else orig_url)
         proxy_src = f"{proxies_url}{user_id}/{filename}" if has_proxy else orig_url
-
         fotos_preview.append({
             'clave':        string_clave.split('_v2_')[0],
             'numero':       data['numero'],
@@ -1488,6 +1524,7 @@ def panel_operativo(request):
     context = {
         'registros_json': json.dumps(registros_data, default=str),
         'last_id': last_id,
+        'pending_evidence_count': _get_pending_evidence_count(request.user),
         'rango_activo': rango_activo,
         'preset_activo': preset or rango_activo,
         'seccion': 'operacion',
@@ -1508,6 +1545,7 @@ def api_check_updates(request):
         return JsonResponse({'error': 'Invalid last_id'}, status=400)
         
     registros_base = get_registros_permitidos(request.user)
+    pending_evidence_count = _get_pending_evidence_count(request.user)
     
     from django.db.models import Max
     max_id_dict = registros_base.aggregate(Max('id'))
@@ -1516,9 +1554,18 @@ def api_check_updates(request):
     if max_id > last_id:
         # Hay nuevos registros
         nuevos_count = registros_base.filter(id__gt=last_id).count()
-        return JsonResponse({'has_updates': True, 'max_id': max_id, 'nuevos_count': nuevos_count})
+        return JsonResponse({
+            'has_updates': True,
+            'max_id': max_id,
+            'nuevos_count': nuevos_count,
+            'pending_evidence_count': pending_evidence_count,
+        })
     
-    return JsonResponse({'has_updates': False, 'max_id': max_id})
+    return JsonResponse({
+        'has_updates': False,
+        'max_id': max_id,
+        'pending_evidence_count': pending_evidence_count,
+    })
 
 @login_required
 def api_get_nuevos(request):

@@ -52,7 +52,7 @@ class PendingEvidenceWebTests(TestCase):
         )
         self.client.force_login(self.user)
 
-    def add_evidence(self, sender_id='one@lid', message_id=None, color=(20, 40, 60)):
+    def add_evidence(self, sender_id='one@lid', message_id=None, color=(20, 40, 60), batch_key=''):
         evidence_id = uuid4()
         folder = self.pending_root / str(evidence_id)
         folder.mkdir(parents=True)
@@ -66,6 +66,7 @@ class PendingEvidenceWebTests(TestCase):
             source_group_id='group-1',
             source_group_name='Incoming 2024',
             source_message_id=message_id or str(evidence_id),
+            receipt_batch_key=batch_key,
             media_index=0,
             sender=contact,
             sender_whatsapp_id=sender_id,
@@ -117,6 +118,48 @@ class PendingEvidenceWebTests(TestCase):
             404,
         )
 
+    def test_pending_group_uses_carousel_and_compact_registration_panel(self):
+        evidence = self.add_evidence()
+        group = self.create_group(evidence)
+
+        response = self.client.get(
+            reverse('pending_evidence'), {'grupo': str(group.id)}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'pending-review')
+        self.assertContains(response, 'pending-carousel')
+        self.assertContains(response, 'pending-photo-modal')
+        self.assertContains(response, 'Datos del registro')
+        self.assertContains(response, 'abrirModalPendiente')
+
+    def test_pending_page_groups_only_confirmed_batches_and_keeps_legacy_rows_separate(self):
+        first = self.add_evidence(message_id='album-1', batch_key='album:one')
+        second = self.add_evidence(message_id='album-2', batch_key='album:one')
+        legacy = self.add_evidence(message_id='legacy-photo')
+
+        response = self.client.get(reverse('pending_evidence'), {'grupo_origen': 'group-1'})
+
+        self.assertEqual(response.status_code, 200)
+        batches = response.context['available_batches']
+        self.assertEqual(sorted(len(batch['evidences']) for batch in batches), [1, 2])
+        self.assertContains(response, 'Álbum · 2 fotografías')
+        self.assertContains(response, 'Envío individual · 1 fotografías')
+        self.assertEqual({e.id for batch in batches for e in batch['evidences']}, {first.id, second.id, legacy.id})
+
+    def test_operation_panel_exposes_pending_whatsapp_evidence(self):
+        self.add_evidence()
+
+        page = self.client.get(reverse('panel_operativo'))
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, '<strong id="pending-evidence-count">1</strong>', html=True)
+        self.assertContains(page, 'evidencias de WhatsApp pendientes de asignar')
+        self.assertContains(page, reverse('pending_evidence'))
+
+        updates = self.client.get(reverse('api_check_updates'), {'last_id': 0})
+        self.assertEqual(updates.status_code, 200)
+        self.assertEqual(updates.json()['pending_evidence_count'], 1)
+
     def test_anonymous_and_profileless_users_cannot_open_basket(self):
         self.add_evidence()
         anonymous = Client()
@@ -126,6 +169,29 @@ class PendingEvidenceWebTests(TestCase):
         client = Client()
         client.force_login(profileless)
         self.assertEqual(client.get(reverse('pending_evidence')).status_code, 403)
+
+    def test_operator_can_read_media_stored_under_django_user_id(self):
+        operator = User.objects.create_user('operator', password='test-pass')
+        PerfilUsuario.objects.create(
+            usuario=operator,
+            turno='A',
+            departamento='IQA',
+        )
+        thumb_dir = self.media_root / 'thumbs' / str(operator.id)
+        thumb_dir.mkdir(parents=True)
+        (thumb_dir / 'sample.jpg').write_bytes(_jpeg_bytes())
+
+        client = Client()
+        client.force_login(operator)
+        response = client.get(
+            f'/media-protegida/thumbs/{operator.id}/sample.jpg'
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response['X-Accel-Redirect'],
+            f'/protected/thumbs/{operator.id}/sample.jpg',
+        )
 
     def test_csrf_is_required_for_group_and_contact_changes(self):
         evidence = self.add_evidence()
@@ -175,9 +241,24 @@ class PendingEvidenceWebTests(TestCase):
         gallery = self.client.get(reverse('galeria_fotos'))
         self.assertEqual(gallery.status_code, 200)
         self.assertContains(gallery, 'MODEL-1')
+        self.assertContains(gallery, f'/media-protegida/fotos/{self.user.id}/wa_{first.id}.jpg')
         reports = self.client.get(reverse('reportes'))
         self.assertEqual(reports.status_code, 200)
         self.assertContains(reports, 'MODEL-1')
+        self.assertEqual(reports.context['latest_record_id'], record.id)
+
+        operation = self.client.get(reverse('panel_operativo'))
+        self.assertEqual(operation.status_code, 200)
+        self.assertContains(operation, 'WhatsApp')
+        self.assertContains(operation, 'whatsapp_evidence_count')
+        self.assertContains(operation, 'whatsapp_sender_count')
+
+        new_records = self.client.get(
+            reverse('api_get_nuevos'), {'last_id': 0}
+        )
+        self.assertEqual(new_records.status_code, 200)
+        self.assertEqual(new_records.json()['registros'][0]['whatsapp_evidence_count'], 2)
+        self.assertEqual(new_records.json()['registros'][0]['whatsapp_sender_count'], 2)
 
     def test_confirm_requires_complete_fields_and_does_not_copy_files(self):
         evidence = self.add_evidence()

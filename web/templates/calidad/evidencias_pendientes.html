@@ -8,6 +8,7 @@
   .pending-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:18px; flex-wrap:wrap; }
   .pending-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(210px, 1fr)); gap:14px; }
   .pending-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+  .pending-open { display:block; width:100%; padding:0; border:0; background:#0b0d12; cursor:zoom-in; }
   .pending-card img { width:100%; height:170px; object-fit:cover; display:block; background:#0b0d12; }
   .pending-card-body { padding:12px; display:grid; gap:7px; }
   .pending-card-body label { display:flex; align-items:flex-start; gap:8px; cursor:pointer; }
@@ -20,9 +21,22 @@
   .pending-section h2 { font-size:1rem; margin-bottom:12px; }
   .pending-group { border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); padding:16px; margin-bottom:16px; }
   .pending-group-head { display:flex; justify-content:space-between; gap:12px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
-  .pending-group-photos { display:flex; gap:8px; overflow-x:auto; padding-bottom:10px; }
-  .pending-group-photos a { flex:0 0 110px; }
-  .pending-group-photos img { width:110px; height:90px; object-fit:cover; border-radius:8px; background:#0b0d12; }
+  .pending-review { display:grid; grid-template-columns:minmax(0, 1.35fr) minmax(280px, .65fr); gap:18px; align-items:stretch; }
+  .pending-viewer { min-width:0; background:#0f1117; border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+  .pending-main-stage { min-height:300px; display:flex; align-items:center; justify-content:center; padding:18px; background:#080a0f; position:relative; }
+  .pending-main-stage img { max-width:100%; max-height:390px; width:auto; height:auto; object-fit:contain; cursor:zoom-in; border-radius:8px; }
+  .pending-main-nav { position:absolute; top:50%; transform:translateY(-50%); width:38px; height:38px; border:1px solid var(--border); border-radius:50%; background:rgba(15,23,42,.86); color:#fff; cursor:pointer; z-index:1; }
+  .pending-main-nav:hover { background:var(--accent); }
+  .pending-main-nav.prev { left:12px; }
+  .pending-main-nav.next { right:12px; }
+  .pending-photo-info { padding:10px 14px; border-top:1px solid var(--border); color:var(--text-muted); font-size:.78rem; line-height:1.45; min-height:58px; }
+  .pending-carousel { display:flex; gap:10px; overflow-x:auto; padding:14px; background:#0f1117; }
+  .pending-carousel-thumb { flex:0 0 72px; width:72px; height:62px; padding:0; border:2px solid transparent; border-radius:8px; overflow:hidden; background:#080a0f; cursor:pointer; opacity:.62; }
+  .pending-carousel-thumb:hover, .pending-carousel-thumb.active { border-color:var(--accent); opacity:1; }
+  .pending-carousel-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+  .pending-inspector { border:1px solid var(--border); border-radius:12px; background:var(--surface2); padding:16px; display:flex; flex-direction:column; }
+  .pending-inspector h3 { margin:0 0 4px; font-size:1rem; }
+  .pending-inspector .pending-meta { margin-bottom:14px; }
   .pending-fields { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; }
   .pending-fields label { display:grid; gap:5px; color:var(--text-muted); font-size:.78rem; }
   .pending-fields input, .pending-fields textarea, .contact-form input { width:100%; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:9px; font:inherit; }
@@ -33,15 +47,34 @@
   .pending-button:hover { filter:brightness(1.1); }
   .pending-button.secondary { background:var(--surface2); }
   .pending-empty { color:var(--text-muted); padding:24px; text-align:center; border:1px dashed var(--border); border-radius:var(--radius); }
+  .pending-batch { border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); padding:16px; margin-bottom:16px; }
+  .pending-batch-head { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
+  .pending-batch-review { margin:0; }
+  .pending-batch-inspector { justify-content:center; }
+  .pending-batch-thumb-wrap { position:relative; flex:0 0 72px; }
+  .pending-batch-thumb-wrap .pending-carousel-thumb { display:block; }
+  .pending-batch-check { display:block; text-align:center; padding-top:4px; }
+  .pending-batch-check input { accent-color:var(--accent); }
   .contacts-list { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:10px; }
   .contact-form { display:flex; gap:8px; align-items:center; }
   .contact-form input { min-width:0; }
-  @media (max-width:700px) { .pending-fields { grid-template-columns:1fr; } .pending-fields .wide { grid-column:auto; } }
+  #pending-photo-modal { display:none; position:fixed; inset:0; z-index:9999; background:rgba(10,15,29,.95); backdrop-filter:blur(8px); align-items:center; justify-content:center; }
+  #pending-photo-modal.open { display:flex; }
+  .pending-modal-content { position:relative; display:flex; flex-direction:column; align-items:center; max-width:92vw; max-height:90vh; }
+  .pending-modal-content img { max-width:86vw; max-height:78vh; object-fit:contain; border-radius:8px; box-shadow:0 16px 48px rgba(0,0,0,.6); }
+  .pending-modal-nav { position:absolute; top:50%; transform:translateY(-50%); width:46px; height:46px; border:1px solid var(--border); border-radius:50%; background:rgba(15,23,42,.86); color:#fff; cursor:pointer; z-index:2; }
+  .pending-modal-nav:hover { background:var(--accent); }
+  .pending-modal-nav.prev { left:-58px; }
+  .pending-modal-nav.next { right:-58px; }
+  .pending-modal-info { margin-top:14px; padding:10px 18px; border:1px solid var(--border); border-radius:10px; background:rgba(15,23,42,.9); color:#f8fafc; font-size:.82rem; max-width:80vw; }
+  .pending-modal-close { position:fixed; top:24px; right:28px; width:40px; height:40px; border:1px solid var(--border); border-radius:8px; background:rgba(15,23,42,.85); color:#fff; cursor:pointer; }
+  @media (max-width:850px) { .pending-review { grid-template-columns:1fr; } }
+  @media (max-width:700px) { .pending-fields { grid-template-columns:1fr; } .pending-fields .wide { grid-column:auto; } .pending-modal-nav.prev { left:10px; } .pending-modal-nav.next { right:10px; } }
 </style>
 {% endblock %}
 
 {% block topbar_actions %}
-<span class="pending-meta">{{ available_total }} fotografías listas</span>
+<span class="pending-meta">{{ available_total }} fotografías · {{ available_batch_total }} tandas</span>
 {% endblock %}
 
 {% block content %}
@@ -51,43 +84,82 @@
       <h2 style="font-size:1.05rem; margin-bottom:4px;">Bandeja de recepción</h2>
       <p class="pending-meta">Selecciona fotografías y crea un grupo manual. Todavía no se crea ningún registro definitivo.</p>
     </div>
-{% if available_evidences %}
-    <button type="button" class="pending-button secondary" onclick="seleccionarTodas()">Seleccionar todas</button>
-    {% endif %}
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <form method="get">
+        <label class="pending-meta" for="pending-group-filter">Grupo</label>
+        <select id="pending-group-filter" name="grupo_origen" onchange="this.form.submit()">
+          <option value="">Todos los grupos</option>
+          {% for source_group in pending_source_groups %}
+          <option value="{{ source_group.source_group_id }}"{% if selected_source_group == source_group.source_group_id %} selected{% endif %}>
+            {{ source_group.source_group_name|default:source_group.source_group_id }}
+          </option>
+          {% endfor %}
+        </select>
+      </form>
+      {% if available_evidences %}<button type="button" class="pending-button secondary" onclick="seleccionarTodas()">Seleccionar todas</button>{% endif %}
+    </div>
   </div>
 
   {% if available_evidences %}
   <form method="post" id="selection-form">
     {% csrf_token %}
     <input type="hidden" name="action" value="create_group">
-    <div class="pending-grid">
-      {% for evidence in available_evidences %}
-      <article class="pending-card">
-        <a href="{{ evidence.original_url }}" target="_blank" rel="noopener">
-          <img src="{{ evidence.thumbnail_url }}" loading="lazy" alt="Evidencia de WhatsApp">
-        </a>
-        <div class="pending-card-body">
-          <label>
-            <input type="checkbox" name="evidence_ids" value="{{ evidence.id }}">
-            <span><strong>{{ evidence.sender.display_name|default:evidence.sender_whatsapp_id|default:"Remitente desconocido" }}</strong></span>
-          </label>
-          <div class="pending-meta">Grupo: {{ evidence.source_group_name|default:evidence.source_group_id }}</div>
-          <div class="pending-meta">{{ evidence.message_at|default:evidence.received_at|date:"Y-m-d H:i" }}</div>
-          {% if evidence.sender.phone_number %}<div class="pending-meta">Tel: {{ evidence.sender.phone_number }}</div>{% endif %}
-          <div class="pending-caption">{{ evidence.caption|default:"Sin caption"|truncatechars:140 }}</div>
+    {% for batch in available_batches %}
+    {% with first_evidence=batch.evidences|first %}
+    <article class="pending-batch" id="{{ batch.dom_id }}">
+      <div class="pending-batch-head">
+        <div>
+          <strong>{{ batch.label }} · {{ batch.evidences|length }} fotografías</strong>
+          <div class="pending-meta">{{ batch.source_group_name|default:batch.source_group_id }} · {{ batch.message_at|date:'Y-m-d H:i' }} · {{ batch.sender_label }}</div>
         </div>
-      </article>
-      {% endfor %}
-    </div>
+        <button type="button" class="pending-button secondary" onclick="seleccionarTanda('{{ batch.dom_id }}')">Seleccionar tanda</button>
+      </div>
+      <div class="pending-review pending-batch-review">
+        <div class="pending-viewer" id="{{ batch.dom_id }}-viewer">
+          <div class="pending-main-stage">
+            <button type="button" class="pending-main-nav prev" onclick="cambiarColeccionPendiente('{{ batch.dom_id }}-viewer', -1)" aria-label="Fotografía anterior">‹</button>
+            <img data-pending-main-for="{{ batch.dom_id }}-viewer" src="{{ first_evidence.thumbnail_url }}" alt="Evidencia de WhatsApp" onclick="abrirModalPendiente('{{ batch.dom_id }}-viewer', 0)">
+            <button type="button" class="pending-main-nav next" onclick="cambiarColeccionPendiente('{{ batch.dom_id }}-viewer', 1)" aria-label="Fotografía siguiente">›</button>
+          </div>
+          <div class="pending-photo-info" data-pending-info-for="{{ batch.dom_id }}-viewer">
+            <strong>{{ first_evidence.sender.display_name|default:first_evidence.sender_whatsapp_id|default:'Remitente desconocido' }}</strong>
+            · {{ first_evidence.message_at|default:first_evidence.received_at|date:'Y-m-d H:i' }}<br>
+            {{ first_evidence.caption|default:'Sin caption'|truncatechars:180 }}
+          </div>
+          <div class="pending-carousel" aria-label="Fotografías de la tanda">
+            {% for evidence in batch.evidences %}
+            <div class="pending-batch-thumb-wrap">
+              <button type="button" class="pending-carousel-thumb{% if forloop.first %} active{% endif %}" data-pending-photo
+                data-thumb="{{ evidence.thumbnail_url }}" data-original="{{ evidence.original_url }}"
+                data-sender="{{ evidence.sender.display_name|default:evidence.sender_whatsapp_id|default:'Remitente desconocido' }}"
+                data-caption="{{ evidence.caption|default:'Sin caption' }}" data-meta="{{ evidence.message_at|default:evidence.received_at|date:'Y-m-d H:i' }}"
+                onclick="seleccionarColeccionPendiente('{{ batch.dom_id }}-viewer', {{ forloop.counter0 }})"
+                aria-label="Fotografía {{ forloop.counter }}">
+                <img src="{{ evidence.thumbnail_url }}" loading="lazy" alt="Miniatura {{ forloop.counter }}">
+              </button>
+              <label class="pending-batch-check"><input type="checkbox" name="evidence_ids" value="{{ evidence.id }}" aria-label="Seleccionar fotografía {{ forloop.counter }}"></label>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        <aside class="pending-inspector pending-batch-inspector">
+          <h3>{{ batch.label }}</h3>
+          <p class="pending-meta">{{ batch.evidences|length }} fotografías · {{ batch.sender_label }}<br>{{ batch.source_group_name|default:batch.source_group_id }}<br>{{ batch.message_at|date:'Y-m-d H:i' }}</p>
+          <p class="pending-meta">La tanda conserva la asociación entregada por WhatsApp. Puedes combinarla manualmente con otras tandas.</p>
+        </aside>
+      </div>
+    </article>
+    {% endwith %}
+    {% endfor %}
     <div class="pending-actions">
       <button type="submit" class="pending-button">Crear grupo con selección</button>
     </div>
   </form>
   {% if pending_page.has_other_pages %}
   <div class="pending-actions" style="justify-content:center;">
-    {% if pending_page.has_previous %}<a class="pending-link" href="?page={{ pending_page.previous_page_number }}">← Anteriores</a>{% endif %}
+    {% if pending_page.has_previous %}<a class="pending-link" href="?page={{ pending_page.previous_page_number }}{% if selected_source_group %}&grupo_origen={{ selected_source_group|urlencode }}{% endif %}">← Anteriores</a>{% endif %}
     <span class="pending-meta">Página {{ pending_page.number }} de {{ pending_page.paginator.num_pages }}</span>
-    {% if pending_page.has_next %}<a class="pending-link" href="?page={{ pending_page.next_page_number }}">Siguientes →</a>{% endif %}
+    {% if pending_page.has_next %}<a class="pending-link" href="?page={{ pending_page.next_page_number }}{% if selected_source_group %}&grupo_origen={{ selected_source_group|urlencode }}{% endif %}">Siguientes →</a>{% endif %}
   </div>
   {% endif %}
   {% else %}
@@ -104,28 +176,53 @@
       <strong>{{ group.pending_evidences|length }} fotografías seleccionadas</strong>
       <span class="pending-meta">Creado por {{ group.created_by.get_full_name|default:group.created_by.username }}</span>
     </div>
-    <div class="pending-group-photos">
-      {% for evidence in group.pending_evidences %}
-      <a href="{{ evidence.original_url }}" target="_blank" rel="noopener" title="{{ evidence.caption|default:'Sin caption' }}">
-        <img src="{{ evidence.thumbnail_url }}" loading="lazy" alt="Evidencia pendiente">
-      </a>
-      {% endfor %}
-    </div>
-    <form method="post">
+    {% with first_evidence=group.pending_evidences|first %}
+    <div class="pending-review">
+      <div class="pending-viewer" id="pending-group-{{ group.id }}">
+        <div class="pending-main-stage">
+          <button type="button" class="pending-main-nav prev" onclick="cambiarColeccionPendiente('pending-group-{{ group.id }}', -1)" aria-label="Fotografía anterior">‹</button>
+          <img id="pending-main-{{ group.id }}" data-pending-main-for="pending-group-{{ group.id }}" src="{{ first_evidence.thumbnail_url }}" alt="Evidencia pendiente" onclick="abrirModalPendiente('pending-group-{{ group.id }}', 0)">
+          <button type="button" class="pending-main-nav next" onclick="cambiarColeccionPendiente('pending-group-{{ group.id }}', 1)" aria-label="Fotografía siguiente">›</button>
+        </div>
+        <div class="pending-photo-info" id="pending-info-{{ group.id }}" data-pending-info-for="pending-group-{{ group.id }}">
+          <strong>{{ first_evidence.sender.display_name|default:first_evidence.sender_whatsapp_id|default:'Remitente desconocido' }}</strong>
+          · {{ first_evidence.message_at|default:first_evidence.received_at|date:'Y-m-d H:i' }}<br>
+          {{ first_evidence.caption|default:'Sin caption'|truncatechars:180 }}
+        </div>
+        <div class="pending-carousel" aria-label="Fotografías del grupo">
+          {% for evidence in group.pending_evidences %}
+          <button type="button" class="pending-carousel-thumb{% if forloop.first %} active{% endif %}" data-pending-photo
+            data-thumb="{{ evidence.thumbnail_url }}" data-original="{{ evidence.original_url }}"
+            data-sender="{{ evidence.sender.display_name|default:evidence.sender_whatsapp_id|default:'Remitente desconocido' }}"
+            data-caption="{{ evidence.caption|default:'Sin caption' }}" data-meta="{{ evidence.message_at|default:evidence.received_at|date:'Y-m-d H:i' }}"
+            onclick="seleccionarColeccionPendiente('pending-group-{{ group.id }}', {{ forloop.counter0 }})"
+            aria-label="Fotografía {{ forloop.counter }}">
+            <img src="{{ evidence.thumbnail_url }}" loading="lazy" alt="Miniatura {{ forloop.counter }}">
+          </button>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="pending-inspector">
+        <h3>Datos del registro</h3>
+        <p class="pending-meta">Las fotos ya están agrupadas. Completa solo lo necesario para crear el registro definitivo.</p>
+        <form method="post">
       {% csrf_token %}
       <input type="hidden" name="action" value="confirm_group">
       <input type="hidden" name="group_id" value="{{ group.id }}">
       <div class="pending-fields">
-        <label>Modelo<input name="model" value="{{ group.model }}" required maxlength="255"></label>
-        <label>Línea<input name="line" value="{{ group.line }}" required maxlength="100"></label>
+        <label>Modelo<input name="model" value="{{ group.model }}" placeholder="Ej. ABC-123" required maxlength="255"></label>
+        <label>Línea<input name="line" value="{{ group.line }}" placeholder="Ej. T01" required maxlength="100"></label>
+        <label>Responsable<input name="responsible" value="{{ group.responsible }}" placeholder="Área o persona" required maxlength="100"></label>
         <label>Cantidad<input type="number" name="quantity" value="{{ group.quantity|default:'' }}" min="1" required></label>
-        <label>Responsable<input name="responsible" value="{{ group.responsible }}" required maxlength="100"></label>
         <label class="wide">Descripción del defecto<textarea name="description" required>{{ group.description }}</textarea></label>
       </div>
       <div class="pending-actions">
         <button type="submit" class="pending-button">Confirmar y crear registro</button>
       </div>
-    </form>
+        </form>
+      </div>
+    </div>
+    {% endwith %}
   </div>
   {% endfor %}
 </section>
@@ -148,11 +245,111 @@
 </section>
 {% endif %}
 
+<div id="pending-photo-modal" role="dialog" aria-modal="true" aria-label="Visor de evidencias pendientes">
+  <button type="button" class="pending-modal-close" onclick="cerrarModalPendiente()" aria-label="Cerrar visor">×</button>
+  <div class="pending-modal-content">
+    <button type="button" class="pending-modal-nav prev" onclick="cambiarModalPendiente(-1)" aria-label="Fotografía anterior">‹</button>
+    <button type="button" class="pending-modal-nav next" onclick="cambiarModalPendiente(1)" aria-label="Fotografía siguiente">›</button>
+    <img id="pending-modal-img" src="" alt="Fotografía ampliada">
+    <div class="pending-modal-info" id="pending-modal-info"></div>
+  </div>
+</div>
+
 <script>
+const pendingModalState = { items: [], index: 0 };
+
+function coleccionPendiente(id) {
+  const container = document.getElementById(id);
+  return container ? [...container.querySelectorAll('[data-pending-photo]')].map(el => ({
+    thumb: el.dataset.thumb,
+    original: el.dataset.original,
+    sender: el.dataset.sender || 'Remitente desconocido',
+    caption: el.dataset.caption || 'Sin caption',
+    meta: el.dataset.meta || ''
+  })) : [];
+}
+
+function seleccionarColeccionPendiente(id, index) {
+  const items = coleccionPendiente(id);
+  if (!items.length) return;
+  const item = items[index] || items[0];
+  const container = document.getElementById(id);
+  const main = container?.querySelector('[data-pending-main-for]');
+  const info = container?.querySelector('[data-pending-info-for]');
+  if (main) main.src = item.thumb;
+  if (info) info.innerHTML = `<strong>${escapePending(item.sender)}</strong> · ${escapePending(item.meta)}<br>${escapePending(item.caption)}`;
+  const thumbs = container.querySelectorAll('.pending-carousel-thumb');
+  thumbs.forEach((thumb, thumbIndex) => thumb.classList.toggle('active', thumbIndex === index));
+  if (main) main.onclick = () => abrirModalPendiente(id, index);
+}
+
+function cambiarColeccionPendiente(id, delta) {
+  const items = coleccionPendiente(id);
+  if (!items.length) return;
+  const active = document.getElementById(id).querySelector('.pending-carousel-thumb.active');
+  const index = active ? Number([...document.getElementById(id).querySelectorAll('.pending-carousel-thumb')].indexOf(active)) : 0;
+  seleccionarColeccionPendiente(id, (index + delta + items.length) % items.length);
+}
+
+function abrirColeccionPendiente(id, index) {
+  abrirModalPendiente(id, index);
+}
+
+function abrirModalPendiente(id, index) {
+  pendingModalState.items = coleccionPendiente(id);
+  pendingModalState.index = index;
+  renderModalPendiente();
+  document.getElementById('pending-photo-modal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function renderModalPendiente() {
+  const item = pendingModalState.items[pendingModalState.index];
+  if (!item) return;
+  document.getElementById('pending-modal-img').src = item.original;
+  document.getElementById('pending-modal-info').textContent = `${item.sender} · ${item.meta} · ${item.caption} (${pendingModalState.index + 1} de ${pendingModalState.items.length})`;
+}
+
+function cambiarModalPendiente(delta) {
+  if (pendingModalState.items.length < 2) return;
+  pendingModalState.index = (pendingModalState.index + delta + pendingModalState.items.length) % pendingModalState.items.length;
+  renderModalPendiente();
+}
+
+function cerrarModalPendiente() {
+  document.getElementById('pending-photo-modal').classList.remove('open');
+  document.getElementById('pending-modal-img').src = '';
+  document.body.style.overflow = '';
+}
+
+function escapePending(value) {
+  const div = document.createElement('div');
+  div.textContent = value || '';
+  return div.innerHTML;
+}
+
+document.addEventListener('keydown', event => {
+  const modal = document.getElementById('pending-photo-modal');
+  if (!modal.classList.contains('open')) return;
+  if (event.key === 'Escape') cerrarModalPendiente();
+  if (event.key === 'ArrowLeft') cambiarModalPendiente(-1);
+  if (event.key === 'ArrowRight') cambiarModalPendiente(1);
+});
+
+document.getElementById('pending-photo-modal').addEventListener('click', event => {
+  if (event.target.id === 'pending-photo-modal') cerrarModalPendiente();
+});
+
 function seleccionarTodas() {
   const boxes = [...document.querySelectorAll('#selection-form input[name="evidence_ids"]')];
   const shouldSelect = boxes.some(box => !box.checked);
   boxes.forEach(box => { box.checked = shouldSelect; });
+}
+
+function seleccionarTanda(id) {
+  const batch = document.getElementById(id);
+  if (!batch) return;
+  batch.querySelectorAll('input[name="evidence_ids"]').forEach(box => { box.checked = true; });
 }
 </script>
 {% endblock %}

@@ -12,6 +12,12 @@ Todos los servicios están bajo el perfil Compose `pilot`; ejecutar `up` sin
 valores permanezcan así, Baileys no abre sesión ni muestra QR.
 
 El piloto usa un único grupo configurado por `WA_PILOT_ALLOWED_GROUP_ID`.
+`WA_PILOT_ACCEPT_OWN_MESSAGES` permanece en `false` para evitar importar mensajes
+enviados por la propia cuenta vinculada. Puede activarse temporalmente para una
+prueba controlada dentro del único grupo autorizado y debe volver a `false` después.
+La sesión persistente y la cola se pueden aislar con `WA_PILOT_SESSION_DIR` y
+`WA_PILOT_QUEUE_DIR`; ambos apuntan por defecto a `/app/data` dentro del volumen
+privado del adaptador.
 `messages.upsert` solo acepta eventos `notify` del adaptador existente; los
 eventos históricos, otros grupos, mensajes propios y contenidos no fotográficos
 se descartan. El adaptador no envía mensajes ni marca presencia.

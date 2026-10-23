@@ -5,6 +5,7 @@ import { useMultiFileAuthState } from '@whiskeysockets/baileys'
 const LOCK_DIR = '.lock'
 const OWNER_FILE = 'owner.json'
 const STALE_LOCK_GRACE_MS = 30_000
+const PROCESS_STARTED_AT = Date.now() - process.uptime() * 1000
 
 async function harden(directory) {
   await chmod(directory, 0o700)
@@ -37,6 +38,10 @@ async function lockIsStale(lockPath) {
   }
 
   if (!Number.isInteger(owner.pid) || owner.pid <= 0) return true
+  if (owner.pid === process.pid) {
+    const ownerStartedAt = Date.parse(owner.startedAt || '')
+    if (!Number.isFinite(ownerStartedAt) || Math.abs(ownerStartedAt - PROCESS_STARTED_AT) > 2_000) return true
+  }
   try {
     process.kill(owner.pid, 0)
     return false
@@ -50,7 +55,7 @@ async function acquireLock(directory) {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
       await mkdir(lockPath, { mode: 0o700 })
-      await writeFile(join(lockPath, OWNER_FILE), JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }), { mode: 0o600, flag: 'wx' })
+      await writeFile(join(lockPath, OWNER_FILE), JSON.stringify({ pid: process.pid, startedAt: new Date(PROCESS_STARTED_AT).toISOString() }), { mode: 0o600, flag: 'wx' })
       return async () => rm(lockPath, { recursive: true, force: true })
     } catch (error) {
       if (error.code !== 'EEXIST' || attempt > 0 || !(await lockIsStale(lockPath))) {

@@ -75,6 +75,17 @@
   </div>
 </div>
 
+<div id="pending-evidence-alert" role="status" aria-live="polite"
+     style="{% if pending_evidence_count %}display:flex;{% else %}display:none;{% endif %} margin-bottom:16px; padding:12px 16px; background:var(--surface); border:1px solid var(--accent); border-radius:10px; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+  <div style="display:flex; align-items:center; gap:8px;">
+    <span class="material-symbols-outlined" style="color:var(--accent);">photo_library</span>
+    <span><strong id="pending-evidence-count">{{ pending_evidence_count }}</strong> evidencias de WhatsApp pendientes de asignar</span>
+  </div>
+  <a href="{% url 'pending_evidence' %}" class="btn btn-primary" style="display:inline-flex; align-items:center; gap:5px;">
+    <span class="material-symbols-outlined" style="font-size:1rem;">inbox</span> Abrir bandeja
+  </a>
+</div>
+
 <!-- Panel de Rango Personalizado -->
 <div id="custom-range-panel" style="display:none; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:16px 20px; margin-bottom:16px;">
   <form method="get" id="form-custom-range">
@@ -434,6 +445,7 @@ document.addEventListener('DOMContentLoaded', () => {
 <script id="initial-data-config" type="application/json">
   {
     "last_id": {{ last_id|default:"null" }},
+    "pending_evidence_count": {{ pending_evidence_count|default:0 }},
     "is_superuser": {% if user.is_superuser %}true{% else %}false{% endif %}
   }
 </script>
@@ -441,4 +453,3 @@ document.addEventListener('DOMContentLoaded', () => {
 <!-- Script de Inicialización -->
 <script src="{% static 'js/panel_operativo.js' %}?v={% now 'U' %}" defer></script>
 {% endblock %}
-

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { chmod, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawn } from 'node:child_process'
@@ -47,4 +47,16 @@ test('fails closed when a persisted auth JSON file is corrupt', async () => {
   await writeFile(join(directory, 'creds.json'), '{not-json', { mode: 0o600 })
   await assert.rejects(openPersistentSession(directory), /auth state is corrupt/)
   assert.equal(await readFile(join(directory, 'creds.json'), 'utf8'), '{not-json')
+})
+
+test('recovers a stale lock when a container reuses the previous process pid', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'bot-calidad-wa-session-pid-'))
+  await mkdir(join(directory, '.lock'), { mode: 0o700 })
+  await writeFile(join(directory, '.lock', 'owner.json'), JSON.stringify({
+    pid: process.pid,
+    startedAt: new Date(Date.now() - 60_000).toISOString(),
+  }), { mode: 0o600 })
+
+  const session = await openPersistentSession(directory)
+  await session.release()
 })

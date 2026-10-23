@@ -53,12 +53,83 @@ test('extracts image metadata without equating LID and phone JID', () => {
   assert.equal(extracted.caption, 'defecto')
 })
 
+test('keeps Baileys album association separate from message idempotency', () => {
+  const extracted = extractImage(image('album-photo-2', {
+    message: {
+      imageMessage: { mimetype: 'image/jpeg', caption: 'album' },
+      messageContextInfo: {
+        messageAssociation: {
+          associationType: 1,
+          parentMessageKey: { id: 'album-parent' },
+          messageIndex: 2,
+        },
+      },
+    },
+  }))
+
+  assert.equal(extracted.receiptBatchType, 'album')
+  assert.equal(extracted.mediaIndex, 2)
+  assert.match(extracted.receiptBatchKey, /^album:[0-9a-f]{64}$/)
+  assert.equal(extracted.albumParentMessageId, 'album-parent')
+})
+
+test('keeps messages without an album association as individual batches', () => {
+  const first = extractImage(image('single-1'))
+  const second = extractImage(image('single-2'))
+  assert.equal(first.receiptBatchType, 'single')
+  assert.match(first.receiptBatchKey, /^message:[0-9a-f]{64}$/)
+  assert.notEqual(first.receiptBatchKey, second.receiptBatchKey)
+})
+
+test('does not collapse an incomplete album association into media position zero', () => {
+  const extracted = extractImage(image('incomplete-album', {
+    message: {
+      imageMessage: { mimetype: 'image/jpeg' },
+      messageContextInfo: {
+        messageAssociation: {
+          associationType: 1,
+          parentMessageKey: { id: 'album-parent' },
+        },
+      },
+    },
+  }))
+
+  assert.equal(extracted.receiptBatchType, 'single')
+  assert.equal(extracted.mediaIndex, 0)
+})
+
+test('ignores own messages by default but supports an explicit pilot override', () => {
+  const own = image('own-message')
+  own.key.fromMe = true
+  assert.equal(extractImage(own), null)
+  assert.equal(extractImage(own, new Date(), { allowFromMe: true }).messageId, 'own-message')
+})
+
+test('preserves the group name resolved from WhatsApp metadata', async () => {
+  const { receiver, queue } = await makeReceiver()
+  receiver.setGroupNameResolver(async () => 'Si')
+  await receiver.handleUpsert({ type: 'notify', messages: [image('named-group')] })
+  assert.equal([...queue.items.values()][0].fields.group_name, 'Si')
+})
+
 test('processes each live image, ignores history and non-allowlisted groups', async () => {
   const { receiver, queue } = await makeReceiver()
   await receiver.handleUpsert({ type: 'append', messages: [image('history')] })
   await receiver.handleUpsert({ type: 'notify', messages: [image('one'), image('two')] })
   await receiver.handleUpsert({ type: 'notify', messages: [image('other', { key: { remoteJid: 'other@g.us' } })] })
   assert.equal(queue.items.size, 2)
+})
+
+test('processes own append events only when the pilot override is enabled', async () => {
+  const { receiver, queue } = await makeReceiver()
+  const own = image('own-append')
+  own.key.fromMe = true
+  await receiver.handleUpsert({ type: 'append', messages: [own] })
+  assert.equal(queue.items.size, 0)
+
+  receiver.acceptOwnMessages = true
+  await receiver.handleUpsert({ type: 'append', messages: [own] })
+  assert.equal(queue.items.size, 1)
 })
 
 test('deduplicates reconnect delivery by group, message and media position', async () => {

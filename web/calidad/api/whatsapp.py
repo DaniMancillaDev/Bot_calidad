@@ -63,6 +63,11 @@ def _message_datetime(raw_value):
     return parsed
 
 
+def _batch_key(group_id, message_id):
+    value = f'{group_id}\x00{message_id}'.encode('utf-8')
+    return f'message:{hashlib.sha256(value).hexdigest()}'
+
+
 def _validate_upload(uploaded_file):
     if uploaded_file is None:
         raise IngestInputError('file is required')
@@ -125,6 +130,7 @@ def _claim_evidence(data, contact):
     }
     defaults = {
         'source_group_name': data['group_name'],
+        'receipt_batch_key': data['receipt_batch_key'],
         'sender': contact,
         'sender_whatsapp_id': data['sender_id'],
         'sender_alt_whatsapp_id': data['sender_alt_id'],
@@ -237,6 +243,9 @@ def ingest(request):
             return _error('historical messages are disabled', 400)
 
         message_id = _text(request, 'message_id', required=True, max_length=255)
+        receipt_batch_key = _text(request, 'receipt_batch_key', max_length=255)
+        if not receipt_batch_key:
+            receipt_batch_key = _batch_key(group_id, message_id)
         media_index_raw = _text(request, 'media_index') or '0'
         media_index = int(media_index_raw)
         if media_index < 0 or media_index > 2147483647:
@@ -248,6 +257,7 @@ def ingest(request):
             'group_id': group_id,
             'group_name': _text(request, 'group_name', max_length=255),
             'message_id': message_id,
+            'receipt_batch_key': receipt_batch_key,
             'media_index': media_index,
             'sender_id': _text(request, 'sender_id', max_length=255),
             'sender_alt_id': _text(request, 'sender_alt_id', max_length=255),
