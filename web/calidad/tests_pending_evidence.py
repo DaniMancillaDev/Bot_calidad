@@ -156,7 +156,7 @@ class PendingEvidenceWebTests(TestCase):
         self.assertContains(response, 'Visor fotográfico')
         self.assertContains(response, 'Tandas recibidas')
         self.assertContains(response, 'wa-batches-list')
-        self.assertContains(response, 'Incorporar tanda completa')
+        self.assertNotContains(response, 'Incorporar tanda completa')
         html = response.content.decode()
         self.assertLess(html.index('wa-batches-title'), html.index('wa-viewer-title'))
         self.assertLess(html.index('wa-viewer-title'), html.index('wa-drafts-title'))
