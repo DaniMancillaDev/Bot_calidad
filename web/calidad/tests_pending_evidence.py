@@ -131,6 +131,10 @@ class PendingEvidenceWebTests(TestCase):
         self.assertContains(response, 'Registros en preparación')
         self.assertContains(response, 'Visor fotográfico')
         self.assertContains(response, 'Envíos de WhatsApp')
+        self.assertContains(response, 'wa-image-viewport')
+        self.assertContains(response, 'wa-panel-head-actions')
+        self.assertContains(response, 'wa-thumb-position')
+        self.assertContains(response, 'panStart')
         self.assertContains(response, 'pending-work-data')
 
     def test_pending_page_groups_only_confirmed_batches_and_keeps_legacy_rows_separate(self):
