@@ -67,7 +67,7 @@ def update_pending_group(user, group_id, action, evidence_ids=(), fields=None):
             raise PendingEvidenceConflict('Este borrador ya no está disponible.')
 
         ids = list(dict.fromkeys(evidence_ids))
-        if action in {'add', 'remove', 'exclude', 'restore', 'reorder'} and not ids:
+        if action in {'add', 'remove', 'exclude', 'restore', 'reorder', 'rotate'} and not ids:
             raise PendingEvidenceError('Selecciona al menos una fotografía.')
         if action == 'add':
             evidences = list(PendingEvidence.objects.select_for_update().filter(
@@ -163,6 +163,21 @@ def update_pending_group(user, group_id, action, evidence_ids=(), fields=None):
                 raise PendingEvidenceConflict('El orden enviado no coincide con las fotografías del borrador.')
             for order, evidence_id in enumerate(ids, start=1):
                 PendingEvidence.objects.filter(pk=evidence_id, group=group).update(draft_order=order)
+        elif action == 'rotate':
+            if len(ids) != 1:
+                raise PendingEvidenceError('Selecciona una sola fotografía para rotar.')
+            try:
+                rotation_angle = int((fields or {}).get('rotation_angle', 0)) % 360
+            except (TypeError, ValueError) as exc:
+                raise PendingEvidenceError('El ángulo de rotación no es válido.') from exc
+            updated = PendingEvidence.objects.filter(
+                pk=ids[0],
+                group=group,
+                status=PendingEvidence.STATUS_READY,
+                is_excluded=False,
+            ).update(rotation_angle=rotation_angle)
+            if updated != 1:
+                raise PendingEvidenceConflict('La fotografía ya no está disponible para rotar.')
         elif action == 'save_fields':
             values = fields or {}
             quantity_raw = str(values.get('quantity', '')).strip()
@@ -401,6 +416,7 @@ def confirm_pending_group(user, group_id, fields):
                     ruta_archivo=relative_path,
                     orden=order,
                     es_portada=(order == 1),
+                    angulo_rotacion=evidence.rotation_angle,
                     metadatos={
                         'source': PendingEvidence.SOURCE_WHATSAPP,
                         'pending_evidence_id': str(evidence.id),

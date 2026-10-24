@@ -410,6 +410,7 @@ class PendingEvidence(models.Model):
     caption = models.TextField(blank=True, default='')
     message_at = models.DateTimeField(null=True, blank=True)
     received_at = models.DateTimeField(auto_now_add=True)
+    rotation_angle = models.PositiveSmallIntegerField(default=0)
     draft_order = models.PositiveIntegerField(default=0)
     is_excluded = models.BooleanField(default=False)
     exclusion_reason = models.CharField(max_length=255, blank=True, default='')

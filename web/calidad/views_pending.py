@@ -114,6 +114,7 @@ def _pending_evidence_payload(evidence):
         'group_id': str(evidence.group_id) if evidence.group_id else '',
         'group_name': evidence.source_group_name or evidence.source_group_id,
         'status': evidence.get_status_display(),
+        'rotation_angle': evidence.rotation_angle,
         'draft_order': evidence.draft_order,
         'excluded': evidence.is_excluded,
         'exclusion_reason': evidence.exclusion_reason,

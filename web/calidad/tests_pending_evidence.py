@@ -287,6 +287,24 @@ class PendingEvidenceWebTests(TestCase):
         self.assertTrue(second.is_excluded)
         self.assertTrue((self.pending_root / second.file_path).is_file())
 
+    def test_rotation_is_saved_in_draft_and_final_evidence(self):
+        evidence = self.add_evidence(message_id='rotation-1')
+        group = self.create_group(evidence)
+
+        response = self.client.post(
+            reverse('update_pending_group', args=[group.id]),
+            {'action': 'rotate', 'evidence_ids': [str(evidence.id)], 'rotation_angle': '90'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        evidence.refresh_from_db()
+        self.assertEqual(evidence.rotation_angle, 90)
+        with patch('calidad.tasks.generar_thumbnails_lote_task.delay'):
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.client.post(reverse('pending_evidence'), self.confirm_data(group))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(RegistroDefecto.objects.get().evidencias_v2.get().angulo_rotacion, 90)
+
     def test_unassigned_excluded_evidence_can_be_restored(self):
         evidence = self.add_evidence(message_id='excluded-unassigned')
         PendingEvidence.objects.filter(pk=evidence.pk).update(
