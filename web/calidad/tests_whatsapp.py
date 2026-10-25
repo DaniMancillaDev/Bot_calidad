@@ -33,6 +33,9 @@ class WhatsAppIngestTests(TestCase):
             WHATSAPP_ALLOW_HISTORICAL=False,
         )
         self.settings_override.enable()
+        self.enqueue_derivatives = patch('calidad.api.whatsapp._enqueue_pending_derivatives')
+        self.enqueue_derivatives.start()
+        self.addCleanup(self.enqueue_derivatives.stop)
         self.client = Client()
         self.url = reverse('whatsapp_ingest')
 
@@ -64,7 +67,8 @@ class WhatsAppIngestTests(TestCase):
         )
 
     def test_valid_image_is_persisted_without_definitive_record(self):
-        response = self.post_image()
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.post_image()
 
         self.assertEqual(response.status_code, 201)
         evidence = PendingEvidence.objects.get()
@@ -77,6 +81,7 @@ class WhatsAppIngestTests(TestCase):
         self.assertIsNone(evidence.sender.phone_number)
         self.assertTrue((Path(self.temp_dir) / evidence.file_path).is_file())
         self.assertEqual(len(evidence.sha256), 64)
+        self.enqueue_derivatives.assert_called_once_with(evidence.id)
 
     def test_authentication_and_group_allowlist_are_mandatory(self):
         data = {

@@ -1,22 +1,19 @@
 """Web interface for grouping and confirming WhatsApp evidence."""
 
-from io import BytesIO
-from pathlib import Path
 from uuid import UUID
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
-from django.http import FileResponse, Http404, HttpResponse, HttpResponseForbidden, JsonResponse
+from django.http import FileResponse, Http404, HttpResponseForbidden, JsonResponse
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 from django.db.models import Q
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
-from PIL import Image, ImageOps
-
 from .models import PendingEvidence, PendingEvidenceGroup, WhatsAppContact
+from .services.pending_media import ensure_pending_derivative, pending_original_path
 from .services.pending_evidence import (
     PendingEvidenceError,
     create_empty_pending_group,
@@ -60,6 +57,7 @@ def _add_image_urls(evidences):
     for evidence in evidences:
         base = f'/evidencias-pendientes/{evidence.id}/imagen/'
         evidence.thumbnail_url = f'{base}?size=thumb'
+        evidence.preview_url = f'{base}?size=proxy'
         evidence.original_url = base
     return evidences
 
@@ -106,6 +104,7 @@ def _pending_evidence_payload(evidence):
         'id': str(evidence.id),
         'batch_key': evidence.receipt_batch_key or f'legacy:{evidence.id}',
         'thumb_url': evidence.thumbnail_url,
+        'preview_url': evidence.preview_url,
         'original_url': evidence.original_url,
         'sender': evidence.sender.display_name if evidence.sender else '',
         'sender_id': evidence.sender_whatsapp_id or '',
@@ -376,18 +375,6 @@ def rename_pending_contact(request, contact_id):
     return redirect('pending_evidence')
 
 
-def _pending_file(evidence):
-    root = Path(settings.WHATSAPP_PENDING_ROOT).resolve()
-    path = (root / evidence.file_path).resolve()
-    try:
-        path.relative_to(root)
-    except ValueError as exc:
-        raise Http404('Archivo no permitido') from exc
-    if not path.is_file():
-        raise Http404('Archivo no encontrado')
-    return path
-
-
 @login_required
 @require_GET
 def pending_evidence_image(request, evidence_id):
@@ -397,20 +384,19 @@ def pending_evidence_image(request, evidence_id):
     )
     if not _visible_evidence(request.user, evidence):
         raise Http404('Evidencia no encontrada')
-    path = _pending_file(evidence)
+    variant = request.GET.get('size')
+    try:
+        path = (
+            ensure_pending_derivative(evidence, variant)
+            if variant in {'thumb', 'proxy'}
+            else pending_original_path(evidence)
+        )
+    except (OSError, ValueError) as exc:
+        raise Http404('Archivo no encontrado') from exc
 
-    if request.GET.get('size') == 'thumb':
-        try:
-            with Image.open(path) as original:
-                image = ImageOps.exif_transpose(original)
-                image.thumbnail((360, 360), Image.Resampling.LANCZOS)
-                if image.mode not in ('RGB', 'L'):
-                    image = image.convert('RGB')
-                output = BytesIO()
-                image.save(output, format='JPEG', quality=78, optimize=True)
-        except (OSError, Image.UnidentifiedImageError) as exc:
-            raise Http404('Imagen no válida') from exc
-        response = HttpResponse(output.getvalue(), content_type='image/jpeg')
+    if variant in {'thumb', 'proxy'}:
+        response = FileResponse(path.open('rb'), content_type='image/jpeg')
+        response['Content-Disposition'] = f'inline; filename="{variant}.jpg"'
     else:
         response = FileResponse(
             path.open('rb'),
@@ -418,6 +404,7 @@ def pending_evidence_image(request, evidence_id):
         )
         response['Content-Disposition'] = f'inline; filename="{path.name}"'
 
-    response['Cache-Control'] = 'private, no-store'
+    response['Cache-Control'] = 'private, max-age=120, must-revalidate'
+    response['Vary'] = 'Cookie'
     response['X-Content-Type-Options'] = 'nosniff'
     return response

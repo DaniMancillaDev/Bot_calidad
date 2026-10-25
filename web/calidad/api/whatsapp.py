@@ -33,6 +33,15 @@ class IngestInputError(ValueError):
     pass
 
 
+def _enqueue_pending_derivatives(evidence_id):
+    try:
+        from calidad.tasks import generar_derivados_evidencia_pendiente_task
+        generar_derivados_evidencia_pendiente_task.delay(str(evidence_id))
+    except Exception:
+        # La recepción no debe fallar si Celery está temporalmente fuera de servicio.
+        logger.exception('Could not queue pending evidence derivatives for %s', evidence_id)
+
+
 def _error(message, status):
     return JsonResponse({'error': message}, status=status)
 
@@ -295,15 +304,17 @@ def ingest(request):
             )
             return _error('temporary storage failure', 503)
 
-        PendingEvidence.objects.filter(pk=evidence.pk).update(
-            file_path=file_path,
-            sha256=sha256,
-            mime_type=mime_type,
-            size_bytes=size_bytes,
-            status=PendingEvidence.STATUS_READY,
-            processing_started_at=None,
-            error_message='',
-        )
+        with transaction.atomic():
+            PendingEvidence.objects.filter(pk=evidence.pk).update(
+                file_path=file_path,
+                sha256=sha256,
+                mime_type=mime_type,
+                size_bytes=size_bytes,
+                status=PendingEvidence.STATUS_READY,
+                processing_started_at=None,
+                error_message='',
+            )
+            transaction.on_commit(lambda: _enqueue_pending_derivatives(evidence.id))
         return JsonResponse({
             'id': str(evidence.id),
             'status': PendingEvidence.STATUS_READY,

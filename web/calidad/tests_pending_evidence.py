@@ -20,6 +20,7 @@ from calidad.models import (
     EvidenciaFotografica,
     PerfilUsuario,
 )
+from calidad.services.pending_media import pending_derivative_path
 from calidad.services.pending_evidence import (
     PendingEvidenceConflict,
     confirm_pending_group,
@@ -112,11 +113,29 @@ class PendingEvidenceWebTests(TestCase):
         )
         self.assertEqual(image.status_code, 200)
         self.assertEqual(image['Content-Type'], 'image/jpeg')
-        self.assertEqual(image['Cache-Control'], 'private, no-store')
+        self.assertEqual(image['Cache-Control'], 'private, max-age=120, must-revalidate')
+        self.assertEqual(image['Vary'], 'Cookie')
+        self.assertTrue(pending_derivative_path(evidence, 'thumb').is_file())
+        proxy = self.client.get(
+            reverse('pending_evidence_image', args=[evidence.id]) + '?size=proxy'
+        )
+        self.assertEqual(proxy.status_code, 200)
+        self.assertEqual(proxy['Content-Type'], 'image/jpeg')
+        self.assertTrue(pending_derivative_path(evidence, 'proxy').is_file())
         self.assertEqual(
             self.client.get('/media/whatsapp_pending/original.jpg').status_code,
             404,
         )
+
+    def test_cached_pending_derivative_is_reused(self):
+        evidence = self.add_evidence()
+        url = reverse('pending_evidence_image', args=[evidence.id]) + '?size=thumb'
+
+        self.assertEqual(self.client.get(url).status_code, 200)
+        derivative = pending_derivative_path(evidence, 'thumb')
+        first_mtime = derivative.stat().st_mtime_ns
+        self.assertEqual(self.client.get(url).status_code, 200)
+        self.assertEqual(derivative.stat().st_mtime_ns, first_mtime)
 
     def test_pending_group_uses_carousel_and_compact_registration_panel(self):
         evidence = self.add_evidence()

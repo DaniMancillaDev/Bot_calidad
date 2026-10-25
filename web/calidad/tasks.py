@@ -120,6 +120,25 @@ def generar_thumbnails_lote_task(self, user_id: int, fotos_paths: list[str]) -> 
     )
 
 
+@shared_task(name='calidad.tasks.generar_derivados_evidencia_pendiente_task', ignore_result=True)
+def generar_derivados_evidencia_pendiente_task(evidence_id: str) -> None:
+    """Prepara derivados privados de una evidencia WhatsApp recién recibida."""
+    from calidad.models import PendingEvidence
+    from calidad.services.pending_media import generate_pending_derivatives
+
+    evidence = PendingEvidence.objects.filter(
+        pk=evidence_id,
+        status=PendingEvidence.STATUS_READY,
+    ).first()
+    if evidence is None:
+        return
+    try:
+        generate_pending_derivatives(evidence)
+    except Exception:
+        # El visor puede generarlos bajo demanda; la evidencia original ya está segura.
+        logger.exception('No se pudieron generar derivados de evidencia pendiente %s', evidence_id)
+
+
 # ── Alias de proveedores ────────────────────────────────────────────────────
 ALIAS = {
     'WH': 'TSCEM',

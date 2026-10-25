@@ -37,6 +37,9 @@ class WhatsAppIngestConcurrencyTests(TransactionTestCase):
             WHATSAPP_PROCESSING_LEASE_SECONDS=300,
         )
         self.settings_override.enable()
+        self.enqueue_derivatives = patch('calidad.api.whatsapp._enqueue_pending_derivatives')
+        self.enqueue_derivatives.start()
+        self.addCleanup(self.enqueue_derivatives.stop)
         self.url = reverse('whatsapp_ingest')
 
     def tearDown(self):
