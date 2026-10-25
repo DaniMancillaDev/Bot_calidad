@@ -29,6 +29,7 @@ def isolated_environment(repo):
         raise ValueError('Use dedicated local Redis database 15, never PROD')
     env.update(PYTHON_DOTENV_DISABLED='1', DJANGO_SETTINGS_MODULE='config.settings',
                DJANGO_SECRET_KEY='isolated-conservation-checks',
+               PGCONNECT_TIMEOUT='5',
                PYTHONPATH=str(repo / 'web') + os.pathsep + str(repo),
                CELERY_RESULT_BACKEND=env['CELERY_BROKER_URL'])
     return env
@@ -57,10 +58,15 @@ def main():
     for name, command in commands.items():
         log = args.output.with_name(args.output.stem + '-' + name + '.log')
         with log.open('xb') as target:
-            result = subprocess.run(command, cwd=args.repo, env=env, stdout=target, stderr=subprocess.STDOUT)
-        checks[name] = {'exit_code': result.returncode, 'log': str(log.resolve()),
+            try:
+                result = subprocess.run(command, cwd=args.repo, env=env, stdout=target, stderr=subprocess.STDOUT, timeout=600)
+                exit_code = result.returncode
+            except (OSError, subprocess.TimeoutExpired) as error:
+                target.write((str(error) + '\n').encode())
+                exit_code = 124 if isinstance(error, subprocess.TimeoutExpired) else 127
+        checks[name] = {'exit_code': exit_code, 'log': str(log.resolve()),
                         'log_sha256': hashlib.sha256(log.read_bytes()).hexdigest()}
-        print(name, result.returncode, flush=True)
+        print(name, exit_code, flush=True)
     image = json.loads(args.image_proof.read_text())
     if image.get('files') != image_sources(args.repo):
         raise ValueError('Image verification does not match current DEV sources/resources')
