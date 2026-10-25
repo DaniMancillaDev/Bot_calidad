@@ -33,9 +33,9 @@ class WhatsAppIngestTests(TestCase):
             WHATSAPP_ALLOW_HISTORICAL=False,
         )
         self.settings_override.enable()
-        self.enqueue_derivatives = patch('calidad.api.whatsapp._enqueue_pending_derivatives')
-        self.enqueue_derivatives.start()
-        self.addCleanup(self.enqueue_derivatives.stop)
+        enqueue_patch = patch('calidad.api.whatsapp._enqueue_pending_derivatives')
+        self.enqueue_derivatives = enqueue_patch.start()
+        self.addCleanup(enqueue_patch.stop)
         self.client = Client()
         self.url = reverse('whatsapp_ingest')
 
