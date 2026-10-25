@@ -1,0 +1,1949 @@
+{
+  "version": 1,
+  "scopes": {
+    "web": {
+      "container": "bot_calidad_web",
+      "image": "sha256:e20a65703b24d79fc99db09df57c8340ba3e7519450140508ca8d1eff7d85842",
+      "paths": [
+        "web",
+        "shared"
+      ],
+      "files": {
+        "shared/__init__.py": {
+          "prod_sha256": "63d22d93548b8eda9bf3e747871b9c5e82a32e4b6a7dbec9b1c83d1553094573",
+          "dev_sha256": "63d22d93548b8eda9bf3e747871b9c5e82a32e4b6a7dbec9b1c83d1553094573",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/application/__init__.py": {
+          "prod_sha256": "ec79a1e3d7718181fba009aa5389255bc0d6b55a4994761e572247f335c79b0a",
+          "dev_sha256": "ec79a1e3d7718181fba009aa5389255bc0d6b55a4994761e572247f335c79b0a",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/application/services/__init__.py": {
+          "prod_sha256": "7e176331264c1ff9994dc8c9127eee0f4d5cf3b65d3ba51288e333d2d5980f7b",
+          "dev_sha256": "7e176331264c1ff9994dc8c9127eee0f4d5cf3b65d3ba51288e333d2d5980f7b",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/application/services/export_service.py": {
+          "prod_sha256": "a1a925017e8e7d2476459ddfa76b78c85c03dd48ea2088165aa82d8e0a8960c3",
+          "dev_sha256": "a1a925017e8e7d2476459ddfa76b78c85c03dd48ea2088165aa82d8e0a8960c3",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/application/validators/__init__.py": {
+          "prod_sha256": "050a7984b3a401e1736ff3d4b0a41a82e424a6f8d571fb30503c601e8ea7d985",
+          "dev_sha256": "050a7984b3a401e1736ff3d4b0a41a82e424a6f8d571fb30503c601e8ea7d985",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/config/__init__.py": {
+          "prod_sha256": "cde35c8357d5948bd8213059aa42c5bb61228c9b5d2ffe2a32bad67c0013ffcb",
+          "dev_sha256": "cde35c8357d5948bd8213059aa42c5bb61228c9b5d2ffe2a32bad67c0013ffcb",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/config/dependencies.py": {
+          "prod_sha256": "f3ea360693d12894c06d76aa7102752ecec8f6b0ee63f750891b336718d0d482",
+          "dev_sha256": "f3ea360693d12894c06d76aa7102752ecec8f6b0ee63f750891b336718d0d482",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/config/logging_config.py": {
+          "prod_sha256": "50adaf75dd7382e56eee0c9ab5fd912166fccd5849c81637afa8038fa0e0eab4",
+          "dev_sha256": "50adaf75dd7382e56eee0c9ab5fd912166fccd5849c81637afa8038fa0e0eab4",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/infrastructure/__init__.py": {
+          "prod_sha256": "6f43120413508a7c14f48c73801d78f5d441908522e4dbeed047d71a49f1d4ea",
+          "dev_sha256": "6f43120413508a7c14f48c73801d78f5d441908522e4dbeed047d71a49f1d4ea",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/infrastructure/ai/__init__.py": {
+          "prod_sha256": "b5490c95ccfff4bda6bbd131da050eee61cf90fd035cf5454890d7f65f269bff",
+          "dev_sha256": "b5490c95ccfff4bda6bbd131da050eee61cf90fd035cf5454890d7f65f269bff",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/infrastructure/ai/defect_catalog.json": {
+          "prod_sha256": "3fcba84b3234bb8e206bb8d5b27c42bf4a8ec827d34062d6064fbd47fed83d6e",
+          "dev_sha256": "be604dd72e9ce2842b646c86aafbb189b694a066cf614cb08842c86c99712335",
+          "decision": "integrated",
+          "reason": "Compatible PROD capabilities combined with DEV and covered by regression tests"
+        },
+        "shared/infrastructure/ai/defect_translator.py": {
+          "prod_sha256": "ff9c34bbb9aa80730c550f9ae58ec07894d52131692e56e8b04ac9ad3c3fbb6a",
+          "dev_sha256": "ff9c34bbb9aa80730c550f9ae58ec07894d52131692e56e8b04ac9ad3c3fbb6a",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/infrastructure/ai/interfaces.py": {
+          "prod_sha256": "7578b0fb54580ef46dff09720aa6452deba3f65b726758e16065ad8f0cbe337a",
+          "dev_sha256": "7578b0fb54580ef46dff09720aa6452deba3f65b726758e16065ad8f0cbe337a",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/infrastructure/database/__init__.py": {
+          "prod_sha256": "db1b9d2009caa93c21b22059ab22b133471a35fd5550f3258b98c7bba52a0bf8",
+          "dev_sha256": "db1b9d2009caa93c21b22059ab22b133471a35fd5550f3258b98c7bba52a0bf8",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/infrastructure/database/django_contador_repository.py": {
+          "prod_sha256": "91275fe856aef279b2651b191a380986315191075eb9db0be2cef875fd9ccb8b",
+          "dev_sha256": "91275fe856aef279b2651b191a380986315191075eb9db0be2cef875fd9ccb8b",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/infrastructure/database/django_registro_repository.py": {
+          "prod_sha256": "d668e071ac14d38d3af9ac15bc4d5b194914be2cf76b9a69530b4d98175fadee",
+          "dev_sha256": "d668e071ac14d38d3af9ac15bc4d5b194914be2cf76b9a69530b4d98175fadee",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/infrastructure/database/django_usuario_repository.py": {
+          "prod_sha256": "e4a70b9810ce4d2e8d8579677abfe0c0ecd069d975ad6c799987746db29a2429",
+          "dev_sha256": "e4a70b9810ce4d2e8d8579677abfe0c0ecd069d975ad6c799987746db29a2429",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/infrastructure/orientation/__init__.py": {
+          "prod_sha256": "54b89e09d33d9fb772e0e98f13830fd8e7a13e073421ad49ddedd6f0efc4de04",
+          "dev_sha256": "54b89e09d33d9fb772e0e98f13830fd8e7a13e073421ad49ddedd6f0efc4de04",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/infrastructure/orientation/orientation_engine.py": {
+          "prod_sha256": "4a5bafb8319e9e6fed6f9cb8faf742000117324d758af115a5899af140eff914",
+          "dev_sha256": "4a5bafb8319e9e6fed6f9cb8faf742000117324d758af115a5899af140eff914",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/infrastructure/storage/__init__.py": {
+          "prod_sha256": "80f7f433b3b7555af8b17a0b26596c54bb773b3381f92c344bd53d451f2eb41c",
+          "dev_sha256": "80f7f433b3b7555af8b17a0b26596c54bb773b3381f92c344bd53d451f2eb41c",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/infrastructure/storage/foto_storage.py": {
+          "prod_sha256": "d5207a371ed80f0e1302301ea8adeaffe536a4b605dd5f40dee5c58fe2065e4d",
+          "dev_sha256": "d5207a371ed80f0e1302301ea8adeaffe536a4b605dd5f40dee5c58fe2065e4d",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/utils/__init__.py": {
+          "prod_sha256": "877457b908014f463dd7da596d98d9362de4c440890819843618e7aed9f80c4d",
+          "dev_sha256": "877457b908014f463dd7da596d98d9362de4c440890819843618e7aed9f80c4d",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/utils/format_utils.py": {
+          "prod_sha256": "9ca50bfb01501c0ce665d4def2aed916db6caa380afea2cfcb3acee2e4f70fb1",
+          "dev_sha256": "9ca50bfb01501c0ce665d4def2aed916db6caa380afea2cfcb3acee2e4f70fb1",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/utils/photo_parser.py": {
+          "prod_sha256": "29660abe9e7d4c652b8a483eb9265d0b6fb8df8524bc3a210021075da6d0d5a8",
+          "dev_sha256": "29660abe9e7d4c652b8a483eb9265d0b6fb8df8524bc3a210021075da6d0d5a8",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/utils/signals_utils.py": {
+          "prod_sha256": "afe81d6024b2b938778362ce4029c738871028c672e66d053a60c0e927640cc3",
+          "dev_sha256": "afe81d6024b2b938778362ce4029c738871028c672e66d053a60c0e927640cc3",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/utils/tests/__init__.py": {
+          "prod_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "dev_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/utils/tests/test_bot_optimizations.py": {
+          "prod_sha256": "e30b101ca03883cad6bdcbe2fb7bb504e0800cffb44974a1f60237c56defed60",
+          "dev_sha256": "e30b101ca03883cad6bdcbe2fb7bb504e0800cffb44974a1f60237c56defed60",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/utils/tests/test_legacy_parser_behaviors.py": {
+          "prod_sha256": "96015dddd38f1702106320207f2939d03d21debfc244c27acc2c6f6663a3fce7",
+          "dev_sha256": "96015dddd38f1702106320207f2939d03d21debfc244c27acc2c6f6663a3fce7",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/utils/tests/test_photo_parser.py": {
+          "prod_sha256": "c150bb7372d8c6e8eb84a56e30db7dfe1a96ea971097b6e5813646cebfc97391",
+          "dev_sha256": "c150bb7372d8c6e8eb84a56e30db7dfe1a96ea971097b6e5813646cebfc97391",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/backup_and_clean.py": {
+          "prod_sha256": "9e16a468e83d12bc14ddaa934721a7c80cfd4e49b9481bbda242d5dc9e73d162",
+          "dev_sha256": null,
+          "decision": "historical",
+          "reason": "Retained in identified external snapshots; unsafe historical diagnostics are not installed or executed in DEV"
+        },
+        "web/calidad/__init__.py": {
+          "prod_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "dev_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/admin.py": {
+          "prod_sha256": "74badf393e07b093fb623e45a2f53d603d88c7a0185e732f426eac0ed5918ed7",
+          "dev_sha256": "74badf393e07b093fb623e45a2f53d603d88c7a0185e732f426eac0ed5918ed7",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/api/__init__.py": {
+          "prod_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "dev_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/api/endpoints_v2.py": {
+          "prod_sha256": "b82f430d9718f92b5767ee683e2cf49f409d0350d2665b415bed054e689b928b",
+          "dev_sha256": "3adea4378c53cbcf3bbbc71633b642c78279cc02501b20d0afaedfb9f1ca6b10",
+          "decision": "equivalent",
+          "reason": "Whitespace only; DEV authentication and authorization retained"
+        },
+        "web/calidad/api/serializers_v2.py": {
+          "prod_sha256": "b10bef3094183870db73298ee1af6a2d89eff7ee969e2608f649fe86287078b5",
+          "dev_sha256": "b10bef3094183870db73298ee1af6a2d89eff7ee969e2608f649fe86287078b5",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/api/services_v2.py": {
+          "prod_sha256": "139a5366a880ab31cafac56b50ea1788025517b6834e407d9484aaa73326577b",
+          "dev_sha256": "139a5366a880ab31cafac56b50ea1788025517b6834e407d9484aaa73326577b",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/api/urls.py": {
+          "prod_sha256": "e674944a124ea2a0a0b4ce5a1437e2977dfdf05d395dbb8bc3fe5abb47e0e4f6",
+          "dev_sha256": "97b21394370bd86e4d7834945e79ea9511fff02fb36c8b214699a8574366b710",
+          "decision": "intentional",
+          "reason": "Preserve newer DEV WhatsApp, permissions, security, tests and UI behavior; see PROD_DEV_SYNC.md"
+        },
+        "web/calidad/api/views.py": {
+          "prod_sha256": "c6f52ee20cd93950b1c4ac5cd62665d7f70e309ce40278dd768d14bf297b81ce",
+          "dev_sha256": "c6f52ee20cd93950b1c4ac5cd62665d7f70e309ce40278dd768d14bf297b81ce",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/application/__init__.py": {
+          "prod_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "dev_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/application/workflows/defecto_workflow.py": {
+          "prod_sha256": "554bf5084f63dab565d46d2c94ad3e9a72f0d3fa6644e7f4a69cd9bce67ffd85",
+          "dev_sha256": "554bf5084f63dab565d46d2c94ad3e9a72f0d3fa6644e7f4a69cd9bce67ffd85",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/apps.py": {
+          "prod_sha256": "4873f483f24fa152f10ed8e3c00d3f2e5c6cc6aef0e4279ff47de91049ac6e34",
+          "dev_sha256": "4873f483f24fa152f10ed8e3c00d3f2e5c6cc6aef0e4279ff47de91049ac6e34",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/celery_app.py": {
+          "prod_sha256": "35ee1091039a2d10307b4cccc61e192e6682c3189388ef98827f584853b397f5",
+          "dev_sha256": "35ee1091039a2d10307b4cccc61e192e6682c3189388ef98827f584853b397f5",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/domain/defectos/entities.py": {
+          "prod_sha256": "17b2f71418fed36d8b7c5c1fd511368c8cc8530d3ec7bbc97b56c1aed6f8beb3",
+          "dev_sha256": "17b2f71418fed36d8b7c5c1fd511368c8cc8530d3ec7bbc97b56c1aed6f8beb3",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/domain/defectos/state_machine.py": {
+          "prod_sha256": "3722864025693267fd86ff22216723780116115f7ee540e8a394da8173320102",
+          "dev_sha256": "3722864025693267fd86ff22216723780116115f7ee540e8a394da8173320102",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/domain/defectos/validators.py": {
+          "prod_sha256": "e96cc8a6a8f20da0c10c6970ae0f7db23ef5ba4caaa1e9fd99aabca6f39451a7",
+          "dev_sha256": "e96cc8a6a8f20da0c10c6970ae0f7db23ef5ba4caaa1e9fd99aabca6f39451a7",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/management/__init__.py": {
+          "prod_sha256": "3473c12c8ab27113e38e7d8130b848f8ad0486d29dde96dd60e6f584faf66f54",
+          "dev_sha256": "3473c12c8ab27113e38e7d8130b848f8ad0486d29dde96dd60e6f584faf66f54",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/management/commands/__init__.py": {
+          "prod_sha256": "c25fc38b1243382ade04740a11e49e168f1e78707cb9ad483b0d9e3c6578c7e2",
+          "dev_sha256": "c25fc38b1243382ade04740a11e49e168f1e78707cb9ad483b0d9e3c6578c7e2",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/management/commands/debug_foto20.py": {
+          "prod_sha256": "691a8a1d42edf3633680f71d2a0630bd3dc10103646ce553954be26e0718b499",
+          "dev_sha256": null,
+          "decision": "historical",
+          "reason": "Retained in identified external snapshots; unsafe historical diagnostics are not installed or executed in DEV"
+        },
+        "web/calidad/management/commands/limpiar_temporales.py": {
+          "prod_sha256": "d6e9bb48072605494014c071c23a42b8dfdc6e1bf7abc5647fbbbbb2d5463022",
+          "dev_sha256": "d6e9bb48072605494014c071c23a42b8dfdc6e1bf7abc5647fbbbbb2d5463022",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/management/commands/sync_evidencias.py": {
+          "prod_sha256": "cc40d1499dc3be597d552d376411499f053da214ad93fe66bedbcda51744a9b1",
+          "dev_sha256": "cc40d1499dc3be597d552d376411499f053da214ad93fe66bedbcda51744a9b1",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/migrations/0001_initial.py": {
+          "prod_sha256": "8fbfefbb81f90313c24a733b39d0bd9c568afbe4b5502dc7f7663106a8a6d4f6",
+          "dev_sha256": "8fbfefbb81f90313c24a733b39d0bd9c568afbe4b5502dc7f7663106a8a6d4f6",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/migrations/0002_phase1_fotos_nums_estados_operativos.py": {
+          "prod_sha256": "41954455d1b82f1f6de8ef219c990a75fb9b8c4a569ba95904c6297aeca5c8d0",
+          "dev_sha256": "41954455d1b82f1f6de8ef219c990a75fb9b8c4a569ba95904c6297aeca5c8d0",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/migrations/0003_phase1_data_migration_fotos_nums.py": {
+          "prod_sha256": "cb5aa3d489c62a48e7d0153cfa9b1162d27d65af8a1c7cac93d3c1e98ca59e74",
+          "dev_sha256": "cb5aa3d489c62a48e7d0153cfa9b1162d27d65af8a1c7cac93d3c1e98ca59e74",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/migrations/0004_registrodefecto_numero_parte.py": {
+          "prod_sha256": "4dc50190de89485fdcf5e4c09c6bccafb530ed4d6ae528d43253db7ae20d65c6",
+          "dev_sha256": "4dc50190de89485fdcf5e4c09c6bccafb530ed4d6ae528d43253db7ae20d65c6",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/migrations/0005_contadorusuario_delete_contadorgrupo_and_more.py": {
+          "prod_sha256": "bd24c012328f8f7092f0bbc5b9961819a3f3e138b2868806625e1aaabd07ecad",
+          "dev_sha256": "bd24c012328f8f7092f0bbc5b9961819a3f3e138b2868806625e1aaabd07ecad",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/migrations/0006_evidenciafotografica.py": {
+          "prod_sha256": "997cb97244529cbda833dedf0d62f5d0c2db3679fb72e2be427d8a6e03444f2d",
+          "dev_sha256": "997cb97244529cbda833dedf0d62f5d0c2db3679fb72e2be427d8a6e03444f2d",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/migrations/0007_migrate_fotos_nums.py": {
+          "prod_sha256": "69f0c1c0881fa3dec92c8a9388005e1d0d13aec066bfeb00dd7d5fe58736e325",
+          "dev_sha256": "69f0c1c0881fa3dec92c8a9388005e1d0d13aec066bfeb00dd7d5fe58736e325",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/migrations/0008_globalcounter_alter_registrodefecto_fecha_registro.py": {
+          "prod_sha256": "c76f99d56a078d5a6b24c3f8151a202256c83f7945632075b33ab201cf21f89a",
+          "dev_sha256": "c76f99d56a078d5a6b24c3f8151a202256c83f7945632075b33ab201cf21f89a",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/migrations/0009_init_global_counter_from_files.py": {
+          "prod_sha256": "ff4a1bc8491c90ee219d82953e3101f690e8d548f179093dd5770921cbdcaf57",
+          "dev_sha256": "ff4a1bc8491c90ee219d82953e3101f690e8d548f179093dd5770921cbdcaf57",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/migrations/0010_numeroreutilizable.py": {
+          "prod_sha256": "06bc7f4d9fd1446c57fba6f23b53b55d410dc001e7880e429cd4a2d351e77d62",
+          "dev_sha256": "06bc7f4d9fd1446c57fba6f23b53b55d410dc001e7880e429cd4a2d351e77d62",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/migrations/0011_delete_contadorusuario.py": {
+          "prod_sha256": "10962905b7f709e039902f8c7f7b65d8320ee3e691e6d85334ece4156457e3b7",
+          "dev_sha256": "10962905b7f709e039902f8c7f7b65d8320ee3e691e6d85334ece4156457e3b7",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/migrations/0012_importacionlote_registrodefecto_importacion.py": {
+          "prod_sha256": "04ec7f33d5b9bb4c10e9baf46f2eaeb3c5cc23f6a3efc4cee38ac8a64cab7400",
+          "dev_sha256": "04ec7f33d5b9bb4c10e9baf46f2eaeb3c5cc23f6a3efc4cee38ac8a64cab7400",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/migrations/0013_registrodefecto_invoice.py": {
+          "prod_sha256": "187f4e770c8f4f1963c4c4b4580a54dbe392df0b297cf9650822c8ff2f53c13e",
+          "dev_sha256": "187f4e770c8f4f1963c4c4b4580a54dbe392df0b297cf9650822c8ff2f53c13e",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/migrations/0014_registrodefecto_wo_alter_registrodefecto_invoice.py": {
+          "prod_sha256": "1219335885bc4ff8f693e31051d167cd259ee49d7fca42190fd3a85bf01bb0ba",
+          "dev_sha256": "1219335885bc4ff8f693e31051d167cd259ee49d7fca42190fd3a85bf01bb0ba",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/migrations/__init__.py": {
+          "prod_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "dev_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/models.py": {
+          "prod_sha256": "d763a10cf5a7d0d1512e0c5f2aa83d80c57c6f54fcbe1f5efc80eabfbdf66b1e",
+          "dev_sha256": "66a3157323a6bc0e5633697330a5bfe8c35fb249c3f38b7359eb30dd1f138ee0",
+          "decision": "intentional",
+          "reason": "Preserve newer DEV WhatsApp, permissions, security, tests and UI behavior; see PROD_DEV_SYNC.md"
+        },
+        "web/calidad/services/__init__.py": {
+          "prod_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "dev_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/services/generador_pptx.py": {
+          "prod_sha256": "6ea33fbdcf3d62bad24b5009bac573b144bff20c296fb9c948b2faeaf126c9f9",
+          "dev_sha256": "6ea33fbdcf3d62bad24b5009bac573b144bff20c296fb9c948b2faeaf126c9f9",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/services/importacion.py": {
+          "prod_sha256": "6df53e6d20e9ca0571ec6b25737cbb43d46e536d9565e69abbf817ff34d8b1e1",
+          "dev_sha256": "0be3009b4a25cd680735f46b164a8c5c51cfa0254732ef3529fdf8f25746f0f5",
+          "decision": "integrated",
+          "reason": "Compatible PROD capabilities combined with DEV and covered by regression tests"
+        },
+        "web/calidad/services/legacy_sync.py": {
+          "prod_sha256": "b663ebb840d09fa02eb3e55c4e69903862b26897b5109e530b32614d5e818a72",
+          "dev_sha256": "b663ebb840d09fa02eb3e55c4e69903862b26897b5109e530b32614d5e818a72",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/services/redis_conversation_state.py": {
+          "prod_sha256": "f9bcab4ae03c24fea291d8e17d59ea2f6521809d581744c41db85df4cc0f8300",
+          "dev_sha256": "f9bcab4ae03c24fea291d8e17d59ea2f6521809d581744c41db85df4cc0f8300",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/services/reporte_box_condition.py": {
+          "prod_sha256": "fc9a55bae30748c1e375942ee055f879f44e3705fd07f0a3d09f77a67ed523de",
+          "dev_sha256": "2618d98db6e14f1b4fe2d67a330a6d55b056cad3e324993cbf60925ccae73cb8",
+          "decision": "integrated",
+          "reason": "Compatible PROD capabilities combined with DEV and covered by regression tests"
+        },
+        "web/calidad/services/reporte_excel.py": {
+          "prod_sha256": "179388728c74f415eac335e83beb63240df8477a481c02b922e6b4bee158ef7d",
+          "dev_sha256": "b6eeee371c8ca363f3985558de87e0a1767e156bdd45c1153632124fc913ffbc",
+          "decision": "integrated",
+          "reason": "Compatible PROD capabilities combined with DEV and covered by regression tests"
+        },
+        "web/calidad/tasks.py": {
+          "prod_sha256": "ec61242fb7d7ade60fe57763943190afaebae08292cf24355061da9191b035f7",
+          "dev_sha256": "44d81b92f7ebe21b18d2f3ae690a76e1056cf9d60b0b16c56771ad6607422148",
+          "decision": "integrated",
+          "reason": "Compatible PROD capabilities combined with DEV and covered by regression tests"
+        },
+        "web/calidad/test_legacy_parser_behaviors.py": {
+          "prod_sha256": "1fa5526ac6ed112e7da0da18186bbae775edf233dac80b920ebc917ae3df9d2c",
+          "dev_sha256": "1fa5526ac6ed112e7da0da18186bbae775edf233dac80b920ebc917ae3df9d2c",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/tests.py": {
+          "prod_sha256": "44eb64e50827be22301aa18addca8194965c8224bfde510ec9465e76b0067c56",
+          "dev_sha256": "44eb64e50827be22301aa18addca8194965c8224bfde510ec9465e76b0067c56",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/tests_concurrency.py": {
+          "prod_sha256": "f68e51960991379498c04703e757536dfc3cfc4ac09e5a9e49c1392391821032",
+          "dev_sha256": "f68e51960991379498c04703e757536dfc3cfc4ac09e5a9e49c1392391821032",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/tests_v2.py": {
+          "prod_sha256": "0edae89c7eddf32adae9d254aa1abccaa390fbeaadd6a3c2eb35d97e68beaa91",
+          "dev_sha256": "bfb26aa685c90c666cc9e6d69fda211f00ae9fb25c2ec185f332d07b6588b543",
+          "decision": "intentional",
+          "reason": "Preserve newer DEV WhatsApp, permissions, security, tests and UI behavior; see PROD_DEV_SYNC.md"
+        },
+        "web/calidad/urls.py": {
+          "prod_sha256": "74ca4059d24efe0be52a27b8b588ff8fca0f558ec10cdcc9eab5f96ede765d89",
+          "dev_sha256": "0107c806d25b7905ec743fe96c44ff5f24abfe5297b64d77d57194cea5688396",
+          "decision": "intentional",
+          "reason": "Preserve newer DEV WhatsApp, permissions, security, tests and UI behavior; see PROD_DEV_SYNC.md"
+        },
+        "web/calidad/utils.py": {
+          "prod_sha256": "df1d672d0fdf82cdfbf5ac729564d102384f7eb7953ee0c52a5c5a4519ba4015",
+          "dev_sha256": "df1d672d0fdf82cdfbf5ac729564d102384f7eb7953ee0c52a5c5a4519ba4015",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/views.py": {
+          "prod_sha256": "68d9dd039a5cd974c37e55a94e7dc0d1c3822e14b32b1e4babb84952cd36cfdc",
+          "dev_sha256": "0a6008a285379b6a55cec255e647bcac20a82dade91f20b58b63625f3b16f7ba",
+          "decision": "intentional",
+          "reason": "Preserve newer DEV WhatsApp, permissions, security, tests and UI behavior; see PROD_DEV_SYNC.md"
+        },
+        "web/calidad/views_importacion.py": {
+          "prod_sha256": "10e76813073769f285ddf576ebb08d2dc228df5cdf33332946ca21c218660a8c",
+          "dev_sha256": "2911ca74ddadf22d4c60857e0fd4fc0e3ab0958abf687201c3f9061bd3e31b6f",
+          "decision": "integrated",
+          "reason": "Compatible PROD capabilities combined with DEV and covered by regression tests"
+        },
+        "web/check_db.py": {
+          "prod_sha256": "1fb78cc3b1e5c279a598dbc3b5078117936cdf69c46a1413a67f298887144868",
+          "dev_sha256": null,
+          "decision": "historical",
+          "reason": "Retained in identified external snapshots; unsafe historical diagnostics are not installed or executed in DEV"
+        },
+        "web/check_db_usage.py": {
+          "prod_sha256": "d2f636f60aeb456292f96504b273958ef3c3937c0322a8b64dbcbd284f5211ca",
+          "dev_sha256": null,
+          "decision": "historical",
+          "reason": "Retained in identified external snapshots; unsafe historical diagnostics are not installed or executed in DEV"
+        },
+        "web/config/__init__.py": {
+          "prod_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "dev_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/config/asgi.py": {
+          "prod_sha256": "85085ec70cba269660557023375b388cdaf64f3942482ee5509a0e4eeb86ee38",
+          "dev_sha256": "85085ec70cba269660557023375b388cdaf64f3942482ee5509a0e4eeb86ee38",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/config/settings.py": {
+          "prod_sha256": "43e2dddbe6d8a6a92b3890e88b9ef69ab3a61e1d6c6acb2eb532e0f6f0a95494",
+          "dev_sha256": "e1ac1a74217688965759cadae0db60b648246cb5ac9db4098e0581162e21ab51",
+          "decision": "intentional",
+          "reason": "Preserve newer DEV WhatsApp, permissions, security, tests and UI behavior; see PROD_DEV_SYNC.md"
+        },
+        "web/config/urls.py": {
+          "prod_sha256": "c6947164de36c51b86636da865c85d8f414ecd2d5759890b1a343f9627377cd3",
+          "dev_sha256": "c6947164de36c51b86636da865c85d8f414ecd2d5759890b1a343f9627377cd3",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/config/wsgi.py": {
+          "prod_sha256": "401be74fd102591400a0b34a9eb20fa27ebd8f15b05c84b473ff6e7355ae33ec",
+          "dev_sha256": "401be74fd102591400a0b34a9eb20fa27ebd8f15b05c84b473ff6e7355ae33ec",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/manage.py": {
+          "prod_sha256": "924fdde88428f45b7d74bf54ed2e74bad2577910d96620407681fb38ac3e4a5a",
+          "dev_sha256": "924fdde88428f45b7d74bf54ed2e74bad2577910d96620407681fb38ac3e4a5a",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/patch_importacion.py": {
+          "prod_sha256": "ec2854e0a0bc1f1828c17c0b68206b8e1bf665034f3b11210b83343ec6d3af9e",
+          "dev_sha256": null,
+          "decision": "historical",
+          "reason": "Retained in identified external snapshots; unsafe historical diagnostics are not installed or executed in DEV"
+        },
+        "web/patch_models.py": {
+          "prod_sha256": "401d7fe116e861bed28e9b99db2d20340c70612aa8d3abf9a5580c05bf67a6c4",
+          "dev_sha256": null,
+          "decision": "historical",
+          "reason": "Retained in identified external snapshots; unsafe historical diagnostics are not installed or executed in DEV"
+        },
+        "web/patch_utils.py": {
+          "prod_sha256": "3b4a1e05d522c0d189a5f4ab172ecb83e835f16966e467b4acfb155097c520c6",
+          "dev_sha256": null,
+          "decision": "historical",
+          "reason": "Retained in identified external snapshots; unsafe historical diagnostics are not installed or executed in DEV"
+        },
+        "web/patch_views.py": {
+          "prod_sha256": "bcc69836a0a0e8b4bcf78fd0041025aff7225b25f4d645f714c37a9c5ea57ba9",
+          "dev_sha256": null,
+          "decision": "historical",
+          "reason": "Retained in identified external snapshots; unsafe historical diagnostics are not installed or executed in DEV"
+        },
+        "web/reproduce_direct.py": {
+          "prod_sha256": "c455cb75d417840a37a169faffd1e7685c30676f36293853c2359712ac374acd",
+          "dev_sha256": null,
+          "decision": "historical",
+          "reason": "Retained in identified external snapshots; unsafe historical diagnostics are not installed or executed in DEV"
+        },
+        "web/reproduce_django.py": {
+          "prod_sha256": "6a2daa862ec9f78deb149ba9729090946c7c33f20bc8fa0d533318544146c4a9",
+          "dev_sha256": null,
+          "decision": "historical",
+          "reason": "Retained in identified external snapshots; unsafe historical diagnostics are not installed or executed in DEV"
+        },
+        "web/reproduce_flow.py": {
+          "prod_sha256": "9ff290099b7bba785d3e599331fc642e871054430b974fdbb5adef68941c66a8",
+          "dev_sha256": null,
+          "decision": "historical",
+          "reason": "Retained in identified external snapshots; unsafe historical diagnostics are not installed or executed in DEV"
+        },
+        "web/run_regression_suite.py": {
+          "prod_sha256": "12d72d81fca41b6e3b72682d9f3d4796643662f6962367d4a70748edb9ca3755",
+          "dev_sha256": null,
+          "decision": "historical",
+          "reason": "Retained in identified external snapshots; unsafe historical diagnostics are not installed or executed in DEV"
+        },
+        "web/scratch_jpeg.py": {
+          "prod_sha256": "6ae94aa1d9a4cc379986fc537dcf1c0921e0cde003739870417d7b81294ac75d",
+          "dev_sha256": null,
+          "decision": "historical",
+          "reason": "Retained in identified external snapshots; unsafe historical diagnostics are not installed or executed in DEV"
+        },
+        "web/static/css/panel_operativo.css": {
+          "prod_sha256": "47380cf0e62f791e6d05ab70cf183c45c271ce4aedb12c82fd785ca47195e080",
+          "dev_sha256": "2e76e2eaf7529dd92d678cb6fdd0179112ace1fdbc7f1de1016594951bb9f231",
+          "decision": "intentional",
+          "reason": "Preserve newer DEV WhatsApp, permissions, security, tests and UI behavior; see PROD_DEV_SYNC.md"
+        },
+        "web/static/js/panel_operativo.js": {
+          "prod_sha256": "21ee449b07c8af9753787ad09317c9548637d92c98ece52a26abe6e0fd90bcb9",
+          "dev_sha256": "151986502d0532dafeae6519731ad6d8df1596aef073b23699fd0c4d4ff0d7dd",
+          "decision": "intentional",
+          "reason": "Preserve newer DEV WhatsApp, permissions, security, tests and UI behavior; see PROD_DEV_SYNC.md"
+        },
+        "web/templates/calidad/base.html": {
+          "prod_sha256": "41c758c021fe28b097a83254ca17e39d7e2df23c13f0dae7962cde8c3f1698df",
+          "dev_sha256": "66d4e5e7a5624e67d8d6cc7bd789e96015de0c9208ab5de3d34ed37bde59383b",
+          "decision": "intentional",
+          "reason": "Preserve newer DEV WhatsApp, permissions, security, tests and UI behavior; see PROD_DEV_SYNC.md"
+        },
+        "web/templates/calidad/dashboard.html": {
+          "prod_sha256": "bfb0fb7fe38445cfb11eb5c672f96ea92a21bbc7c7d6bf5f8789f01f531c1af0",
+          "dev_sha256": "bfb0fb7fe38445cfb11eb5c672f96ea92a21bbc7c7d6bf5f8789f01f531c1af0",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/templates/calidad/diccionario.html": {
+          "prod_sha256": "72c822272d5bf1e72e05c1a71c0c9a41bdb346101faabf5143fd294ad00e678e",
+          "dev_sha256": "72c822272d5bf1e72e05c1a71c0c9a41bdb346101faabf5143fd294ad00e678e",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/templates/calidad/galeria.html": {
+          "prod_sha256": "07f906f0df846f2a5854151af2d28ab74947e3dfe6806864d55a30040b660ba7",
+          "dev_sha256": "07f906f0df846f2a5854151af2d28ab74947e3dfe6806864d55a30040b660ba7",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/templates/calidad/importacion/upload.html": {
+          "prod_sha256": "369440f5d002d5323315b027d96a309f4bd3ede3945d058f32d562ff73d46103",
+          "dev_sha256": "369440f5d002d5323315b027d96a309f4bd3ede3945d058f32d562ff73d46103",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/templates/calidad/importacion/workspace.html": {
+          "prod_sha256": "e14c23c8d1707f4902af1dd3564cf79954c6a8af687158220280d66233e360a4",
+          "dev_sha256": "e14c23c8d1707f4902af1dd3564cf79954c6a8af687158220280d66233e360a4",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/templates/calidad/login.html": {
+          "prod_sha256": "e900f8a20dc14bb8a1efe8b25e692e9041151cbffe1c88f45b600dbbc55e6b06",
+          "dev_sha256": "e900f8a20dc14bb8a1efe8b25e692e9041151cbffe1c88f45b600dbbc55e6b06",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/templates/calidad/operacion.html": {
+          "prod_sha256": "3a8051e0862a6ad7a9b0e74782b15830c958dbf42ef6c2dbda74f4bc1fd1fc0f",
+          "dev_sha256": "55a750d9b4f1dcf986a9feb30c2cd68dc85f4385e4985376b6006e19cba3eb06",
+          "decision": "intentional",
+          "reason": "Preserve newer DEV WhatsApp, permissions, security, tests and UI behavior; see PROD_DEV_SYNC.md"
+        },
+        "web/templates/calidad/partials/feed_page.html": {
+          "prod_sha256": "865b1de2153fb638e474e829c2a459369235c3798a1b64c5ed4911d005cc018c",
+          "dev_sha256": "865b1de2153fb638e474e829c2a459369235c3798a1b64c5ed4911d005cc018c",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/templates/calidad/reportes.html": {
+          "prod_sha256": "ff09d4bfa6d8a0e440ce6aac37d63a61a86de28a268479d00e3606f2fdacc12a",
+          "dev_sha256": "ce3697eb175a81a5391ee19fee64db15281b0dd3c906a8bddcde1604be8ae33f",
+          "decision": "intentional",
+          "reason": "Preserve newer DEV WhatsApp, permissions, security, tests and UI behavior; see PROD_DEV_SYNC.md"
+        },
+        "web/templates/calidad/revisar_box_condition.html": {
+          "prod_sha256": "50ee5c656c0e89cc382ab1e445ac2a534c71500b575a7c1046e5cdeae8cca249",
+          "dev_sha256": "50ee5c656c0e89cc382ab1e445ac2a534c71500b575a7c1046e5cdeae8cca249",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/templates/calidad/revisar_orientacion.html": {
+          "prod_sha256": "8d5c38fec2d14a573f9a03988534e1448890d5a956057776ba467d8daa1f1ff6",
+          "dev_sha256": "8d5c38fec2d14a573f9a03988534e1448890d5a956057776ba467d8daa1f1ff6",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/templates/calidad/ver_foto.html": {
+          "prod_sha256": "2330e279f5974fabe6d777c8221b2dd5d1a0f3a8e3da4395e17ba6500cba4c7d",
+          "dev_sha256": "2330e279f5974fabe6d777c8221b2dd5d1a0f3a8e3da4395e17ba6500cba4c7d",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/test_final_validation_15.py": {
+          "prod_sha256": "af98c7d70ab3d3094e7399c2e8e18cb24e781e3d836f59683970a461f7b4c54e",
+          "dev_sha256": null,
+          "decision": "historical",
+          "reason": "Retained in identified external snapshots; unsafe historical diagnostics are not installed or executed in DEV"
+        },
+        "web/verify_tab_isolation.py": {
+          "prod_sha256": "685243d99f1db4ae356050b34bf2d5cd845f73530f8733910ff66d3be70c14d9",
+          "dev_sha256": null,
+          "decision": "historical",
+          "reason": "Retained in identified external snapshots; unsafe historical diagnostics are not installed or executed in DEV"
+        },
+        "web/workspace/__init__.py": {
+          "prod_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "dev_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/workspace/admin.py": {
+          "prod_sha256": "b2e328e31f08dc907100505521d13ee6a9ea67a240655d051120011ce49cfaf8",
+          "dev_sha256": "b2e328e31f08dc907100505521d13ee6a9ea67a240655d051120011ce49cfaf8",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/workspace/apps.py": {
+          "prod_sha256": "339d6c76bcb24826d341d155006a2328a87b15f01e46d23643dbf1f744f7f863",
+          "dev_sha256": "339d6c76bcb24826d341d155006a2328a87b15f01e46d23643dbf1f744f7f863",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/workspace/migrations/0001_initial.py": {
+          "prod_sha256": "75feae5d06ccf6ce892f518ae05c49c3ca090de5ee43040599b0fd1209990d7e",
+          "dev_sha256": "75feae5d06ccf6ce892f518ae05c49c3ca090de5ee43040599b0fd1209990d7e",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/workspace/migrations/__init__.py": {
+          "prod_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "dev_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/workspace/models.py": {
+          "prod_sha256": "d06364b9459bea5649b397352b032757e4aa4939e68a2f4bc313b9bc4e23d352",
+          "dev_sha256": "d06364b9459bea5649b397352b032757e4aa4939e68a2f4bc313b9bc4e23d352",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/workspace/services/__init__.py": {
+          "prod_sha256": "ef1b8fb383200e53a738166d9775a04ca4473437cd6aa6c2b529f667478bb7cd",
+          "dev_sha256": "ef1b8fb383200e53a738166d9775a04ca4473437cd6aa6c2b529f667478bb7cd",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/workspace/services/confirmation.py": {
+          "prod_sha256": "4628dd523b0a8d15af6d92fbe80c21924f9c5e5184b2cf21b41ce6b78d96eb3e",
+          "dev_sha256": "4628dd523b0a8d15af6d92fbe80c21924f9c5e5184b2cf21b41ce6b78d96eb3e",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/workspace/services/processing.py": {
+          "prod_sha256": "aa945fc4fe8f2d67f07fba7daab3a5fa355118e720cce4ced138db5e45047cd7",
+          "dev_sha256": "aa945fc4fe8f2d67f07fba7daab3a5fa355118e720cce4ced138db5e45047cd7",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/workspace/static/workspace/css/workspace.css": {
+          "prod_sha256": "bc7cd3a4a27a3de0711a8c339212237823002d855f1ba36622eeabe063aa50ad",
+          "dev_sha256": "bc7cd3a4a27a3de0711a8c339212237823002d855f1ba36622eeabe063aa50ad",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/workspace/tasks.py": {
+          "prod_sha256": "6a67f8df9bb1bac90d0b648b7e57f4eb292dcfb45438a33b6229ec910a2e2f6c",
+          "dev_sha256": "6a67f8df9bb1bac90d0b648b7e57f4eb292dcfb45438a33b6229ec910a2e2f6c",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/workspace/templates/workspace/workspace.html": {
+          "prod_sha256": "f5f9e13b6a0aff1c7efee053fd84ad488af77f9099543f3cf8a7146d06731cd2",
+          "dev_sha256": "f5f9e13b6a0aff1c7efee053fd84ad488af77f9099543f3cf8a7146d06731cd2",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/workspace/tests/__init__.py": {
+          "prod_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "dev_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/workspace/tests/test_processing_characterization.py": {
+          "prod_sha256": "64e7f517227bf7cc73128d5a59e7ccf2026f719c8c19b3e46d0bd1ba9c5dd332",
+          "dev_sha256": "64e7f517227bf7cc73128d5a59e7ccf2026f719c8c19b3e46d0bd1ba9c5dd332",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/workspace/tests/test_processing_locking.py": {
+          "prod_sha256": "3c85ef965ce7207002489109fcd7b6e8575931cf55d3770ea503e3b5d36bf2a9",
+          "dev_sha256": "3c85ef965ce7207002489109fcd7b6e8575931cf55d3770ea503e3b5d36bf2a9",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/workspace/tests.py": {
+          "prod_sha256": "9ab6c6191360e63c1b4c9b5659aef348a743c9e078be68190917369e4e9563e8",
+          "dev_sha256": "9ab6c6191360e63c1b4c9b5659aef348a743c9e078be68190917369e4e9563e8",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/workspace/urls.py": {
+          "prod_sha256": "59b114608aeefd62bb75520fbb76af0dcadd148f28855e93b9dd787bf866f3a4",
+          "dev_sha256": "59b114608aeefd62bb75520fbb76af0dcadd148f28855e93b9dd787bf866f3a4",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/workspace/views.py": {
+          "prod_sha256": "9ace7f1d1620db47bf797e14083b0049cd1ed0af275b2e6c14f933916810e72d",
+          "dev_sha256": "9ace7f1d1620db47bf797e14083b0049cd1ed0af275b2e6c14f933916810e72d",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        }
+      }
+    },
+    "celery": {
+      "container": "bot_calidad_celery",
+      "image": "sha256:4953281398a441e2b654baffc1223217dc377f2a6c61f8ced3d9bcf0083b7dac",
+      "paths": [
+        "web",
+        "shared"
+      ],
+      "files": {
+        "shared/__init__.py": {
+          "prod_sha256": "63d22d93548b8eda9bf3e747871b9c5e82a32e4b6a7dbec9b1c83d1553094573",
+          "dev_sha256": "63d22d93548b8eda9bf3e747871b9c5e82a32e4b6a7dbec9b1c83d1553094573",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/application/__init__.py": {
+          "prod_sha256": "ec79a1e3d7718181fba009aa5389255bc0d6b55a4994761e572247f335c79b0a",
+          "dev_sha256": "ec79a1e3d7718181fba009aa5389255bc0d6b55a4994761e572247f335c79b0a",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/application/services/__init__.py": {
+          "prod_sha256": "7e176331264c1ff9994dc8c9127eee0f4d5cf3b65d3ba51288e333d2d5980f7b",
+          "dev_sha256": "7e176331264c1ff9994dc8c9127eee0f4d5cf3b65d3ba51288e333d2d5980f7b",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/application/services/export_service.py": {
+          "prod_sha256": "a1a925017e8e7d2476459ddfa76b78c85c03dd48ea2088165aa82d8e0a8960c3",
+          "dev_sha256": "a1a925017e8e7d2476459ddfa76b78c85c03dd48ea2088165aa82d8e0a8960c3",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/application/validators/__init__.py": {
+          "prod_sha256": "050a7984b3a401e1736ff3d4b0a41a82e424a6f8d571fb30503c601e8ea7d985",
+          "dev_sha256": "050a7984b3a401e1736ff3d4b0a41a82e424a6f8d571fb30503c601e8ea7d985",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/config/__init__.py": {
+          "prod_sha256": "cde35c8357d5948bd8213059aa42c5bb61228c9b5d2ffe2a32bad67c0013ffcb",
+          "dev_sha256": "cde35c8357d5948bd8213059aa42c5bb61228c9b5d2ffe2a32bad67c0013ffcb",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/config/dependencies.py": {
+          "prod_sha256": "f3ea360693d12894c06d76aa7102752ecec8f6b0ee63f750891b336718d0d482",
+          "dev_sha256": "f3ea360693d12894c06d76aa7102752ecec8f6b0ee63f750891b336718d0d482",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/config/logging_config.py": {
+          "prod_sha256": "50adaf75dd7382e56eee0c9ab5fd912166fccd5849c81637afa8038fa0e0eab4",
+          "dev_sha256": "50adaf75dd7382e56eee0c9ab5fd912166fccd5849c81637afa8038fa0e0eab4",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/infrastructure/__init__.py": {
+          "prod_sha256": "6f43120413508a7c14f48c73801d78f5d441908522e4dbeed047d71a49f1d4ea",
+          "dev_sha256": "6f43120413508a7c14f48c73801d78f5d441908522e4dbeed047d71a49f1d4ea",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/infrastructure/ai/__init__.py": {
+          "prod_sha256": "b5490c95ccfff4bda6bbd131da050eee61cf90fd035cf5454890d7f65f269bff",
+          "dev_sha256": "b5490c95ccfff4bda6bbd131da050eee61cf90fd035cf5454890d7f65f269bff",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/infrastructure/ai/defect_catalog.json": {
+          "prod_sha256": "3fcba84b3234bb8e206bb8d5b27c42bf4a8ec827d34062d6064fbd47fed83d6e",
+          "dev_sha256": "be604dd72e9ce2842b646c86aafbb189b694a066cf614cb08842c86c99712335",
+          "decision": "integrated",
+          "reason": "Compatible PROD capabilities combined with DEV and covered by regression tests"
+        },
+        "shared/infrastructure/ai/defect_translator.py": {
+          "prod_sha256": "ff9c34bbb9aa80730c550f9ae58ec07894d52131692e56e8b04ac9ad3c3fbb6a",
+          "dev_sha256": "ff9c34bbb9aa80730c550f9ae58ec07894d52131692e56e8b04ac9ad3c3fbb6a",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/infrastructure/ai/interfaces.py": {
+          "prod_sha256": "7578b0fb54580ef46dff09720aa6452deba3f65b726758e16065ad8f0cbe337a",
+          "dev_sha256": "7578b0fb54580ef46dff09720aa6452deba3f65b726758e16065ad8f0cbe337a",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/infrastructure/database/__init__.py": {
+          "prod_sha256": "db1b9d2009caa93c21b22059ab22b133471a35fd5550f3258b98c7bba52a0bf8",
+          "dev_sha256": "db1b9d2009caa93c21b22059ab22b133471a35fd5550f3258b98c7bba52a0bf8",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/infrastructure/database/django_contador_repository.py": {
+          "prod_sha256": "91275fe856aef279b2651b191a380986315191075eb9db0be2cef875fd9ccb8b",
+          "dev_sha256": "91275fe856aef279b2651b191a380986315191075eb9db0be2cef875fd9ccb8b",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/infrastructure/database/django_registro_repository.py": {
+          "prod_sha256": "d668e071ac14d38d3af9ac15bc4d5b194914be2cf76b9a69530b4d98175fadee",
+          "dev_sha256": "d668e071ac14d38d3af9ac15bc4d5b194914be2cf76b9a69530b4d98175fadee",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/infrastructure/database/django_usuario_repository.py": {
+          "prod_sha256": "e4a70b9810ce4d2e8d8579677abfe0c0ecd069d975ad6c799987746db29a2429",
+          "dev_sha256": "e4a70b9810ce4d2e8d8579677abfe0c0ecd069d975ad6c799987746db29a2429",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/infrastructure/orientation/__init__.py": {
+          "prod_sha256": "54b89e09d33d9fb772e0e98f13830fd8e7a13e073421ad49ddedd6f0efc4de04",
+          "dev_sha256": "54b89e09d33d9fb772e0e98f13830fd8e7a13e073421ad49ddedd6f0efc4de04",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/infrastructure/orientation/orientation_engine.py": {
+          "prod_sha256": "4a5bafb8319e9e6fed6f9cb8faf742000117324d758af115a5899af140eff914",
+          "dev_sha256": "4a5bafb8319e9e6fed6f9cb8faf742000117324d758af115a5899af140eff914",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/infrastructure/storage/__init__.py": {
+          "prod_sha256": "80f7f433b3b7555af8b17a0b26596c54bb773b3381f92c344bd53d451f2eb41c",
+          "dev_sha256": "80f7f433b3b7555af8b17a0b26596c54bb773b3381f92c344bd53d451f2eb41c",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/infrastructure/storage/foto_storage.py": {
+          "prod_sha256": "d5207a371ed80f0e1302301ea8adeaffe536a4b605dd5f40dee5c58fe2065e4d",
+          "dev_sha256": "d5207a371ed80f0e1302301ea8adeaffe536a4b605dd5f40dee5c58fe2065e4d",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/utils/__init__.py": {
+          "prod_sha256": "877457b908014f463dd7da596d98d9362de4c440890819843618e7aed9f80c4d",
+          "dev_sha256": "877457b908014f463dd7da596d98d9362de4c440890819843618e7aed9f80c4d",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/utils/format_utils.py": {
+          "prod_sha256": "9ca50bfb01501c0ce665d4def2aed916db6caa380afea2cfcb3acee2e4f70fb1",
+          "dev_sha256": "9ca50bfb01501c0ce665d4def2aed916db6caa380afea2cfcb3acee2e4f70fb1",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/utils/photo_parser.py": {
+          "prod_sha256": "29660abe9e7d4c652b8a483eb9265d0b6fb8df8524bc3a210021075da6d0d5a8",
+          "dev_sha256": "29660abe9e7d4c652b8a483eb9265d0b6fb8df8524bc3a210021075da6d0d5a8",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/utils/signals_utils.py": {
+          "prod_sha256": "afe81d6024b2b938778362ce4029c738871028c672e66d053a60c0e927640cc3",
+          "dev_sha256": "afe81d6024b2b938778362ce4029c738871028c672e66d053a60c0e927640cc3",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/utils/tests/__init__.py": {
+          "prod_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "dev_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/utils/tests/test_bot_optimizations.py": {
+          "prod_sha256": "e30b101ca03883cad6bdcbe2fb7bb504e0800cffb44974a1f60237c56defed60",
+          "dev_sha256": "e30b101ca03883cad6bdcbe2fb7bb504e0800cffb44974a1f60237c56defed60",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/utils/tests/test_legacy_parser_behaviors.py": {
+          "prod_sha256": "96015dddd38f1702106320207f2939d03d21debfc244c27acc2c6f6663a3fce7",
+          "dev_sha256": "96015dddd38f1702106320207f2939d03d21debfc244c27acc2c6f6663a3fce7",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/utils/tests/test_photo_parser.py": {
+          "prod_sha256": "c150bb7372d8c6e8eb84a56e30db7dfe1a96ea971097b6e5813646cebfc97391",
+          "dev_sha256": "c150bb7372d8c6e8eb84a56e30db7dfe1a96ea971097b6e5813646cebfc97391",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/backup_and_clean.py": {
+          "prod_sha256": "9e16a468e83d12bc14ddaa934721a7c80cfd4e49b9481bbda242d5dc9e73d162",
+          "dev_sha256": null,
+          "decision": "historical",
+          "reason": "Retained in identified external snapshots; unsafe historical diagnostics are not installed or executed in DEV"
+        },
+        "web/calidad/__init__.py": {
+          "prod_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "dev_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/admin.py": {
+          "prod_sha256": "74badf393e07b093fb623e45a2f53d603d88c7a0185e732f426eac0ed5918ed7",
+          "dev_sha256": "74badf393e07b093fb623e45a2f53d603d88c7a0185e732f426eac0ed5918ed7",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/api/__init__.py": {
+          "prod_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "dev_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/api/endpoints_v2.py": {
+          "prod_sha256": "0a3a35fa728359c7b863cb919b3b2934463cd86e11df54e464d1b721b81eb183",
+          "dev_sha256": "3adea4378c53cbcf3bbbc71633b642c78279cc02501b20d0afaedfb9f1ca6b10",
+          "decision": "equivalent",
+          "reason": "Whitespace only; DEV authentication and authorization retained"
+        },
+        "web/calidad/api/serializers_v2.py": {
+          "prod_sha256": "3373e28841f309b9d8afd53500eff96965ab8e71f4c2c03c743eb86afca91bbe",
+          "dev_sha256": "b10bef3094183870db73298ee1af6a2d89eff7ee969e2608f649fe86287078b5",
+          "decision": "intentional",
+          "reason": "Preserve newer DEV WhatsApp, permissions, security, tests and UI behavior; see PROD_DEV_SYNC.md"
+        },
+        "web/calidad/api/services_v2.py": {
+          "prod_sha256": "5bf3c510b08639a4a15b23a2097c1959c7c1c93d5c50bea889204042499e243a",
+          "dev_sha256": "139a5366a880ab31cafac56b50ea1788025517b6834e407d9484aaa73326577b",
+          "decision": "intentional",
+          "reason": "Preserve newer DEV WhatsApp, permissions, security, tests and UI behavior; see PROD_DEV_SYNC.md"
+        },
+        "web/calidad/api/urls.py": {
+          "prod_sha256": "e674944a124ea2a0a0b4ce5a1437e2977dfdf05d395dbb8bc3fe5abb47e0e4f6",
+          "dev_sha256": "97b21394370bd86e4d7834945e79ea9511fff02fb36c8b214699a8574366b710",
+          "decision": "intentional",
+          "reason": "Preserve newer DEV WhatsApp, permissions, security, tests and UI behavior; see PROD_DEV_SYNC.md"
+        },
+        "web/calidad/api/views.py": {
+          "prod_sha256": "c6f52ee20cd93950b1c4ac5cd62665d7f70e309ce40278dd768d14bf297b81ce",
+          "dev_sha256": "c6f52ee20cd93950b1c4ac5cd62665d7f70e309ce40278dd768d14bf297b81ce",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/application/__init__.py": {
+          "prod_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "dev_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/application/workflows/defecto_workflow.py": {
+          "prod_sha256": "554bf5084f63dab565d46d2c94ad3e9a72f0d3fa6644e7f4a69cd9bce67ffd85",
+          "dev_sha256": "554bf5084f63dab565d46d2c94ad3e9a72f0d3fa6644e7f4a69cd9bce67ffd85",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/apps.py": {
+          "prod_sha256": "4873f483f24fa152f10ed8e3c00d3f2e5c6cc6aef0e4279ff47de91049ac6e34",
+          "dev_sha256": "4873f483f24fa152f10ed8e3c00d3f2e5c6cc6aef0e4279ff47de91049ac6e34",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/celery_app.py": {
+          "prod_sha256": "35ee1091039a2d10307b4cccc61e192e6682c3189388ef98827f584853b397f5",
+          "dev_sha256": "35ee1091039a2d10307b4cccc61e192e6682c3189388ef98827f584853b397f5",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/domain/defectos/entities.py": {
+          "prod_sha256": "17b2f71418fed36d8b7c5c1fd511368c8cc8530d3ec7bbc97b56c1aed6f8beb3",
+          "dev_sha256": "17b2f71418fed36d8b7c5c1fd511368c8cc8530d3ec7bbc97b56c1aed6f8beb3",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/domain/defectos/state_machine.py": {
+          "prod_sha256": "3722864025693267fd86ff22216723780116115f7ee540e8a394da8173320102",
+          "dev_sha256": "3722864025693267fd86ff22216723780116115f7ee540e8a394da8173320102",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/domain/defectos/validators.py": {
+          "prod_sha256": "e96cc8a6a8f20da0c10c6970ae0f7db23ef5ba4caaa1e9fd99aabca6f39451a7",
+          "dev_sha256": "e96cc8a6a8f20da0c10c6970ae0f7db23ef5ba4caaa1e9fd99aabca6f39451a7",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/management/__init__.py": {
+          "prod_sha256": "3473c12c8ab27113e38e7d8130b848f8ad0486d29dde96dd60e6f584faf66f54",
+          "dev_sha256": "3473c12c8ab27113e38e7d8130b848f8ad0486d29dde96dd60e6f584faf66f54",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/management/commands/__init__.py": {
+          "prod_sha256": "c25fc38b1243382ade04740a11e49e168f1e78707cb9ad483b0d9e3c6578c7e2",
+          "dev_sha256": "c25fc38b1243382ade04740a11e49e168f1e78707cb9ad483b0d9e3c6578c7e2",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/management/commands/debug_foto20.py": {
+          "prod_sha256": "691a8a1d42edf3633680f71d2a0630bd3dc10103646ce553954be26e0718b499",
+          "dev_sha256": null,
+          "decision": "historical",
+          "reason": "Retained in identified external snapshots; unsafe historical diagnostics are not installed or executed in DEV"
+        },
+        "web/calidad/management/commands/limpiar_temporales.py": {
+          "prod_sha256": "d6e9bb48072605494014c071c23a42b8dfdc6e1bf7abc5647fbbbbb2d5463022",
+          "dev_sha256": "d6e9bb48072605494014c071c23a42b8dfdc6e1bf7abc5647fbbbbb2d5463022",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/management/commands/sync_evidencias.py": {
+          "prod_sha256": "cc40d1499dc3be597d552d376411499f053da214ad93fe66bedbcda51744a9b1",
+          "dev_sha256": "cc40d1499dc3be597d552d376411499f053da214ad93fe66bedbcda51744a9b1",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/migrations/0001_initial.py": {
+          "prod_sha256": "8fbfefbb81f90313c24a733b39d0bd9c568afbe4b5502dc7f7663106a8a6d4f6",
+          "dev_sha256": "8fbfefbb81f90313c24a733b39d0bd9c568afbe4b5502dc7f7663106a8a6d4f6",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/migrations/0002_phase1_fotos_nums_estados_operativos.py": {
+          "prod_sha256": "41954455d1b82f1f6de8ef219c990a75fb9b8c4a569ba95904c6297aeca5c8d0",
+          "dev_sha256": "41954455d1b82f1f6de8ef219c990a75fb9b8c4a569ba95904c6297aeca5c8d0",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/migrations/0003_phase1_data_migration_fotos_nums.py": {
+          "prod_sha256": "cb5aa3d489c62a48e7d0153cfa9b1162d27d65af8a1c7cac93d3c1e98ca59e74",
+          "dev_sha256": "cb5aa3d489c62a48e7d0153cfa9b1162d27d65af8a1c7cac93d3c1e98ca59e74",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/migrations/0004_registrodefecto_numero_parte.py": {
+          "prod_sha256": "4dc50190de89485fdcf5e4c09c6bccafb530ed4d6ae528d43253db7ae20d65c6",
+          "dev_sha256": "4dc50190de89485fdcf5e4c09c6bccafb530ed4d6ae528d43253db7ae20d65c6",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/migrations/0005_contadorusuario_delete_contadorgrupo_and_more.py": {
+          "prod_sha256": "bd24c012328f8f7092f0bbc5b9961819a3f3e138b2868806625e1aaabd07ecad",
+          "dev_sha256": "bd24c012328f8f7092f0bbc5b9961819a3f3e138b2868806625e1aaabd07ecad",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/migrations/0006_evidenciafotografica.py": {
+          "prod_sha256": "997cb97244529cbda833dedf0d62f5d0c2db3679fb72e2be427d8a6e03444f2d",
+          "dev_sha256": "997cb97244529cbda833dedf0d62f5d0c2db3679fb72e2be427d8a6e03444f2d",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/migrations/0007_migrate_fotos_nums.py": {
+          "prod_sha256": "69f0c1c0881fa3dec92c8a9388005e1d0d13aec066bfeb00dd7d5fe58736e325",
+          "dev_sha256": "69f0c1c0881fa3dec92c8a9388005e1d0d13aec066bfeb00dd7d5fe58736e325",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/migrations/0008_globalcounter_alter_registrodefecto_fecha_registro.py": {
+          "prod_sha256": "c76f99d56a078d5a6b24c3f8151a202256c83f7945632075b33ab201cf21f89a",
+          "dev_sha256": "c76f99d56a078d5a6b24c3f8151a202256c83f7945632075b33ab201cf21f89a",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/migrations/0009_init_global_counter_from_files.py": {
+          "prod_sha256": "ff4a1bc8491c90ee219d82953e3101f690e8d548f179093dd5770921cbdcaf57",
+          "dev_sha256": "ff4a1bc8491c90ee219d82953e3101f690e8d548f179093dd5770921cbdcaf57",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/migrations/0010_numeroreutilizable.py": {
+          "prod_sha256": "06bc7f4d9fd1446c57fba6f23b53b55d410dc001e7880e429cd4a2d351e77d62",
+          "dev_sha256": "06bc7f4d9fd1446c57fba6f23b53b55d410dc001e7880e429cd4a2d351e77d62",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/migrations/0011_delete_contadorusuario.py": {
+          "prod_sha256": "10962905b7f709e039902f8c7f7b65d8320ee3e691e6d85334ece4156457e3b7",
+          "dev_sha256": "10962905b7f709e039902f8c7f7b65d8320ee3e691e6d85334ece4156457e3b7",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/migrations/0012_importacionlote_registrodefecto_importacion.py": {
+          "prod_sha256": "04ec7f33d5b9bb4c10e9baf46f2eaeb3c5cc23f6a3efc4cee38ac8a64cab7400",
+          "dev_sha256": "04ec7f33d5b9bb4c10e9baf46f2eaeb3c5cc23f6a3efc4cee38ac8a64cab7400",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/migrations/__init__.py": {
+          "prod_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "dev_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/models.py": {
+          "prod_sha256": "d763a10cf5a7d0d1512e0c5f2aa83d80c57c6f54fcbe1f5efc80eabfbdf66b1e",
+          "dev_sha256": "66a3157323a6bc0e5633697330a5bfe8c35fb249c3f38b7359eb30dd1f138ee0",
+          "decision": "intentional",
+          "reason": "Preserve newer DEV WhatsApp, permissions, security, tests and UI behavior; see PROD_DEV_SYNC.md"
+        },
+        "web/calidad/services/__init__.py": {
+          "prod_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "dev_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/services/generador_pptx.py": {
+          "prod_sha256": "6ea33fbdcf3d62bad24b5009bac573b144bff20c296fb9c948b2faeaf126c9f9",
+          "dev_sha256": "6ea33fbdcf3d62bad24b5009bac573b144bff20c296fb9c948b2faeaf126c9f9",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/services/importacion.py": {
+          "prod_sha256": "13a99b6f2341d9801c49a9598bf843cdd079701617217b24db06ae72c6344733",
+          "dev_sha256": "0be3009b4a25cd680735f46b164a8c5c51cfa0254732ef3529fdf8f25746f0f5",
+          "decision": "integrated",
+          "reason": "Compatible PROD capabilities combined with DEV and covered by regression tests"
+        },
+        "web/calidad/services/legacy_sync.py": {
+          "prod_sha256": "b663ebb840d09fa02eb3e55c4e69903862b26897b5109e530b32614d5e818a72",
+          "dev_sha256": "b663ebb840d09fa02eb3e55c4e69903862b26897b5109e530b32614d5e818a72",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/services/redis_conversation_state.py": {
+          "prod_sha256": "f9bcab4ae03c24fea291d8e17d59ea2f6521809d581744c41db85df4cc0f8300",
+          "dev_sha256": "f9bcab4ae03c24fea291d8e17d59ea2f6521809d581744c41db85df4cc0f8300",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/services/reporte_box_condition.py": {
+          "prod_sha256": "fc9a55bae30748c1e375942ee055f879f44e3705fd07f0a3d09f77a67ed523de",
+          "dev_sha256": "2618d98db6e14f1b4fe2d67a330a6d55b056cad3e324993cbf60925ccae73cb8",
+          "decision": "integrated",
+          "reason": "Compatible PROD capabilities combined with DEV and covered by regression tests"
+        },
+        "web/calidad/services/reporte_excel.py": {
+          "prod_sha256": "179388728c74f415eac335e83beb63240df8477a481c02b922e6b4bee158ef7d",
+          "dev_sha256": "b6eeee371c8ca363f3985558de87e0a1767e156bdd45c1153632124fc913ffbc",
+          "decision": "integrated",
+          "reason": "Compatible PROD capabilities combined with DEV and covered by regression tests"
+        },
+        "web/calidad/tasks.py": {
+          "prod_sha256": "ec61242fb7d7ade60fe57763943190afaebae08292cf24355061da9191b035f7",
+          "dev_sha256": "44d81b92f7ebe21b18d2f3ae690a76e1056cf9d60b0b16c56771ad6607422148",
+          "decision": "integrated",
+          "reason": "Compatible PROD capabilities combined with DEV and covered by regression tests"
+        },
+        "web/calidad/test_legacy_parser_behaviors.py": {
+          "prod_sha256": "1fa5526ac6ed112e7da0da18186bbae775edf233dac80b920ebc917ae3df9d2c",
+          "dev_sha256": "1fa5526ac6ed112e7da0da18186bbae775edf233dac80b920ebc917ae3df9d2c",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/tests.py": {
+          "prod_sha256": "44eb64e50827be22301aa18addca8194965c8224bfde510ec9465e76b0067c56",
+          "dev_sha256": "44eb64e50827be22301aa18addca8194965c8224bfde510ec9465e76b0067c56",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/tests_concurrency.py": {
+          "prod_sha256": "f68e51960991379498c04703e757536dfc3cfc4ac09e5a9e49c1392391821032",
+          "dev_sha256": "f68e51960991379498c04703e757536dfc3cfc4ac09e5a9e49c1392391821032",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/tests_v2.py": {
+          "prod_sha256": "f8b435adab982309cd4dcf5712f8cd95cff5650743fdadf2bc4824fe0c54f2d1",
+          "dev_sha256": "bfb26aa685c90c666cc9e6d69fda211f00ae9fb25c2ec185f332d07b6588b543",
+          "decision": "intentional",
+          "reason": "Preserve newer DEV WhatsApp, permissions, security, tests and UI behavior; see PROD_DEV_SYNC.md"
+        },
+        "web/calidad/urls.py": {
+          "prod_sha256": "fff3bbd9520c46620da6ccfd1d0789b8d50c3522ae030b6527d796d552795999",
+          "dev_sha256": "0107c806d25b7905ec743fe96c44ff5f24abfe5297b64d77d57194cea5688396",
+          "decision": "intentional",
+          "reason": "Preserve newer DEV WhatsApp, permissions, security, tests and UI behavior; see PROD_DEV_SYNC.md"
+        },
+        "web/calidad/utils.py": {
+          "prod_sha256": "df1d672d0fdf82cdfbf5ac729564d102384f7eb7953ee0c52a5c5a4519ba4015",
+          "dev_sha256": "df1d672d0fdf82cdfbf5ac729564d102384f7eb7953ee0c52a5c5a4519ba4015",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/calidad/views.py": {
+          "prod_sha256": "68d9dd039a5cd974c37e55a94e7dc0d1c3822e14b32b1e4babb84952cd36cfdc",
+          "dev_sha256": "0a6008a285379b6a55cec255e647bcac20a82dade91f20b58b63625f3b16f7ba",
+          "decision": "intentional",
+          "reason": "Preserve newer DEV WhatsApp, permissions, security, tests and UI behavior; see PROD_DEV_SYNC.md"
+        },
+        "web/calidad/views_importacion.py": {
+          "prod_sha256": "5eb72d65b642b0410afd872dfb59f561939a0751b19960b09916cfe6f47a7cf4",
+          "dev_sha256": "2911ca74ddadf22d4c60857e0fd4fc0e3ab0958abf687201c3f9061bd3e31b6f",
+          "decision": "integrated",
+          "reason": "Compatible PROD capabilities combined with DEV and covered by regression tests"
+        },
+        "web/check_db.py": {
+          "prod_sha256": "1fb78cc3b1e5c279a598dbc3b5078117936cdf69c46a1413a67f298887144868",
+          "dev_sha256": null,
+          "decision": "historical",
+          "reason": "Retained in identified external snapshots; unsafe historical diagnostics are not installed or executed in DEV"
+        },
+        "web/check_db_usage.py": {
+          "prod_sha256": "d2f636f60aeb456292f96504b273958ef3c3937c0322a8b64dbcbd284f5211ca",
+          "dev_sha256": null,
+          "decision": "historical",
+          "reason": "Retained in identified external snapshots; unsafe historical diagnostics are not installed or executed in DEV"
+        },
+        "web/config/__init__.py": {
+          "prod_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "dev_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/config/asgi.py": {
+          "prod_sha256": "85085ec70cba269660557023375b388cdaf64f3942482ee5509a0e4eeb86ee38",
+          "dev_sha256": "85085ec70cba269660557023375b388cdaf64f3942482ee5509a0e4eeb86ee38",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/config/settings.py": {
+          "prod_sha256": "138f8e143e8b584661437246f892501f01f5afebd874557576276de82555f887",
+          "dev_sha256": "e1ac1a74217688965759cadae0db60b648246cb5ac9db4098e0581162e21ab51",
+          "decision": "intentional",
+          "reason": "Preserve newer DEV WhatsApp, permissions, security, tests and UI behavior; see PROD_DEV_SYNC.md"
+        },
+        "web/config/urls.py": {
+          "prod_sha256": "7d2a2366b64891b7afd6cd5be43e8952eb055f1a49a10d4c7b48431624d6905c",
+          "dev_sha256": "c6947164de36c51b86636da865c85d8f414ecd2d5759890b1a343f9627377cd3",
+          "decision": "intentional",
+          "reason": "Preserve newer DEV WhatsApp, permissions, security, tests and UI behavior; see PROD_DEV_SYNC.md"
+        },
+        "web/config/wsgi.py": {
+          "prod_sha256": "401be74fd102591400a0b34a9eb20fa27ebd8f15b05c84b473ff6e7355ae33ec",
+          "dev_sha256": "401be74fd102591400a0b34a9eb20fa27ebd8f15b05c84b473ff6e7355ae33ec",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/manage.py": {
+          "prod_sha256": "924fdde88428f45b7d74bf54ed2e74bad2577910d96620407681fb38ac3e4a5a",
+          "dev_sha256": "924fdde88428f45b7d74bf54ed2e74bad2577910d96620407681fb38ac3e4a5a",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/patch_importacion.py": {
+          "prod_sha256": "ec2854e0a0bc1f1828c17c0b68206b8e1bf665034f3b11210b83343ec6d3af9e",
+          "dev_sha256": null,
+          "decision": "historical",
+          "reason": "Retained in identified external snapshots; unsafe historical diagnostics are not installed or executed in DEV"
+        },
+        "web/patch_models.py": {
+          "prod_sha256": "401d7fe116e861bed28e9b99db2d20340c70612aa8d3abf9a5580c05bf67a6c4",
+          "dev_sha256": null,
+          "decision": "historical",
+          "reason": "Retained in identified external snapshots; unsafe historical diagnostics are not installed or executed in DEV"
+        },
+        "web/patch_utils.py": {
+          "prod_sha256": "3b4a1e05d522c0d189a5f4ab172ecb83e835f16966e467b4acfb155097c520c6",
+          "dev_sha256": null,
+          "decision": "historical",
+          "reason": "Retained in identified external snapshots; unsafe historical diagnostics are not installed or executed in DEV"
+        },
+        "web/patch_views.py": {
+          "prod_sha256": "bcc69836a0a0e8b4bcf78fd0041025aff7225b25f4d645f714c37a9c5ea57ba9",
+          "dev_sha256": null,
+          "decision": "historical",
+          "reason": "Retained in identified external snapshots; unsafe historical diagnostics are not installed or executed in DEV"
+        },
+        "web/reproduce_direct.py": {
+          "prod_sha256": "c455cb75d417840a37a169faffd1e7685c30676f36293853c2359712ac374acd",
+          "dev_sha256": null,
+          "decision": "historical",
+          "reason": "Retained in identified external snapshots; unsafe historical diagnostics are not installed or executed in DEV"
+        },
+        "web/reproduce_django.py": {
+          "prod_sha256": "6a2daa862ec9f78deb149ba9729090946c7c33f20bc8fa0d533318544146c4a9",
+          "dev_sha256": null,
+          "decision": "historical",
+          "reason": "Retained in identified external snapshots; unsafe historical diagnostics are not installed or executed in DEV"
+        },
+        "web/reproduce_flow.py": {
+          "prod_sha256": "9ff290099b7bba785d3e599331fc642e871054430b974fdbb5adef68941c66a8",
+          "dev_sha256": null,
+          "decision": "historical",
+          "reason": "Retained in identified external snapshots; unsafe historical diagnostics are not installed or executed in DEV"
+        },
+        "web/scratch_jpeg.py": {
+          "prod_sha256": "6ae94aa1d9a4cc379986fc537dcf1c0921e0cde003739870417d7b81294ac75d",
+          "dev_sha256": null,
+          "decision": "historical",
+          "reason": "Retained in identified external snapshots; unsafe historical diagnostics are not installed or executed in DEV"
+        },
+        "web/static/css/panel_operativo.css": {
+          "prod_sha256": "47380cf0e62f791e6d05ab70cf183c45c271ce4aedb12c82fd785ca47195e080",
+          "dev_sha256": "2e76e2eaf7529dd92d678cb6fdd0179112ace1fdbc7f1de1016594951bb9f231",
+          "decision": "intentional",
+          "reason": "Preserve newer DEV WhatsApp, permissions, security, tests and UI behavior; see PROD_DEV_SYNC.md"
+        },
+        "web/static/js/panel_operativo.js": {
+          "prod_sha256": "0569c011f988663a1550a44593b7c18605636fbd8c7d84a50a628eca8e7d0d4c",
+          "dev_sha256": "151986502d0532dafeae6519731ad6d8df1596aef073b23699fd0c4d4ff0d7dd",
+          "decision": "intentional",
+          "reason": "Preserve newer DEV WhatsApp, permissions, security, tests and UI behavior; see PROD_DEV_SYNC.md"
+        },
+        "web/templates/calidad/base.html": {
+          "prod_sha256": "41c758c021fe28b097a83254ca17e39d7e2df23c13f0dae7962cde8c3f1698df",
+          "dev_sha256": "66d4e5e7a5624e67d8d6cc7bd789e96015de0c9208ab5de3d34ed37bde59383b",
+          "decision": "intentional",
+          "reason": "Preserve newer DEV WhatsApp, permissions, security, tests and UI behavior; see PROD_DEV_SYNC.md"
+        },
+        "web/templates/calidad/dashboard.html": {
+          "prod_sha256": "bfb0fb7fe38445cfb11eb5c672f96ea92a21bbc7c7d6bf5f8789f01f531c1af0",
+          "dev_sha256": "bfb0fb7fe38445cfb11eb5c672f96ea92a21bbc7c7d6bf5f8789f01f531c1af0",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/templates/calidad/diccionario.html": {
+          "prod_sha256": "72c822272d5bf1e72e05c1a71c0c9a41bdb346101faabf5143fd294ad00e678e",
+          "dev_sha256": "72c822272d5bf1e72e05c1a71c0c9a41bdb346101faabf5143fd294ad00e678e",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/templates/calidad/galeria.html": {
+          "prod_sha256": "07f906f0df846f2a5854151af2d28ab74947e3dfe6806864d55a30040b660ba7",
+          "dev_sha256": "07f906f0df846f2a5854151af2d28ab74947e3dfe6806864d55a30040b660ba7",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/templates/calidad/importacion/upload.html": {
+          "prod_sha256": "f378c857a6a8c636f470573840897719041bdbe4b5e1fe0bd7f25fa61fbc49b3",
+          "dev_sha256": "369440f5d002d5323315b027d96a309f4bd3ede3945d058f32d562ff73d46103",
+          "decision": "intentional",
+          "reason": "Preserve newer DEV WhatsApp, permissions, security, tests and UI behavior; see PROD_DEV_SYNC.md"
+        },
+        "web/templates/calidad/importacion/workspace.html": {
+          "prod_sha256": "38b7b1cccb87d192a2dc65c4c4d16ff40cae2905a8611334d661d48397122736",
+          "dev_sha256": "e14c23c8d1707f4902af1dd3564cf79954c6a8af687158220280d66233e360a4",
+          "decision": "intentional",
+          "reason": "Preserve newer DEV WhatsApp, permissions, security, tests and UI behavior; see PROD_DEV_SYNC.md"
+        },
+        "web/templates/calidad/login.html": {
+          "prod_sha256": "e900f8a20dc14bb8a1efe8b25e692e9041151cbffe1c88f45b600dbbc55e6b06",
+          "dev_sha256": "e900f8a20dc14bb8a1efe8b25e692e9041151cbffe1c88f45b600dbbc55e6b06",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/templates/calidad/operacion.html": {
+          "prod_sha256": "3a8051e0862a6ad7a9b0e74782b15830c958dbf42ef6c2dbda74f4bc1fd1fc0f",
+          "dev_sha256": "55a750d9b4f1dcf986a9feb30c2cd68dc85f4385e4985376b6006e19cba3eb06",
+          "decision": "intentional",
+          "reason": "Preserve newer DEV WhatsApp, permissions, security, tests and UI behavior; see PROD_DEV_SYNC.md"
+        },
+        "web/templates/calidad/partials/feed_page.html": {
+          "prod_sha256": "865b1de2153fb638e474e829c2a459369235c3798a1b64c5ed4911d005cc018c",
+          "dev_sha256": "865b1de2153fb638e474e829c2a459369235c3798a1b64c5ed4911d005cc018c",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/templates/calidad/reportes.html": {
+          "prod_sha256": "5f4ff63683d744b06fd7dbb5514893cec9e966dd54ffc1e0ae6a12e0f241300f",
+          "dev_sha256": "ce3697eb175a81a5391ee19fee64db15281b0dd3c906a8bddcde1604be8ae33f",
+          "decision": "intentional",
+          "reason": "Preserve newer DEV WhatsApp, permissions, security, tests and UI behavior; see PROD_DEV_SYNC.md"
+        },
+        "web/templates/calidad/revisar_orientacion.html": {
+          "prod_sha256": "42770b9162a4080d6ba98595f2e8fd1e179863e63435054e6bf87c09f83b8e15",
+          "dev_sha256": "8d5c38fec2d14a573f9a03988534e1448890d5a956057776ba467d8daa1f1ff6",
+          "decision": "intentional",
+          "reason": "Preserve newer DEV WhatsApp, permissions, security, tests and UI behavior; see PROD_DEV_SYNC.md"
+        },
+        "web/templates/calidad/ver_foto.html": {
+          "prod_sha256": "2330e279f5974fabe6d777c8221b2dd5d1a0f3a8e3da4395e17ba6500cba4c7d",
+          "dev_sha256": "2330e279f5974fabe6d777c8221b2dd5d1a0f3a8e3da4395e17ba6500cba4c7d",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/test_db.py": {
+          "prod_sha256": "b9838d831f257fbc9c8da749f45c8c4ae45892f471b096343e1e23b6f0a134a9",
+          "dev_sha256": null,
+          "decision": "historical",
+          "reason": "Retained in identified external snapshots; unsafe historical diagnostics are not installed or executed in DEV"
+        },
+        "web/test_excel_v2.py": {
+          "prod_sha256": "cc144cb85a77b32c7a96945ce85ebdae5b7b186adca4d03b1bf790b63d2f1f60",
+          "dev_sha256": null,
+          "decision": "historical",
+          "reason": "Retained in identified external snapshots; unsafe historical diagnostics are not installed or executed in DEV"
+        },
+        "web/test_importacion_aislamiento.py": {
+          "prod_sha256": "895e438e9a8b792e9e198fbdbd1b3e3fe0a9015fe7c3b20810133d63ae52ad8c",
+          "dev_sha256": null,
+          "decision": "historical",
+          "reason": "Retained in identified external snapshots; unsafe historical diagnostics are not installed or executed in DEV"
+        },
+        "web/test_isolation.py": {
+          "prod_sha256": "54cc726fb05c9a8747b356b6b1ddd273cdc864843b03ffcb148e0ac9aaf49e7a",
+          "dev_sha256": null,
+          "decision": "historical",
+          "reason": "Retained in identified external snapshots; unsafe historical diagnostics are not installed or executed in DEV"
+        },
+        "web/test_patch.py": {
+          "prod_sha256": "55251308ee987ff0fd5d94bd69a008ca0e35bcef3c86e1e79653cfd7058b6de4",
+          "dev_sha256": null,
+          "decision": "historical",
+          "reason": "Retained in identified external snapshots; unsafe historical diagnostics are not installed or executed in DEV"
+        },
+        "web/workspace/__init__.py": {
+          "prod_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "dev_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/workspace/admin.py": {
+          "prod_sha256": "b2e328e31f08dc907100505521d13ee6a9ea67a240655d051120011ce49cfaf8",
+          "dev_sha256": "b2e328e31f08dc907100505521d13ee6a9ea67a240655d051120011ce49cfaf8",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/workspace/apps.py": {
+          "prod_sha256": "339d6c76bcb24826d341d155006a2328a87b15f01e46d23643dbf1f744f7f863",
+          "dev_sha256": "339d6c76bcb24826d341d155006a2328a87b15f01e46d23643dbf1f744f7f863",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/workspace/migrations/0001_initial.py": {
+          "prod_sha256": "75feae5d06ccf6ce892f518ae05c49c3ca090de5ee43040599b0fd1209990d7e",
+          "dev_sha256": "75feae5d06ccf6ce892f518ae05c49c3ca090de5ee43040599b0fd1209990d7e",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/workspace/migrations/__init__.py": {
+          "prod_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "dev_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/workspace/models.py": {
+          "prod_sha256": "d06364b9459bea5649b397352b032757e4aa4939e68a2f4bc313b9bc4e23d352",
+          "dev_sha256": "d06364b9459bea5649b397352b032757e4aa4939e68a2f4bc313b9bc4e23d352",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/workspace/services/__init__.py": {
+          "prod_sha256": "ef1b8fb383200e53a738166d9775a04ca4473437cd6aa6c2b529f667478bb7cd",
+          "dev_sha256": "ef1b8fb383200e53a738166d9775a04ca4473437cd6aa6c2b529f667478bb7cd",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/workspace/services/confirmation.py": {
+          "prod_sha256": "4628dd523b0a8d15af6d92fbe80c21924f9c5e5184b2cf21b41ce6b78d96eb3e",
+          "dev_sha256": "4628dd523b0a8d15af6d92fbe80c21924f9c5e5184b2cf21b41ce6b78d96eb3e",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/workspace/services/processing.py": {
+          "prod_sha256": "aa945fc4fe8f2d67f07fba7daab3a5fa355118e720cce4ced138db5e45047cd7",
+          "dev_sha256": "aa945fc4fe8f2d67f07fba7daab3a5fa355118e720cce4ced138db5e45047cd7",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/workspace/static/workspace/css/workspace.css": {
+          "prod_sha256": "bc7cd3a4a27a3de0711a8c339212237823002d855f1ba36622eeabe063aa50ad",
+          "dev_sha256": "bc7cd3a4a27a3de0711a8c339212237823002d855f1ba36622eeabe063aa50ad",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/workspace/tasks.py": {
+          "prod_sha256": "6a67f8df9bb1bac90d0b648b7e57f4eb292dcfb45438a33b6229ec910a2e2f6c",
+          "dev_sha256": "6a67f8df9bb1bac90d0b648b7e57f4eb292dcfb45438a33b6229ec910a2e2f6c",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/workspace/templates/workspace/workspace.html": {
+          "prod_sha256": "f5f9e13b6a0aff1c7efee053fd84ad488af77f9099543f3cf8a7146d06731cd2",
+          "dev_sha256": "f5f9e13b6a0aff1c7efee053fd84ad488af77f9099543f3cf8a7146d06731cd2",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/workspace/tests/__init__.py": {
+          "prod_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "dev_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/workspace/tests/test_processing_characterization.py": {
+          "prod_sha256": "64e7f517227bf7cc73128d5a59e7ccf2026f719c8c19b3e46d0bd1ba9c5dd332",
+          "dev_sha256": "64e7f517227bf7cc73128d5a59e7ccf2026f719c8c19b3e46d0bd1ba9c5dd332",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/workspace/tests/test_processing_locking.py": {
+          "prod_sha256": "3c85ef965ce7207002489109fcd7b6e8575931cf55d3770ea503e3b5d36bf2a9",
+          "dev_sha256": "3c85ef965ce7207002489109fcd7b6e8575931cf55d3770ea503e3b5d36bf2a9",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/workspace/tests.py": {
+          "prod_sha256": "9ab6c6191360e63c1b4c9b5659aef348a743c9e078be68190917369e4e9563e8",
+          "dev_sha256": "9ab6c6191360e63c1b4c9b5659aef348a743c9e078be68190917369e4e9563e8",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/workspace/urls.py": {
+          "prod_sha256": "59b114608aeefd62bb75520fbb76af0dcadd148f28855e93b9dd787bf866f3a4",
+          "dev_sha256": "59b114608aeefd62bb75520fbb76af0dcadd148f28855e93b9dd787bf866f3a4",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "web/workspace/views.py": {
+          "prod_sha256": "9ace7f1d1620db47bf797e14083b0049cd1ed0af275b2e6c14f933916810e72d",
+          "dev_sha256": "9ace7f1d1620db47bf797e14083b0049cd1ed0af275b2e6c14f933916810e72d",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        }
+      }
+    },
+    "bot": {
+      "container": "bot_calidad_bot",
+      "image": "sha256:51a6de627c8c7a6287a95f4f81ec754c478619a20e136159ce94f7942eaa7d59",
+      "paths": [
+        "bot",
+        "shared",
+        "main.py",
+        "pyproject.toml",
+        "uv.lock"
+      ],
+      "files": {
+        "bot/__init__.py": {
+          "prod_sha256": "91f3a5882d5626204c98e2d8fda546e784fed5e56052c169dffe3c4159d2f16b",
+          "dev_sha256": "91f3a5882d5626204c98e2d8fda546e784fed5e56052c169dffe3c4159d2f16b",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "bot/app.py": {
+          "prod_sha256": "dd81eb029919e87de0ee8b4f28558ab005b74a34dbdbbedfd101184675c5f35e",
+          "dev_sha256": "dd81eb029919e87de0ee8b4f28558ab005b74a34dbdbbedfd101184675c5f35e",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "bot/client/api_client.py": {
+          "prod_sha256": "af83260456f463fd8bdb7f18aeeca8f7bb176badfb96a0894cf2782506a0d390",
+          "dev_sha256": "af83260456f463fd8bdb7f18aeeca8f7bb176badfb96a0894cf2782506a0d390",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "bot/handlers/__init__.py": {
+          "prod_sha256": "3a4bc353f047178f7198ecb485031c02c0f78b7a08bd086e43504aa6cacae88f",
+          "dev_sha256": "3a4bc353f047178f7198ecb485031c02c0f78b7a08bd086e43504aa6cacae88f",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "bot/handlers/auth_handler.py": {
+          "prod_sha256": "82f7983ad44db91f79d299007e554c1357e197afced28c6e1f34f6f20ad7401e",
+          "dev_sha256": "82f7983ad44db91f79d299007e554c1357e197afced28c6e1f34f6f20ad7401e",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "bot/handlers/cancelar_handler.py": {
+          "prod_sha256": "47a038fc2cec50b41b9b388ba03c63b2e9fb9eda4fc6bbe0198d3f77344e4c69",
+          "dev_sha256": "47a038fc2cec50b41b9b388ba03c63b2e9fb9eda4fc6bbe0198d3f77344e4c69",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "bot/handlers/consulta_handler.py": {
+          "prod_sha256": "4f5d823d80599320d89f0bcef100307f8ecee6415fd780fd063dd98964e07279",
+          "dev_sha256": "4f5d823d80599320d89f0bcef100307f8ecee6415fd780fd063dd98964e07279",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "bot/handlers/lock_utils.py": {
+          "prod_sha256": "79108ecbbbf7c56dd0cee3e7196b64bfe4e4d98b358053d27bd34a72a559feb7",
+          "dev_sha256": "79108ecbbbf7c56dd0cee3e7196b64bfe4e4d98b358053d27bd34a72a559feb7",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "bot/handlers/registro_handler.py": {
+          "prod_sha256": "43322fcd58cc95b5b4b21a6b22a8a44dcfa1f5cff1d4b61c763c10645308e5f2",
+          "dev_sha256": "43322fcd58cc95b5b4b21a6b22a8a44dcfa1f5cff1d4b61c763c10645308e5f2",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "bot/helpers/__init__.py": {
+          "prod_sha256": "b3788fa26f20a68850103c201d8107295b6a97607d5d2701409a097679cae97a",
+          "dev_sha256": "b3788fa26f20a68850103c201d8107295b6a97607d5d2701409a097679cae97a",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "main.py": {
+          "prod_sha256": "ed762045d33eca23ab3fa878d2162356838802915bb673bdd38cc9fac61345fe",
+          "dev_sha256": "ed762045d33eca23ab3fa878d2162356838802915bb673bdd38cc9fac61345fe",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "pyproject.toml": {
+          "prod_sha256": "494e4ac3cd238330f4ce918407d5f2053a6c993beb1fbb4244ca080357b918dc",
+          "dev_sha256": "494e4ac3cd238330f4ce918407d5f2053a6c993beb1fbb4244ca080357b918dc",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/__init__.py": {
+          "prod_sha256": "63d22d93548b8eda9bf3e747871b9c5e82a32e4b6a7dbec9b1c83d1553094573",
+          "dev_sha256": "63d22d93548b8eda9bf3e747871b9c5e82a32e4b6a7dbec9b1c83d1553094573",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/application/__init__.py": {
+          "prod_sha256": "ec79a1e3d7718181fba009aa5389255bc0d6b55a4994761e572247f335c79b0a",
+          "dev_sha256": "ec79a1e3d7718181fba009aa5389255bc0d6b55a4994761e572247f335c79b0a",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/application/services/__init__.py": {
+          "prod_sha256": "7e176331264c1ff9994dc8c9127eee0f4d5cf3b65d3ba51288e333d2d5980f7b",
+          "dev_sha256": "7e176331264c1ff9994dc8c9127eee0f4d5cf3b65d3ba51288e333d2d5980f7b",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/application/services/export_service.py": {
+          "prod_sha256": "a1a925017e8e7d2476459ddfa76b78c85c03dd48ea2088165aa82d8e0a8960c3",
+          "dev_sha256": "a1a925017e8e7d2476459ddfa76b78c85c03dd48ea2088165aa82d8e0a8960c3",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/application/validators/__init__.py": {
+          "prod_sha256": "050a7984b3a401e1736ff3d4b0a41a82e424a6f8d571fb30503c601e8ea7d985",
+          "dev_sha256": "050a7984b3a401e1736ff3d4b0a41a82e424a6f8d571fb30503c601e8ea7d985",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/config/__init__.py": {
+          "prod_sha256": "cde35c8357d5948bd8213059aa42c5bb61228c9b5d2ffe2a32bad67c0013ffcb",
+          "dev_sha256": "cde35c8357d5948bd8213059aa42c5bb61228c9b5d2ffe2a32bad67c0013ffcb",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/config/dependencies.py": {
+          "prod_sha256": "f3ea360693d12894c06d76aa7102752ecec8f6b0ee63f750891b336718d0d482",
+          "dev_sha256": "f3ea360693d12894c06d76aa7102752ecec8f6b0ee63f750891b336718d0d482",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/config/logging_config.py": {
+          "prod_sha256": "50adaf75dd7382e56eee0c9ab5fd912166fccd5849c81637afa8038fa0e0eab4",
+          "dev_sha256": "50adaf75dd7382e56eee0c9ab5fd912166fccd5849c81637afa8038fa0e0eab4",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/infrastructure/__init__.py": {
+          "prod_sha256": "6f43120413508a7c14f48c73801d78f5d441908522e4dbeed047d71a49f1d4ea",
+          "dev_sha256": "6f43120413508a7c14f48c73801d78f5d441908522e4dbeed047d71a49f1d4ea",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/infrastructure/ai/__init__.py": {
+          "prod_sha256": "b5490c95ccfff4bda6bbd131da050eee61cf90fd035cf5454890d7f65f269bff",
+          "dev_sha256": "b5490c95ccfff4bda6bbd131da050eee61cf90fd035cf5454890d7f65f269bff",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/infrastructure/ai/defect_catalog.json": {
+          "prod_sha256": "68083b45582346d7a6a0406890283b167d778c620445617503a27f0c02157c25",
+          "dev_sha256": "be604dd72e9ce2842b646c86aafbb189b694a066cf614cb08842c86c99712335",
+          "decision": "integrated",
+          "reason": "Compatible PROD capabilities combined with DEV and covered by regression tests"
+        },
+        "shared/infrastructure/ai/defect_translator.py": {
+          "prod_sha256": "ff9c34bbb9aa80730c550f9ae58ec07894d52131692e56e8b04ac9ad3c3fbb6a",
+          "dev_sha256": "ff9c34bbb9aa80730c550f9ae58ec07894d52131692e56e8b04ac9ad3c3fbb6a",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/infrastructure/ai/interfaces.py": {
+          "prod_sha256": "7578b0fb54580ef46dff09720aa6452deba3f65b726758e16065ad8f0cbe337a",
+          "dev_sha256": "7578b0fb54580ef46dff09720aa6452deba3f65b726758e16065ad8f0cbe337a",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/infrastructure/database/__init__.py": {
+          "prod_sha256": "db1b9d2009caa93c21b22059ab22b133471a35fd5550f3258b98c7bba52a0bf8",
+          "dev_sha256": "db1b9d2009caa93c21b22059ab22b133471a35fd5550f3258b98c7bba52a0bf8",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/infrastructure/database/django_contador_repository.py": {
+          "prod_sha256": "91275fe856aef279b2651b191a380986315191075eb9db0be2cef875fd9ccb8b",
+          "dev_sha256": "91275fe856aef279b2651b191a380986315191075eb9db0be2cef875fd9ccb8b",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/infrastructure/database/django_registro_repository.py": {
+          "prod_sha256": "d668e071ac14d38d3af9ac15bc4d5b194914be2cf76b9a69530b4d98175fadee",
+          "dev_sha256": "d668e071ac14d38d3af9ac15bc4d5b194914be2cf76b9a69530b4d98175fadee",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/infrastructure/database/django_usuario_repository.py": {
+          "prod_sha256": "e4a70b9810ce4d2e8d8579677abfe0c0ecd069d975ad6c799987746db29a2429",
+          "dev_sha256": "e4a70b9810ce4d2e8d8579677abfe0c0ecd069d975ad6c799987746db29a2429",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/infrastructure/orientation/__init__.py": {
+          "prod_sha256": "54b89e09d33d9fb772e0e98f13830fd8e7a13e073421ad49ddedd6f0efc4de04",
+          "dev_sha256": "54b89e09d33d9fb772e0e98f13830fd8e7a13e073421ad49ddedd6f0efc4de04",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/infrastructure/orientation/orientation_engine.py": {
+          "prod_sha256": "4a5bafb8319e9e6fed6f9cb8faf742000117324d758af115a5899af140eff914",
+          "dev_sha256": "4a5bafb8319e9e6fed6f9cb8faf742000117324d758af115a5899af140eff914",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/infrastructure/storage/__init__.py": {
+          "prod_sha256": "80f7f433b3b7555af8b17a0b26596c54bb773b3381f92c344bd53d451f2eb41c",
+          "dev_sha256": "80f7f433b3b7555af8b17a0b26596c54bb773b3381f92c344bd53d451f2eb41c",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/infrastructure/storage/foto_storage.py": {
+          "prod_sha256": "d5207a371ed80f0e1302301ea8adeaffe536a4b605dd5f40dee5c58fe2065e4d",
+          "dev_sha256": "d5207a371ed80f0e1302301ea8adeaffe536a4b605dd5f40dee5c58fe2065e4d",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/utils/__init__.py": {
+          "prod_sha256": "877457b908014f463dd7da596d98d9362de4c440890819843618e7aed9f80c4d",
+          "dev_sha256": "877457b908014f463dd7da596d98d9362de4c440890819843618e7aed9f80c4d",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/utils/format_utils.py": {
+          "prod_sha256": "9ca50bfb01501c0ce665d4def2aed916db6caa380afea2cfcb3acee2e4f70fb1",
+          "dev_sha256": "9ca50bfb01501c0ce665d4def2aed916db6caa380afea2cfcb3acee2e4f70fb1",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/utils/photo_parser.py": {
+          "prod_sha256": "29660abe9e7d4c652b8a483eb9265d0b6fb8df8524bc3a210021075da6d0d5a8",
+          "dev_sha256": "29660abe9e7d4c652b8a483eb9265d0b6fb8df8524bc3a210021075da6d0d5a8",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/utils/signals_utils.py": {
+          "prod_sha256": "afe81d6024b2b938778362ce4029c738871028c672e66d053a60c0e927640cc3",
+          "dev_sha256": "afe81d6024b2b938778362ce4029c738871028c672e66d053a60c0e927640cc3",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/utils/tests/__init__.py": {
+          "prod_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "dev_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/utils/tests/test_bot_optimizations.py": {
+          "prod_sha256": "e30b101ca03883cad6bdcbe2fb7bb504e0800cffb44974a1f60237c56defed60",
+          "dev_sha256": "e30b101ca03883cad6bdcbe2fb7bb504e0800cffb44974a1f60237c56defed60",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/utils/tests/test_legacy_parser_behaviors.py": {
+          "prod_sha256": "96015dddd38f1702106320207f2939d03d21debfc244c27acc2c6f6663a3fce7",
+          "dev_sha256": "96015dddd38f1702106320207f2939d03d21debfc244c27acc2c6f6663a3fce7",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "shared/utils/tests/test_photo_parser.py": {
+          "prod_sha256": "c150bb7372d8c6e8eb84a56e30db7dfe1a96ea971097b6e5813646cebfc97391",
+          "dev_sha256": "c150bb7372d8c6e8eb84a56e30db7dfe1a96ea971097b6e5813646cebfc97391",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "uv.lock": {
+          "prod_sha256": "d62943a9a198d405eadea9db014bd645d74ada6bce328d1fd6c02012e6327d61",
+          "dev_sha256": "d62943a9a198d405eadea9db014bd645d74ada6bce328d1fd6c02012e6327d61",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        }
+      }
+    },
+    "assets": {
+      "container": "bot_calidad_web",
+      "image": "sha256:e20a65703b24d79fc99db09df57c8340ba3e7519450140508ca8d1eff7d85842",
+      "paths": [
+        "pyproject.toml",
+        "uv.lock",
+        "plantilla_reporte.xlsx",
+        "Daily Tracking Box Condition.xlsx"
+      ],
+      "files": {
+        "Daily Tracking Box Condition.xlsx": {
+          "prod_sha256": "10c9072b071759e130544f095d762ac61bb9dbccf2ff4dee18dd75145f14cf6a",
+          "dev_sha256": "13b05a747cb29f7dcb5cde5cbea5818cef3baeab8aacfcb8467f1ea099a3b46a",
+          "decision": "integrated",
+          "reason": "Compatible PROD capabilities combined with DEV and covered by regression tests"
+        },
+        "plantilla_reporte.xlsx": {
+          "prod_sha256": "d561253a2f669dda7c8a03e23d335ed48b3262c6379dadfd5d27eb68d0e88345",
+          "dev_sha256": "d561253a2f669dda7c8a03e23d335ed48b3262c6379dadfd5d27eb68d0e88345",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "pyproject.toml": {
+          "prod_sha256": "494e4ac3cd238330f4ce918407d5f2053a6c993beb1fbb4244ca080357b918dc",
+          "dev_sha256": "494e4ac3cd238330f4ce918407d5f2053a6c993beb1fbb4244ca080357b918dc",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        },
+        "uv.lock": {
+          "prod_sha256": "d62943a9a198d405eadea9db014bd645d74ada6bce328d1fd6c02012e6327d61",
+          "dev_sha256": "d62943a9a198d405eadea9db014bd645d74ada6bce328d1fd6c02012e6327d61",
+          "decision": "equivalent",
+          "reason": "Identical reviewed source/resource"
+        }
+      }
+    }
+  },
+  "required_files": [
+    "Daily Tracking Box Condition.xlsx",
+    "plantilla_reporte.xlsx",
+    "Dockerfile",
+    "web/calidad/services/reporte_box_condition.py",
+    "web/calidad/services/report_grouping.py",
+    "web/calidad/services/pending_evidence.py",
+    "web/calidad/services/importacion.py"
+  ],
+  "conflicts": [
+    {
+      "id": "report-grouping-default",
+      "status": "pending",
+      "reason": "Both rules are reusable and tested; choosing a new default can merge models/responsibles or descriptions and requires business authorization."
+    }
+  ],
+  "migration_target": {
+    "container": "bot_calidad_postgres",
+    "user": "calidad_user",
+    "database": "calidad_db"
+  }
+}
