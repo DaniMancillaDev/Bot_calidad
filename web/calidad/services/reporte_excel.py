@@ -29,6 +29,7 @@ from shared.infrastructure.orientation.orientation_engine import (
     detect_orientation,
 )
 from calidad.utils import get_best_image_path
+from calidad.services.report_grouping import report_group_key, FIELDS, DEV_DESCRIPTION
 
 os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
 warnings.filterwarnings("ignore")
@@ -437,7 +438,8 @@ def generate_excel(
                     if ev.registro_id not in [r.get('id') for r in registro['registros']]:
                         logger.error(f"VALIDATION FAILED: photo_id={ev.id} registro_id={ev.registro_id} no pertenece al grupo de registros")
                         continue
-                    if (ev.registro.numero_parte or '').strip().upper() != registro['key'][0] or (ev.registro.descripcion or '').strip().upper() != registro['key'][1]:
+                    evidence_record = {field: getattr(ev.registro, field) for field in FIELDS}
+                    if report_group_key(evidence_record, registro.get('grouping_rule', DEV_DESCRIPTION)) != registro['key']:
                         logger.error(f"VALIDATION FAILED: photo_id={ev.id} metadata mismatch con {registro['key']}")
                         continue
 

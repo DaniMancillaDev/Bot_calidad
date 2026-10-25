@@ -169,19 +169,18 @@ def _obtener_defecto_canonico(reg, translator):
         
     return defecto_canonico, _translation
 
-def _consolidar_registros(regs, translator=None):
+def _consolidar_registros(regs, translator=None, *, grouping_rule='dev_description'):
+    from calidad.services.report_grouping import report_group_key
     agrupados = {}
 
     for reg in regs:
         defecto_canonico, _translation = _obtener_defecto_canonico(reg, translator)
-        clave = (
-            (reg.get('numero_parte') or '').strip().upper(),
-            (reg.get('descripcion') or '').strip().upper(),
-        )
+        clave = report_group_key(reg, grouping_rule)
 
         if clave not in agrupados:
             agrupados[clave] = {
                 'key': clave,
+                'grouping_rule': grouping_rule,
                 'registros': [],
                 'evidencias': [],
                 'cantidad': 0,
