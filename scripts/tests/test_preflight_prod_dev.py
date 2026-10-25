@@ -59,10 +59,17 @@ class PreflightTests(unittest.TestCase):
         return gate.evaluate(self.repo, {'scopes': [self.scope]}, overrides.get('policy', self.policy),
             overrides.get('evidence', self.evidence),
             live_reader=overrides.get('live_reader', lambda scope: {'image': scope['image'], 'files': self.recorded['files']}),
-            migration_reader=lambda target: {'calidad:0001_initial'})
+            migration_reader=lambda target: {'calidad:0001_initial'},
+            runtime_reader=overrides.get('runtime_reader', lambda policy: []))
 
     def test_reviewed_clean_tree_with_current_tests_can_pass(self):
         self.assertTrue(self.check()['ready'])
+
+    def test_service_failure_or_redis_persistence_failure_blocks(self):
+        failures = ['runtime:celery: exited', 'redis-persistence:rdb_last_bgsave_status=err']
+        result = self.check(runtime_reader=lambda policy: failures)
+        self.assertFalse(result['ready'])
+        self.assertTrue(set(failures).issubset(result['blockers']))
 
     def test_snapshot_corruption_and_live_drift_are_blocked(self):
         live = lambda scope: {'image': scope['image'], 'files': {}}

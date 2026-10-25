@@ -52,13 +52,35 @@ def read_migrations(target):
     return set(rows.splitlines())
 
 
+def read_runtime(policy):
+    problems = []
+    for name in policy.get('runtime_services', []):
+        state = subprocess.check_output(docker_command() + ['inspect', '--format',
+            '{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}}', name], text=True).split()
+        if not state or state[0] != 'running' or 'unhealthy' in state:
+            problems.append(f'runtime:{name}: ' + ' '.join(state))
+    if policy.get('redis_container'):
+        info = subprocess.check_output(docker_command() + ['exec', policy['redis_container'],
+            'redis-cli', 'INFO', 'persistence'], text=True)
+        values = dict(line.strip().split(':', 1) for line in info.splitlines() if ':' in line)
+        for field in ('rdb_last_bgsave_status', 'aof_last_write_status'):
+            if values.get(field) == 'err':
+                problems.append(f'redis-persistence:{field}=err')
+    return problems
+
+
 def image_sources(repo):
     # The common web/Celery image contains bot/, but main.py belongs to Dockerfile.bot.
     return {name: value for name, value in manifest(repo, 'dev')['files'].items() if name != 'main.py'}
 
 
-def evaluate(repo, inventory, policy, evidence, *, live_reader=read_live, migration_reader=read_migrations):
+def evaluate(repo, inventory, policy, evidence, *, live_reader=read_live, migration_reader=read_migrations,
+             runtime_reader=read_runtime):
     blockers, observations = [], []
+    try:
+        blockers.extend(runtime_reader(policy))
+    except (OSError, subprocess.SubprocessError) as error:
+        blockers.append(f'runtime-unavailable: {type(error).__name__}')
     scopes = inventory.get('scopes', [])
     if not scopes or len(scopes) != len(policy.get('scopes', {})) or {s['name'] for s in scopes} != set(policy.get('scopes', {})):
         blockers.append('snapshot-scopes: inventory does not cover every reviewed PROD service/resource')

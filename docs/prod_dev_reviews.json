@@ -1945,5 +1945,13 @@
     "container": "bot_calidad_postgres",
     "user": "calidad_user",
     "database": "calidad_db"
-  }
+  },
+  "runtime_services": [
+    "bot_calidad_web",
+    "bot_calidad_celery",
+    "bot_calidad_bot",
+    "bot_calidad_postgres",
+    "bot_calidad_redis"
+  ],
+  "redis_container": "bot_calidad_redis"
 }
