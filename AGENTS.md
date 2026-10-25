@@ -45,3 +45,16 @@ Integrar por capacidad con pruebas de ambos lados, commits locales pequenos y
 trazabilidad en `docs/PROD_DEV_SYNC.md`. No versionar secretos ni datos de PROD.
 Un diff limpio o tests parciales no prueban un superconjunto funcional completo:
 declarar conflictos y dependencias pendientes, sin dar la sincronizacion por cerrada.
+
+Antes de cualquier despliegue, ejecutar `scripts/preflight_prod_dev.py` con snapshots
+verificados, inventario vivo de los servicios originales, politica versionada y
+evidencia de `scripts/run_conservation_checks.py` para los fuentes actuales.
+Solo continuar con salida 0 y READY. BLOCKED no se ignora porque las pruebas pasen.
+No aprobar hashes o conflictos automaticamente para obtener un resultado verde.
+Una excepcion funcional requiere autor, referencia y motivo de autorizacion explicita.
+Las migraciones pendientes bloquean hasta definir y ejecutar un plan autorizado.
+
+Si una construccion agota recursos del host, detenerla. No limpiar imagenes, datos
+o volumenes de terceros ni reiniciar PROD. Un segundo dockerd en el mismo namespace
+de red puede alterar docker0 aunque use otro data-root; no repetir ese aislamiento
+incompleto. Usar un host/VM de construccion separado o un aislamiento de red real.

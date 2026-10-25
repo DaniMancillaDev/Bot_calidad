@@ -1,5 +1,27 @@
 # Conservacion acumulativa PROD -> DEV
 
+## Estado vigente: proteccion posterior a d174635
+
+La ejecucion documentada en `docs/DEV_PROTECTION_20261025.md` comprobo restauraciones
+reales, integro una plantilla Box Condition saneada y conservo ambas reglas de
+agrupacion como implementaciones reutilizables. DEV sigue usando su regla original.
+Las decisiones pendientes del informe inicial de abajo se actualizan en ese documento.
+
+El control previo es `scripts/preflight_prod_dev.py`. Su politica versionada es
+`docs/prod_dev_reviews.json`; registra parejas exactas de hashes PROD/DEV y el motivo
+de cada diferencia. Lee PROD en vivo, verifica snapshots y pruebas, y devuelve
+BLOCKED/exit 1 ante fuentes no evaluados, dependencias ausentes, servicios fallidos,
+persistencia Redis fallida, migraciones pendientes o conflictos sin resolver.
+No despliega. No proporciona una opcion force.
+
+No confundir READY con recuperacion completa del sistema. Los bundles y snapshots
+de fuentes no respaldan PostgreSQL, Redis, sesiones o fotografias actuales.
+
+Durante esta ejecucion se observo agotamiento de metadatos Btrfs en el disco del
+Docker principal, Redis MISCONF y caida de Celery. No se ordenaron reinicios ni
+ediciones sobre esos servicios. El estado operativo no puede declararse intacto
+ni listo para despliegue. Ver incidente, alcance y limites en el documento nuevo.
+
 Politica permanente: DEV conserva las capacidades verificadas de PROD y sus avances
 propios. Nunca sustituir archivos completos por su fecha, ni descartar capacidades
 sin decision documentada. Una sincronizacion con conflictos pendientes es parcial;
