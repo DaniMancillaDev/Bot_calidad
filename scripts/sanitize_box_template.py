@@ -115,5 +115,6 @@ if __name__ == '__main__':
     parser.add_argument('source', type=Path)
     parser.add_argument('output', type=Path)
     args = parser.parse_args()
+    result = sanitized_bytes(args.source.read_bytes())
     with args.output.open('xb') as output:
-        output.write(sanitized_bytes(args.source.read_bytes()))
+        output.write(result)
