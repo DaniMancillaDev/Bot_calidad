@@ -24,3 +24,24 @@ Rules:
 Not lazy about: input validation at trust boundaries, error handling that prevents data loss, security, accessibility, the calibration real hardware needs (the platform is never the spec ideal, a clock drifts, a sensor reads off), anything explicitly requested. Lazy code without its check is unfinished: non-trivial logic leaves ONE runnable check behind, the smallest thing that fails if the logic breaks (an assert-based demo/self-check or one small test file; no frameworks, no fixtures). Trivial one-liners need no test.
 
 (Yes, this file also applies to agents working on the ponytail repo itself. Especially to them.)
+
+## Conservacion PROD / DEV
+
+Antes de sincronizar, leer `docs/PROD_DEV_SYNC.md`. DEV debe acumular las
+capacidades verificadas de ambos entornos. No reemplazar archivos completos,
+descartar funcionalidades ni elegir por fecha. Las diferencias de comportamiento
+se documentan y esperan decision explicita; continuar las integraciones independientes.
+
+Antes de editar, comprobar Git, respaldar HEAD y cambios sin commit fuera del
+repositorio, y verificar snapshots identificados de PROD con hashes y procedencia.
+Git no demuestra que el runtime carezca de cambios adicionales.
+
+Las comparaciones contra PROD son solo lectura: no reiniciar, desplegar, aplicar
+migraciones ni modificar contenedores, bases, sesiones, fotos o volumenes.
+No hacer push ni merge a produccion como parte de una sincronizacion.
+No usar reset --hard, clean -fd ni resolver conflictos eligiendo un archivo entero.
+
+Integrar por capacidad con pruebas de ambos lados, commits locales pequenos y
+trazabilidad en `docs/PROD_DEV_SYNC.md`. No versionar secretos ni datos de PROD.
+Un diff limpio o tests parciales no prueban un superconjunto funcional completo:
+declarar conflictos y dependencias pendientes, sin dar la sincronizacion por cerrada.
