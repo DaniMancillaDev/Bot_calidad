@@ -21,7 +21,26 @@
     "pin danado": "BACK COVER WITH DAMAGED PIN",
     "sheet flyer dañado": "DAMAGED SHEET FLYER",
     "sheet flyer danado": "DAMAGED SHEET FLYER",
-    "blu mal retrabajado": "METAL BLU WITH BAD REWORK"
+    "blu mal retrabajado": "METAL BLU WITH BAD REWORK",
+    "rear cover con rebaba": "REAR COVER WITH BURRS",
+    "rear cover con rebabas": "REAR COVER WITH BURRS",
+    "bolsa de base dañada": "ABS BASE WITH DAMAGED PROTECT BAG",
+    "bolsa de base danada": "ABS BASE WITH DAMAGED PROTECT BAG",
+    "bolsa base dañada": "ABS BASE WITH DAMAGED PROTECT BAG",
+    "bolsa base danada": "ABS BASE WITH DAMAGED PROTECT BAG",
+    "sincho ajustado": "CLEAR SECURING STRAP OVER-TIGHTENED",
+    "cincho ajustado": "CLEAR SECURING STRAP OVER-TIGHTENED",
+    "sincho transparente ajustado": "CLEAR SECURING STRAP OVER-TIGHTENED",
+    "cincho transparente ajustado": "CLEAR SECURING STRAP OVER-TIGHTENED",
+    "sincho ajustado que daño la caja": "ARTWORK CARTON DAMAGED BY OVER-TIGHTENED CLEAR SECURING STRAP",
+    "cincho ajustado que daño la caja": "ARTWORK CARTON DAMAGED BY OVER-TIGHTENED CLEAR SECURING STRAP",
+    "sincho ajustado daño la caja": "ARTWORK CARTON DAMAGED BY OVER-TIGHTENED CLEAR SECURING STRAP",
+    "cincho ajustado daño la caja": "ARTWORK CARTON DAMAGED BY OVER-TIGHTENED CLEAR SECURING STRAP",
+    "deco con mal modelo": "DECO WITH WRONG MODEL",
+    "deco con mal moldeo": "DECO WITH BAD MOLDING",
+    "deco con mal moldeado": "DECO WITH BAD MOLDING",
+    "deco mal diseñado": "DECO WITH BAD DESIGN",
+    "deco mal disenado": "DECO WITH BAD DESIGN"
   },
   "components": {
     "etiqueta": "LABEL",
@@ -85,7 +104,12 @@
     "bolsa": "PROTECT BAG",
     "by carton": "CUSHION DIE",
     "sheet flyer": "SHEET FLYER",
-    "bracket": "BKT"
+    "bracket": "BKT",
+    "rear cover": "REAR COVER",
+    "base": "ABS BASE",
+    "abs": "ABS",
+    "sincho": "CLEAR SECURING STRAP",
+    "cincho": "CLEAR SECURING STRAP"
   },
   "material_areas": {
     "REFLECTOR FILM": "CLEAN ROOM",
@@ -110,7 +134,18 @@
     "SHEET FLYER": "INPUT",
     "DAMAGED SHEET FLYER": "INPUT",
     "METAL BLU WITH BAD REWORK": "INPUT",
-    "bracket": "INPUT"
+    "bracket": "INPUT",
+    "REAR COVER": "INPUT",
+    "REAR COVER WITH BURRS": "INPUT",
+    "ABS": "INPUT",
+    "ABS BASE": "INPUT",
+    "ABS BASE WITH DAMAGED PROTECT BAG": "INPUT",
+    "CLEAR SECURING STRAP": "INPUT",
+    "CLEAR SECURING STRAP OVER-TIGHTENED": "INPUT",
+    "ARTWORK CARTON DAMAGED BY OVER-TIGHTENED CLEAR SECURING STRAP": "INPUT",
+    "DECO WITH WRONG MODEL": "INPUT",
+    "DECO WITH BAD MOLDING": "INPUT",
+    "DECO WITH BAD DESIGN": "INPUT"
   },
   "symptoms": {
     "dañad": "DAMAGED",
@@ -134,7 +169,19 @@
     "abertura": "GAP",
     "fuga de luz": "LIGHT LEAK",
     "mal retrabajad": "BADLY REWORKED",
-    "mal retrabajo": "BAD REWORK"
+    "mal retrabajo": "BAD REWORK",
+    "rebaba": "BURRS",
+    "rebabas": "BURRS",
+    "burr": "BURRS",
+    "burrs": "BURRS",
+    "ajustad": "OVER-TIGHTENED",
+    "mal modelo": "WRONG MODEL",
+    "modelo equivocado": "WRONG MODEL",
+    "modelo incorrecto": "WRONG MODEL",
+    "mal moldeo": "BAD MOLDING",
+    "mal moldeado": "BAD MOLDING",
+    "mal diseñado": "BAD DESIGN",
+    "mal disenado": "BAD DESIGN"
   },
   "connectors": {
     "con poco de": "WITH LITTLE",

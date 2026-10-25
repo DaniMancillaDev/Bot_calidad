@@ -12,6 +12,20 @@ CATALOG_PATH = (
 
 
 class DefectCatalogTests(unittest.TestCase):
+    def test_prod_additions_are_preserved_and_translate_without_ai(self):
+        from shared.infrastructure.ai.defect_translator import deterministic_translate_defect
+
+        fixture = Path(__file__).with_name('prod_catalog_additions_20261025.json')
+        additions = json.loads(fixture.read_text(encoding='utf-8'))
+        self.assertEqual(sum(len(entries) for entries in additions.values()), 47)
+        for section, entries in additions.items():
+            for key, value in entries.items():
+                with self.subTest(section=section, key=key):
+                    self.assertEqual(self.catalog[section][key], value)
+        for description, expected in additions['exact_matches'].items():
+            with self.subTest(description=description):
+                self.assertEqual(deterministic_translate_defect(description), (expected, 'INPUT'))
+
     @classmethod
     def setUpClass(cls):
         with CATALOG_PATH.open(encoding="utf-8") as catalog_file:
