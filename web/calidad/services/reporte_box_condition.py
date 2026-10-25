@@ -2,6 +2,8 @@ import os
 import io
 import shutil
 import tempfile
+import zipfile
+from xml.etree import ElementTree as ET
 from pathlib import Path
 from PIL import Image, ImageOps
 import openpyxl
@@ -50,6 +52,51 @@ def pixels_to_EMU(pixels):
 
 import logging
 logger = logging.getLogger(__name__)
+
+
+def _preserve_auxiliary_template_parts(template_path, output_path, edited_sheet):
+    """openpyxl cannot retain the process diagram's native Excel shapes."""
+    ns = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
+    rel_ns = 'http://schemas.openxmlformats.org/package/2006/relationships'
+    with zipfile.ZipFile(template_path) as archive:
+        original = {name: archive.read(name) for name in archive.namelist()}
+    drawings = {name: content for name, content in original.items()
+                if name.startswith('xl/drawings/templateDrawing')}
+    if not drawings:
+        return
+    restored = dict(drawings)
+    sheets = ET.fromstring(original['xl/workbook.xml']).find(f'{{{ns}}}sheets')
+    for index, sheet in enumerate(sheets, 1):
+        if sheet.get('name') in (edited_sheet, 'Fotos Box Condition'):
+            continue
+        name = f'xl/worksheets/sheet{index}.xml'
+        restored[name] = original[name]
+        relation = f'xl/worksheets/_rels/sheet{index}.xml.rels'
+        if relation in original:
+            restored[relation] = original[relation]
+    restored['xl/sharedStrings.xml'] = original['xl/sharedStrings.xml']
+    with zipfile.ZipFile(output_path) as archive:
+        output = {name: archive.read(name) for name in archive.namelist()}
+    output.update(restored)
+    relationships = ET.fromstring(output['xl/_rels/workbook.xml.rels'])
+    ET.SubElement(relationships, f'{{{rel_ns}}}Relationship', {
+        'Id': 'rIdBoxTemplateStrings', 'Type': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings',
+        'Target': 'sharedStrings.xml',
+    })
+    output['xl/_rels/workbook.xml.rels'] = ET.tostring(relationships, encoding='utf-8', xml_declaration=True)
+    content_types = ET.fromstring(output['[Content_Types].xml'])
+    existing = {entry.get('PartName') for entry in content_types}
+    for entry in ET.fromstring(original['[Content_Types].xml']):
+        if entry.get('PartName', '').lstrip('/') in restored and entry.get('PartName') not in existing:
+            content_types.append(entry)
+    output['[Content_Types].xml'] = ET.tostring(content_types, encoding='utf-8', xml_declaration=True)
+    # Only the newly generated report is replaced; the template remains read-only.
+    with tempfile.NamedTemporaryFile(dir=Path(output_path).parent, suffix='.xlsx') as temporary:
+        with zipfile.ZipFile(temporary, 'w', zipfile.ZIP_DEFLATED) as archive:
+            for name, content in output.items():
+                archive.writestr(name, content)
+        temporary.flush()
+        shutil.copyfile(temporary.name, output_path)
 
 def box_condition_group_key(r, duty, translator):
     # ponytail: La clave debe incluir el responsable para no cruzar Cajas Dañadas de XM y WH
@@ -306,4 +353,6 @@ def generate_box_condition_excel(registros_orm, template_path, fotos_dir, output
         
         current_row += 1
         
+    ws.print_area = f'A1:P{max(2, current_row - 1)}'
     wb.save(output_path)
+    _preserve_auxiliary_template_parts(template_path, output_path, ws.title)

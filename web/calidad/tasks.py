@@ -516,7 +516,8 @@ def generar_excel_box_condition_task(self, lote_id, fotos_dir_str, registros_ids
     total_fotos = len(todas_evidencias)
 
     # ── Modo Excel ───────────────────────────────────────────────────────────
-    template_path = Path("/app/Daily Tracking Box Condition.xlsx")
+    from django.conf import settings
+    template_path = Path(settings.BASE_DIR).parent / "Daily Tracking Box Condition.xlsx"
     nombre_archivo = f"Daily_Tracking_Box_Condition_{fecha_str}.xlsx"
     output_path = temp_dir / f"tmp_box_{datetime.now().timestamp()}.xlsx"
 

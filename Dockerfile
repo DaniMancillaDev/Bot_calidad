@@ -30,6 +30,7 @@ COPY bot/ bot/
 COPY web/ web/
 COPY shared/ shared/
 COPY plantilla_reporte.xlsx ./
+COPY ["Daily Tracking Box Condition.xlsx", "./"]
 
 # Usuario no-root para seguridad
 RUN useradd -m -r -u 1001 webuser && \
