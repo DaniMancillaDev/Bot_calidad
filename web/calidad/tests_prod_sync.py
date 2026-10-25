@@ -97,6 +97,45 @@ class ImportRecoveryTests(TestCase):
         self.assertEqual(enqueue.call_count, 2)
 
     @patch('calidad.tasks.generar_thumbnails_lote_task.delay')
+    def test_import_names_work_with_gallery_order_thumbnails_and_excel(self, enqueue):
+        from PIL import Image
+        from openpyxl import load_workbook
+        from calidad.services.reporte_excel import generate_excel, PLANTILLA_PATH
+        from calidad.tasks import _consolidar_registros, _ordenar_evidencias, generar_thumbnails_lote_task
+        from calidad.views import _enrich_galeria_registros
+
+        content = io.BytesIO()
+        Image.new('RGB', (32, 48), 'green').save(content, format='JPEG')
+        state = self.session('gallery', (content.getvalue(), content.getvalue()))
+        state['registros'][0].update(modelo='MODEL', numero_parte='PN', defecto='DENT', responsable='XM')
+        lote = commit_importacion(state, self.user)
+        record = RegistroDefecto.objects.get(importacion=lote)
+        evidence = list(record.evidencias_v2.all())
+        paths = [self.root / item.ruta_archivo for item in evidence]
+        with override_settings(THUMBS_ROOT=self.root / 'thumbs'), \
+                patch('calidad.tasks.THUMBS_PATH', str(self.root / 'thumbs')), \
+                patch('calidad.tasks.PROXIES_PATH', str(self.root / 'proxies')):
+            generar_thumbnails_lote_task.run(record.user_id, [str(path) for path in paths])
+            gallery = _enrich_galeria_registros([record])[0]['fotos']
+        self.assertTrue(gallery[0]['nombre'].startswith('2__imp_'))
+        self.assertEqual(gallery[0]['orig_url'], '/media-protegida/' + evidence[0].ruta_archivo)
+        self.assertIn('/thumbs/', gallery[0]['thumb_url'])
+        self.assertEqual([item.id for item in _ordenar_evidencias(evidence, [1, 2])],
+                         [evidence[1].id, evidence[0].id])
+        translator = SimpleNamespace(translate=lambda *args: {'defect_en': 'DENT'})
+        groups = _consolidar_registros([{
+            'id': record.id, 'modelo': record.modelo, 'numero_parte': record.numero_parte,
+            'descripcion': record.descripcion, 'responsable': record.responsable,
+            'cantidad': 1, 'evidencias': evidence,
+        }], translator)
+        output = self.root / 'imported.xlsx'
+        generate_excel(groups, {}, self.root / 'fotos', output, translator=translator)
+        workbook = load_workbook(output)
+        template_images = sum(len(sheet._images) for sheet in load_workbook(PLANTILLA_PATH)) if PLANTILLA_PATH.exists() else 0
+        self.assertEqual(sum(len(sheet._images) for sheet in workbook), template_images + 2)
+        self.assertEqual([path.read_bytes() for path in paths], [content.getvalue()] * 2)
+
+    @patch('calidad.tasks.generar_thumbnails_lote_task.delay')
     def test_even_generated_name_collision_cannot_overwrite(self, enqueue):
         with patch('calidad.services.importacion.uuid.uuid4', return_value=SimpleNamespace(hex='fixed')):
             commit_importacion(self.session('samepref-one'), self.user)
@@ -112,6 +151,55 @@ class ImportRecoveryTests(TestCase):
 
 
 class ExportRecoveryTests(TestCase):
+    def test_box_excel_keeps_multiline_group_photos_and_exclusions(self):
+        from openpyxl import Workbook, load_workbook
+        from PIL import Image
+        from calidad.services.reporte_box_condition import generate_box_condition_excel
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            template = root / 'template.xlsx'
+            workbook = Workbook()
+            workbook.active.title = '23-09-26'
+            workbook.save(template)
+            records = []
+            for line, quantity in (('T01', 10), ('T03', 15)):
+                record = RegistroDefecto.objects.create(
+                    user_id=123, modelo='MODEL', numero_parte='PN',
+                    descripcion='CARTON DAMAGED', responsable='XM', linea=line, cantidad=quantity, fotos='',
+                )
+                records.append(record)
+                path = root / f'{record.id}.jpg'
+                Image.new('RGB', (24, 16), 'blue').save(path)
+                EvidenciaFotografica.objects.create(registro=record, ruta_archivo=path.name, orden=1)
+            EvidenciaFotografica.objects.create(
+                registro=records[0], ruta_archivo='excluded.jpg', orden=2, metadatos={'excluida': True},
+            )
+            result = root / 'box.xlsx'
+            translator = SimpleNamespace(translate=lambda *args: {'defect_en': 'CARTON DAMAGED'})
+            with override_settings(MEDIA_ROOT=root):
+                generate_box_condition_excel(records, str(template), root, str(result), translator)
+            output = load_workbook(result)
+            self.assertEqual(output['23-09-26'].cell(2, 8).value, 'T01/T03')
+            self.assertEqual(output['23-09-26'].cell(2, 9).value, 25)
+            self.assertEqual(len(output['Fotos Box Condition']._images), 2)
+            self.assertEqual({output['Fotos Box Condition'].cell(row, 2).value for row in (2, 3)},
+                             {record.id for record in records})
+
+    def test_pending_grouping_decision_keeps_dev_description_rule(self):
+        from calidad.tasks import _consolidar_registros
+
+        records = [
+            {'id': 1, 'numero_parte': 'PN', 'modelo': 'MODEL', 'responsable': 'XM',
+             'descripcion': 'DENT', 'cantidad': 2, 'evidencias': ['photo-a']},
+            {'id': 2, 'numero_parte': 'PN', 'modelo': 'MODEL', 'responsable': 'XM',
+             'descripcion': 'SCRATCH', 'cantidad': 3, 'evidencias': ['photo-b']},
+        ]
+        groups = _consolidar_registros(records)
+        self.assertEqual(len(groups), 2)
+        self.assertEqual([group['cantidad'] for group in groups], [2, 3])
+        self.assertEqual([group['evidencias'] for group in groups], [['photo-a'], ['photo-b']])
+
     def test_export_keeps_all_photos_and_unique_names_across_groups_and_runs(self):
         from openpyxl import load_workbook
         from PIL import Image
