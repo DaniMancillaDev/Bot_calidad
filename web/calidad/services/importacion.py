@@ -2,6 +2,7 @@ import os
 import zipfile
 import uuid
 import openpyxl
+from collections import defaultdict
 from pathlib import Path
 from django.utils.text import get_valid_filename
 from django.db import transaction
@@ -280,6 +281,31 @@ def generar_estado_inicial(filas, fotos_dict, session_id):
         "registros": filas
     }
 
+def validar_importacion_sin_ambiguedades(filas, fotos_dict):
+    """Rechaza referencias numericas que identifican mas de una fila o archivo."""
+    filas_por_numero = defaultdict(list)
+    for fila in filas:
+        for numero in set(extraer_numeros_fotos(fila.get('fotos_rango', ''))):
+            filas_por_numero[numero].append(fila.get('numero_fila_excel', fila.get('id', '?')))
+
+    fotos_por_numero = defaultdict(list)
+    for foto in fotos_dict.values():
+        nombre = foto.get('original_name') or foto.get('filename')
+        numero = numero_desde_nombre_foto(nombre)
+        if numero is not None:
+            fotos_por_numero[numero].append(nombre)
+
+    conflictos = []
+    for numero, filas_afectadas in filas_por_numero.items():
+        if len(filas_afectadas) > 1:
+            conflictos.append(f"la foto {numero} se solicita en las filas {', '.join(map(str, filas_afectadas))}")
+    for numero, nombres in fotos_por_numero.items():
+        if len(nombres) > 1:
+            conflictos.append(f"el ZIP contiene varios archivos para la foto {numero}: {', '.join(nombres)}")
+    if conflictos:
+        raise ValueError("Importacion ambigua; corrige antes de continuar: " + "; ".join(conflictos))
+
+
 def commit_importacion(session_data, user):
     """
     Toma el estado validado por el usuario, crea los registros,
@@ -292,6 +318,7 @@ def commit_importacion(session_data, user):
     registros_data = session_data.get('registros', [])
     fotos_dict = session_data.get('fotos', {})
     session_id = session_data.get('session_id')
+    validar_importacion_sin_ambiguedades(registros_data, fotos_dict)
     
     user_id = user.perfil.telegram_user_id if hasattr(user, 'perfil') and user.perfil.telegram_user_id else user.id
     turno = user.perfil.turno if hasattr(user, 'perfil') else ''
@@ -360,18 +387,23 @@ def commit_importacion(session_data, user):
                     
                 filename = foto_meta['filename']
                 src_path = temp_dir / filename
-                dst_path = final_dir / filename
+                path_obj = Path(filename)
+                unique_filename = f"{path_obj.stem}__imp_{session_id[:8]}_{uuid.uuid4().hex}{path_obj.suffix}"
+                dst_path = final_dir / unique_filename
                 
                 # Mover el archivo (si existe)
                 if not src_path.exists():
                     raise ValueError(f"Archivo de evidencia no encontrado durante importación: {filename}")
 
                 # Usamos copy para que si falla la transacción no perdamos el original
-                shutil.copy2(src_path, dst_path)
+                # Exclusive creation protects existing originals even on a name collision.
+                with src_path.open('rb') as source, dst_path.open('xb') as target:
+                    shutil.copyfileobj(source, target)
+                shutil.copystat(src_path, dst_path)
                 fotos_paths_para_celery.append(str(dst_path))
 
                 # Guardar la ruta relativa que el sistema espera ('fotos/USER_ID/ARCHIVO.jpg')
-                rel_path = f"fotos/{user_id}/{filename}"
+                rel_path = f"fotos/{user_id}/{unique_filename}"
                 EvidenciaFotografica.objects.create(
                     registro=reg,
                     ruta_archivo=rel_path,

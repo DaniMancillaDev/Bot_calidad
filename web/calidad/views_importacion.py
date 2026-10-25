@@ -10,7 +10,10 @@ from django.contrib import messages
 from django.http import JsonResponse
 import json
 import os
-from calidad.services.importacion import parsear_excel, parsear_txt, extraer_zip_seguro, generar_estado_inicial, commit_importacion
+from calidad.services.importacion import (
+    parsear_excel, parsear_txt, extraer_zip_seguro, generar_estado_inicial,
+    commit_importacion, validar_importacion_sin_ambiguedades,
+)
 
 @login_required
 def importacion_iniciar(request):
@@ -57,6 +60,7 @@ def importacion_iniciar(request):
             # 3. Extraer ZIP a media temporal
             temp_dir = settings.MEDIA_ROOT / 'importaciones_temp' / session_key
             fotos_dict = extraer_zip_seguro(zip_file, temp_dir)
+            validar_importacion_sin_ambiguedades(filas, fotos_dict)
             
             # 4. Generar estado y guardar en sesión
             estado = generar_estado_inicial(filas, fotos_dict, session_key)
