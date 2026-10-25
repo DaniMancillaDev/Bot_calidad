@@ -13,6 +13,7 @@ import os
 import zipfile
 import re
 import time
+import uuid
 from pathlib import Path
 from datetime import datetime
 
@@ -329,6 +330,7 @@ def generar_excel_task(self, registros_ids, rotaciones, fotos_dir_str, fecha_str
 
     archivos_generados = []
     total_grupos = len(grupos)
+    export_id = uuid.uuid4().hex
 
     from shared.infrastructure.ai.defect_translator import build_translator
     translator = build_translator()
@@ -367,8 +369,9 @@ def generar_excel_task(self, registros_ids, rotaciones, fotos_dir_str, fecha_str
             if total_fotos >= UMBRAL_PPTX:
                 safe_defecto = "".join(c for c in str(grupo.get('defecto_canonico', 'DEFECTO')) if c.isalnum() or c in [' ', '_']).strip().replace(' ', '_')
                 safe_modelo = "".join(c for c in str(grupo.get('modelo', 'MOD')) if c.isalnum() or c in [' ', '_']).strip().replace(' ', '_')
+                safe_part = "".join(c for c in str(grupo.get('numero_parte', 'PN')) if c.isalnum() or c in [' ', '_']).strip().replace(' ', '_')
                 safe_resp = "".join(c for c in str(grupo.get('responsable', 'RESP')) if c.isalnum() or c in [' ', '_']).strip().replace(' ', '_')
-                nombre_pptx = f"{safe_defecto}_{safe_modelo}_{safe_resp}.pptx"
+                nombre_pptx = f"{safe_defecto}_{safe_modelo}_{safe_part}_{safe_resp}_{export_id}_{idx_grupo}.pptx"
                 pptx_output_path = temp_dir / nombre_pptx
                 
                 try:

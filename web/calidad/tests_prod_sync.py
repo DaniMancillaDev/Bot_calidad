@@ -1,5 +1,6 @@
 """Regression checks for compatible capabilities recovered from PROD."""
 import io
+import hashlib
 import tempfile
 import zipfile
 from pathlib import Path
@@ -108,3 +109,49 @@ class ImportRecoveryTests(TestCase):
         for path, content in before.items():
             self.assertEqual((self.root / path).read_bytes(), content)
         self.assertEqual(enqueue.call_count, 1)
+
+
+class ExportRecoveryTests(TestCase):
+    def test_export_keeps_all_photos_and_unique_names_across_groups_and_runs(self):
+        from openpyxl import load_workbook
+        from PIL import Image
+        from pptx import Presentation
+        from calidad.tasks import generar_excel_task
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            records = []
+            for part in ('PN-1', 'PN-2'):
+                record = RegistroDefecto.objects.create(
+                    user_id=123, modelo='MODEL', numero_parte=part,
+                    descripcion='DENT', responsable='XM', linea='T01', cantidad=2, fotos='',
+                )
+                records.append(record)
+                for number in range(1, 21):
+                    relative = f'fotos/123/{number:03d}_{record.id}.jpg'
+                    path = root / relative
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    Image.new('RGB', (16, 24), 'red').save(path)
+                    EvidenciaFotografica.objects.create(registro=record, ruta_archivo=relative, orden=number)
+            before = {p: hashlib.sha256(p.read_bytes()).hexdigest() for p in root.rglob('*.jpg')}
+            translator = SimpleNamespace(translate=lambda *args: {'defect_en': 'DENT'})
+            names_by_run = []
+            with override_settings(MEDIA_ROOT=root), patch.object(generar_excel_task, 'update_state'), \
+                    patch('shared.infrastructure.ai.defect_translator.build_translator', return_value=translator):
+                for _ in range(2):
+                    result = generar_excel_task.run([r.id for r in records], {}, str(root / 'fotos'), 'test')
+                    with zipfile.ZipFile(result['file_path']) as archive:
+                        pptx_names = [name for name in archive.namelist() if name.endswith('.pptx')]
+                        self.assertEqual(len(pptx_names), 2)
+                        self.assertTrue(any('PN1' in name.replace('-', '') for name in pptx_names))
+                        photos = 0
+                        for name in pptx_names:
+                            presentation = Presentation(io.BytesIO(archive.read(name)))
+                            photos += sum(len(slide.shapes) for slide in presentation.slides)
+                        self.assertEqual(photos, 40)
+                        workbook = load_workbook(io.BytesIO(archive.read('reporte_XM.xlsx')))
+                        self.assertTrue(workbook.sheetnames)
+                        names_by_run.append(set(pptx_names))
+            self.assertTrue(names_by_run[0].isdisjoint(names_by_run[1]))
+            self.assertEqual(before, {p: hashlib.sha256(p.read_bytes()).hexdigest() for p in before})
+            self.assertEqual(EvidenciaFotografica.objects.count(), 40)
