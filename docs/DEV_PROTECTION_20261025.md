@@ -176,6 +176,10 @@ La evidencia final, logs y reporte del preflight estan en
 `/mnt/Orto/iqa_protection_20261025T203123Z/`. El HEAD final y los commits se registran
 en Git y en el resumen externo, evitando referencias circulares dentro del commit.
 
+Resultado final: 72 pruebas Django, 15 compartidas, 15 scripts/auditor/preflight
+y 23 del adaptador, total 125 correctas. Consistencia de migraciones y diff-check
+correctos; el fingerprint de fuentes no cambio durante las pruebas.
+
 ## Incidente operativo y bloqueo real
 
 El build inicial en el Docker principal fallo por ENOSPC: Btrfs tiene grupos de
@@ -200,6 +204,15 @@ No se hizo balance/reconfiguracion de Btrfs ni se desactivo la proteccion de Red
 La recuperacion operativa requiere una intervencion autorizada fuera de esta
 sincronizacion. El preflight bloquea por el servicio caido/persistencia y por
 migraciones WhatsApp pendientes y la decision de agrupacion; no se autoriza despliegue.
+
+Actualizacion al cierre: la retirada exclusiva del contenedor temporal fallido
+termino y Redis completo automaticamente un RDB con exito a las 21:03:08 UTC;
+su estado de persistencia volvio a ok sin cambiar configuracion ni ordenar SAVE.
+Celery permanecio detenido. El reporte final bloquea por Celery (tambien impide
+verificar sus fuentes en vivo), cinco migraciones pendientes y agrupacion.
+No marca pruebas fallidas ni evidencia obsoleta. La presion de metadatos Btrfs
+sigue requiriendo revision; no se afirma que el problema del almacenamiento este
+solucionado ni se autorizo reiniciar Celery.
 
 ## Recuperar sin perder trabajo
 
