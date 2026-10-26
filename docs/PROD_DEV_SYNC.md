@@ -309,3 +309,36 @@ Operacion -> galeria y visor sin barras. Se aplicaron solo los bloques necesario
 sobre los fuentes reales de PROD y su copia estatica, sin sustituir DEV/PROD.
 Validacion y limites: `docs/deployments/20261026-operation-gallery-hotfix.md`.
 La politica general sigue BLOCKED; esta excepcion no habilita otros despliegues.
+
+## 2026-10-26: borrado administrativo desde Operacion (solo DEV)
+
+Causa confirmada en DEV y fuentes PROD: `api_delete_registro` llamaba `delete()`
+sin `force_delete=True`, obligatorio por la proteccion de `RegistroDefecto`.
+La prueba previa reprodujo PermissionError para el superusuario. Se corrige
+solo esa llamada, despues de la comprobacion `is_superuser`, sin retirar
+la proteccion del modelo, POST obligatorio, autenticacion ni CSRF.
+
+El borrado sigue siendo permanente: desaparecen el registro y sus filas de
+evidencias por CASCADE, igual que en la API V2 existente. No elimina archivos
+originales del almacenamiento. No se introduce borrado logico ni recuperacion.
+No se probo ni ejecuto un borrado contra datos productivos.
+
+Base Git: `e98ed18`. Rama de recuperacion:
+`backup/before-operation-delete-20261026T191125Z`.
+Respaldo de views.py: `/mnt/Orto/iqa_delete_fix_backup_20261026T191125Z/before.tar.gz`,
+SHA256 `3e2b92909a8f58cade49a863d6b972dfe69934d6794631250422b6293e7ffd14`.
+
+Pruebas: PostgreSQL nuevo en RAM, socket Unix local, sin listener TCP, sin
+volumenes ni bases productivas, broker en memoria. El proceso temporal se
+detuvo al terminar. Antes: 4 pruebas correctas y un error reproducible.
+Despues: 5 nuevas pruebas y 9 pruebas V2 existentes correctas (14 en total).
+Se comprobaron superusuario, usuario normal y staff sin privilegio superuser,
+anonimo, GET, CSRF, ID ya eliminado, bloqueo del modelo, otro registro intacto,
+eliminacion de filas relacionadas y hash del original sintetico conservado.
+Las migraciones del test se aplicaron solo a PostgreSQL temporal.
+La nueva suite queda incluida en `run_conservation_checks.py`.
+
+Logs previos y posteriores conservados junto al respaldo externo. Preflight
+general BLOCKED; no se desplego este cambio, no se reinicio PROD ni se tocaron
+sus registros, fotos, sesiones o colas. La autorizacion anterior era unicamente
+para navegacion y barras del visor; no cubre el borrado administrativo.

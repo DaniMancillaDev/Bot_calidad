@@ -15,6 +15,7 @@ DJANGO_MODULES = (
     'calidad.tests', 'calidad.tests_v2', 'calidad.tests_concurrency',
     'calidad.tests_whatsapp', 'calidad.tests_pending_evidence', 'calidad.tests_whatsapp_concurrency',
     'calidad.tests_prod_sync', 'calidad.tests_box_template', 'calidad.tests_report_grouping',
+    'calidad.tests_operation_delete',
     'workspace.tests.test_processing_characterization', 'workspace.tests.test_processing_locking',
 )
 

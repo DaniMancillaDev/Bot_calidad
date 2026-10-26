@@ -1611,7 +1611,7 @@ def api_delete_registro(request, registro_id):
         return JsonResponse({'error': 'No autorizado'}, status=403)
         
     registro = get_object_or_404(RegistroDefecto, id=registro_id)
-    registro.delete()
+    registro.delete(force_delete=True)
     return JsonResponse({'success': True})
 
 @require_POST
