@@ -445,3 +445,20 @@ Se reviso visualmente la captura movil de error renderizada en esa demo.
 Pendiente: aprobacion y despliegue acotado; las excepciones anteriores no cubren
 el login. No comprobado en telefonos fisicos, Safari/Firefox o gestores externos
 de contrasenas. No se introducen recuperacion de contrasena ni cuentas nuevas.
+
+### Segunda revision: legibilidad y reglas UX/UI
+
+Tras reportar dificultad para ver Usuario/Contrasena, se consultaron W3C, GOV.UK
+y NN/g. Criterios, medidas y fuentes: `docs/LOGIN_UX.md`. Se mantienen el tema y
+el flujo existente, con etiquetas 16px, campos/bordes de mayor contraste,
+agrupacion clara y controles mayores. Se evita correccion automatica de la
+contrasena visible y se vuelve a ocultar antes del POST para gestores de acceso.
+
+Base `048e71c`; rama `backup/before-login-legibility-20261026T202725Z`.
+Respaldo `/mnt/Orto/iqa_login_legibility_backup_20261026T202725Z/before.tar.gz`,
+SHA256 `f77229207d7bb54dd8bc91280eb70e9d92237f3b7016be0d73aa694a9b1378f1`.
+Tests y capturas se conservan en ese directorio. 45 pruebas correctas en DB
+temporal; las nuevas comprobaciones de contraste fallan con la plantilla
+anterior en los tres tamanos. La base temporal se detuvo al finalizar.
+Demo del tunel refrescada; PROD no se modifico ni se autoriza implicitamente
+otro despliegue. Sin cambios a autenticacion, permisos, modelos o datos.

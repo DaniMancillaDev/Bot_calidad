@@ -41,6 +41,9 @@ class LoginTests(TestCase):
         self.assertIn('required', markup.inputs['password'])
         self.assertEqual(markup.inputs['username']['autocomplete'], 'username')
         self.assertEqual(markup.inputs['password']['autocomplete'], 'current-password')
+        self.assertEqual(markup.inputs['password']['spellcheck'], 'false')
+        self.assertEqual(markup.inputs['password']['autocapitalize'], 'none')
+        self.assertNotIn('maxlength', markup.inputs['password'])
         self.assertEqual(markup.inputs['next']['value'], '/operacion/')
 
     def test_missing_password_has_field_error_and_retains_username(self):
@@ -105,6 +108,29 @@ try {
   const toggle = document.getElementById('password-toggle');
   const submit = document.getElementById('login-submit');
   const serverError = document.getElementById('login-errors');
+  const luminance = color => {
+    const values = color.match(/[\d.]+/g).slice(0, 3).map(value => Number(value) / 255)
+      .map(value => value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4);
+    return values[0] * .2126 + values[1] * .7152 + values[2] * .0722;
+  };
+  const contrast = (first, second) => {
+    const values = [luminance(first), luminance(second)].sort((a, b) => a - b);
+    return (values[1] + .05) / (values[0] + .05);
+  };
+  const panelColor = getComputedStyle(document.querySelector('main')).backgroundColor;
+  for (const field of [username, password]) {
+    const style = getComputedStyle(field);
+    const label = document.querySelector(`label[for="${field.id}"]`);
+    assert(contrast(style.borderTopColor, panelColor) >= 3, 'Field boundary distinguishable from panel');
+    assert(contrast(style.borderTopColor, style.backgroundColor) >= 3, 'Field boundary distinguishable from input');
+    assert(contrast(style.color, style.backgroundColor) >= 4.5, 'Typed text readable');
+    assert(contrast(getComputedStyle(field, '::placeholder').color, style.backgroundColor) >= 4.5, 'Placeholder readable');
+    assert(parseFloat(getComputedStyle(label).fontSize) >= 16, 'Visible 16px labels');
+    assert(parseFloat(style.fontSize) >= 16 && field.getBoundingClientRect().height >= 50, 'Readable spacious fields');
+    const gap = field.getBoundingClientRect().top - label.getBoundingClientRect().bottom;
+    assert(gap >= 0 && gap <= 12, 'Label stays close to its own field');
+  }
+  assert(contrast(getComputedStyle(submit).color, getComputedStyle(submit).backgroundColor) >= 4.5, 'Primary button text contrast');
   if (document.body.dataset.scenario === 'missing-password') {
     assert(document.activeElement === password, 'Server field error receives focus');
     assert(username.value === 'operador_prueba', 'Username retained');
@@ -122,10 +148,15 @@ try {
   toggle.click();
   assert(password.type === 'text' && password.value === 'synthetic' && toggle.getAttribute('aria-pressed') === 'true', 'Reveal without changing secret');
   toggle.click(); assert(password.type === 'password', 'Hide again');
+  assert(password.getAttribute('spellcheck') === 'false' && password.getAttribute('autocapitalize') === 'none', 'Reveal does not enable text corrections');
+  assert(password.dispatchEvent(new ClipboardEvent('paste', {cancelable: true})), 'Paste not blocked');
   const rect = toggle.getBoundingClientRect();
   assert(rect.width >= 44 && rect.height >= 44, 'Comfortable touch target');
+  toggle.click();
+  assert(password.type === 'text', 'Shown password before submit');
   submit.click();
   assert(submissions === 1 && submit.disabled && form.getAttribute('aria-busy') === 'true', 'Valid submit has loading state');
+  assert(password.type === 'password' && toggle.getAttribute('aria-pressed') === 'false', 'Password hidden on submission for password managers');
   window.dispatchEvent(new PageTransitionEvent('pageshow', {persisted: true}));
   assert(!submit.disabled && password.type === 'password' && toggle.getAttribute('aria-pressed') === 'false', 'Back navigation restores usable hidden-password state');
   for (const element of document.querySelectorAll('main, input:not([type=hidden]), button, .error-msg')) {
