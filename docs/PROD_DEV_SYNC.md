@@ -301,3 +301,11 @@ Las mismas 3 pruebas pasan, incluyendo ausencia de barras por estilo calculado
 y arrastre real en Chromium para los tres tamanos. No probado en dispositivos
 fisicos ni otros motores. Se refresco solo el servidor de demo aislado del
 tunel existente; PROD permanece intacto.
+
+### Aplicacion autorizada a PROD
+
+Posteriormente, el usuario autorizo explicitamente una excepcion acotada para
+Operacion -> galeria y visor sin barras. Se aplicaron solo los bloques necesarios
+sobre los fuentes reales de PROD y su copia estatica, sin sustituir DEV/PROD.
+Validacion y limites: `docs/deployments/20261026-operation-gallery-hotfix.md`.
+La politica general sigue BLOCKED; esta excepcion no habilita otros despliegues.
