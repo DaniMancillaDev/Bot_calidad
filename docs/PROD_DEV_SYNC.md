@@ -405,3 +405,43 @@ pagina WhatsApp exclusiva de DEV. Ver
 `docs/deployments/20261026-themed-dialogs-hotfix.md` para respaldo, hashes,
 pruebas, primera reversion real, resultado final y limites de persistencia.
 El control general permanece BLOCKED; esta autorizacion no cubre otros cambios.
+
+## 2026-10-26: login y avisos accesibles (solo DEV)
+
+Solicitud: corregir los hallazgos del login. Base Git `b528477`.
+La plantilla login.html de DEV y PROD coincidia antes de editar, SHA256
+`e900f8a20dc14bb8a1efe8b25e692e9041151cbffe1c88f45b600dbbc55e6b06`.
+Respaldo previo: `/mnt/Orto/iqa_login_backup_20261026T201758Z/before.tar.gz`,
+SHA256 `5cfb6fe79663e693ce8db0d43631b87e28832252c65fcbce54a928b69c69b404`.
+Listado tar verificado y rama `backup/before-login-ux-20261026T201758Z` creada.
+
+Cambios limitados a la plantilla y sus pruebas: marca IQA, formulario compacto,
+avisos integrados, errores por campo, usuario conservado y escapado, contrasena
+nunca reflejada en la respuesta, mostrar/ocultar con etiqueta y estado accesibles.
+Campos required y autocomplete conservados; con JS se muestran errores inline
+y se dirige el foco al primer campo invalido o al resumen. Sin JS sigue vigente
+la validacion nativa. Estado de envio y restauracion al volver con bfcache;
+la contrasena vuelve a estar oculta. No hay fetch, almacenamiento de credenciales
+ni autenticacion personalizada: sigue el POST normal de LoginView y CSRF Django.
+El mensaje de credenciales sigue siendo generico, sin revelar cuentas existentes.
+La redireccion next pasa por las comprobaciones originales de Django.
+
+Pruebas: 45 tests correctos contra PostgreSQL nuevo en RAM: nueve del login y
+36 regresiones anteriores de borrado, V2, permisos y evidencias pendientes.
+La prueba de navegador del login cubre dos estados en tres tamanos (1440x1000,
+390x844 y 320x568), errores inline, foco, mostrar/ocultar, envio y retorno.
+Se comprobaron autenticacion valida, usuario desconocido/contrasena incorrecta,
+campos vacios, escape HTML, no reflejar secretos, CSRF y rechazo de next externo.
+Cinco tests de scripts existentes (dialogos, navegacion y zoom) tambien correctos.
+El PostgreSQL temporal se detuvo al terminar; no se aplicaron migraciones en PROD.
+Logs y capturas se conservan junto al respaldo externo.
+
+Se agrego `calidad.tests_login` al gate de conservacion. Produccion no se modifico.
+La demo aislada dispone de `/login/` y `/login/error/`, con aviso de no usar
+credenciales reales; intercepta el envio localmente y CSP form-action none
+impide envios tambien sin JS. No crea sesiones ni consulta DB/Redis productivos.
+Se reviso visualmente la captura movil de error renderizada en esa demo.
+
+Pendiente: aprobacion y despliegue acotado; las excepciones anteriores no cubren
+el login. No comprobado en telefonos fisicos, Safari/Firefox o gestores externos
+de contrasenas. No se introducen recuperacion de contrasena ni cuentas nuevas.

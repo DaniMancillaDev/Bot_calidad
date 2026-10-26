@@ -1,53 +1,138 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Iniciar Sesión — Panel de Calidad</title>
+  <title>Acceso | IQA</title>
+  <link rel="icon" type="image/svg+xml" href="{% static 'img/favicon.svg' %}">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
   <style>
-    :root { --accent: #6366f1; --accent2: #8b5cf6; --bg: #0f1117; --surface: #1a1d2e; --border: #2e3250; --text: #e2e8f0; --text-muted: #94a3b8; }
+    :root { color-scheme: dark; --accent: #6366f1; --bg: #0f1117; --surface: #1a1d2e; --border: #2e3250; --text: #e2e8f0; --text-muted: #94a3b8; --danger: #f87171; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-    .login-box { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 40px; width: 100%; max-width: 400px; }
-    .login-logo { text-align: center; margin-bottom: 28px; }
-    .login-logo .emoji { font-size: 3rem; display: block; margin-bottom: 8px; }
-    .login-logo h1 { font-size: 1.4rem; font-weight: 700; }
-    .login-logo p  { color: var(--text-muted); font-size: 0.88rem; margin-top: 4px; }
-    .form-group { margin-bottom: 18px; }
-    label { display: block; font-size: 0.82rem; font-weight: 500; color: var(--text-muted); margin-bottom: 6px; }
-    input { width: 100%; background: #242842; border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 10px 14px; font-size: 0.9rem; font-family: 'Inter', sans-serif; }
-    input:focus { outline: none; border-color: var(--accent); }
-    .btn-login { width: 100%; padding: 11px; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-size: 0.95rem; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; transition: background .2s; margin-top: 8px; }
-    .btn-login:hover { background: var(--accent2); }
-    .error-msg { background: rgba(239,68,68,.15); color: #f87171; border: 1px solid rgba(239,68,68,.3); border-radius: 8px; padding: 10px 14px; font-size: 0.85rem; margin-bottom: 16px; }
+    body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; padding: 24px 16px; }
+    .login-box { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 32px; width: 100%; max-width: 400px; }
+    .login-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; }
+    .login-brand > .material-symbols-outlined { font-size: 30px; color: #6ee7b7; }
+    .login-brand h1 { font-size: 24px; font-weight: 700; }
+    .login-brand p { color: var(--text-muted); font-size: 13px; margin-top: 3px; }
+    h2 { font-size: 18px; font-weight: 600; margin-bottom: 24px; }
+    .form-group { margin-bottom: 20px; }
+    label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 8px; }
+    input { width: 100%; min-height: 46px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 11px 12px; font: inherit; font-size: 16px; }
+    input::placeholder { color: var(--text-muted); }
+    input[aria-invalid="true"] { border-color: var(--danger); }
+    :focus-visible { outline: 2px solid #93c5fd; outline-offset: 3px; }
+    .password-wrap { position: relative; }
+    .password-wrap input { padding-right: 54px; }
+    .password-toggle { position: absolute; top: 1px; right: 1px; width: 44px; height: 44px; display: grid; place-items: center; border: 0; border-radius: 5px; background: transparent; color: var(--text-muted); cursor: pointer; }
+    .password-toggle:hover { color: var(--text); background: rgba(255,255,255,.05); }
+    .password-toggle .material-symbols-outlined { font-size: 20px; }
+    .btn-login { width: 100%; min-height: 46px; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 11px 16px; background: var(--accent); color: #fff; border: 1px solid transparent; border-radius: 6px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+    .btn-login:hover:not(:disabled) { filter: brightness(1.12); }
+    .btn-login:disabled { opacity: .7; cursor: wait; }
+    .btn-login .material-symbols-outlined { font-size: 18px; }
+    .error-msg { display: flex; align-items: flex-start; gap: 8px; background: rgba(239,68,68,.08); color: #fca5a5; border: 1px solid rgba(239,68,68,.3); border-radius: 6px; padding: 12px; font-size: 13px; line-height: 1.6; margin-bottom: 24px; }
+    .error-msg .material-symbols-outlined { font-size: 18px; margin-top: 2px; flex-shrink: 0; }
+    .field-error { margin-top: 8px; color: #fca5a5; font-size: 12px; line-height: 1.5; }
+    .login-status { min-height: 20px; margin-top: 16px; text-align: center; font-size: 12px; color: var(--text-muted); }
+    .error-msg, .field-error, h1, h2 { overflow-wrap: anywhere; }
+    [hidden] { display: none !important; }
+    @media (max-width: 440px) { .login-box { padding: 24px; } }
   </style>
 </head>
 <body>
-  <div class="login-box">
-    <div class="login-logo">
-      <span class="material-symbols-outlined" style="font-size: 3rem; color: var(--accent); margin-bottom: 16px;">verified</span>
-      <h1>Panel de Calidad</h1>
-      <p>Ingresa con tu usuario y contraseña</p>
+  <main class="login-box" aria-labelledby="login-heading">
+    <header class="login-brand">
+      <span class="material-symbols-outlined" aria-hidden="true">verified</span>
+      <div><h1>IQA</h1><p>Bot de Calidad</p></div>
+    </header>
+    <h2 id="login-heading">Iniciar sesión</h2>
+    <div id="login-errors" class="error-msg" role="alert" tabindex="-1" {% if not form.errors %}hidden{% endif %}>
+      <span class="material-symbols-outlined" aria-hidden="true">error</span>
+      <p id="login-error-message">{% if form.non_field_errors %}No pudimos iniciar sesión. Revisa tu usuario y contraseña.{% else %}Revisa los campos marcados para continuar.{% endif %}</p>
     </div>
-
-    {% if form.errors %}
-      <div class="error-msg">❌ Usuario o contraseña incorrectos. Intenta de nuevo.</div>
-    {% endif %}
-
-    <form method="post">
+    <form method="post" id="login-form">
       {% csrf_token %}
+      <input type="hidden" name="next" value="{{ next|default:'' }}">
       <div class="form-group">
         <label for="id_username">Usuario</label>
-        <input type="text" name="username" id="id_username" autofocus autocomplete="username" placeholder="tu_usuario">
+        <input type="text" name="username" id="id_username" value="{{ form.username.value|default_if_none:'' }}" required maxlength="{{ form.username.field.max_length|default:150 }}" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Tu usuario" aria-describedby="username-error" {% if form.username.errors %}aria-invalid="true"{% endif %} {% if not form.errors %}autofocus{% endif %}>
+        <p id="username-error" class="field-error" {% if not form.username.errors %}hidden{% endif %}>{% for error in form.username.errors %}{{ error }}{% endfor %}</p>
       </div>
       <div class="form-group">
         <label for="id_password">Contraseña</label>
-        <input type="password" name="password" id="id_password" autocomplete="current-password" placeholder="••••••••">
+        <div class="password-wrap">
+          <input type="password" name="password" id="id_password" required autocomplete="current-password" placeholder="Tu contraseña" aria-describedby="password-error" {% if form.password.errors %}aria-invalid="true"{% endif %}>
+          <button type="button" id="password-toggle" class="password-toggle" aria-label="Mostrar contraseña" title="Mostrar contraseña" aria-controls="id_password" aria-pressed="false" hidden><span class="material-symbols-outlined" aria-hidden="true">visibility</span></button>
+        </div>
+        <p id="password-error" class="field-error" {% if not form.password.errors %}hidden{% endif %}>{% for error in form.password.errors %}{{ error }}{% endfor %}</p>
       </div>
-      <button type="submit" class="btn-login">Entrar →</button>
+      <button type="submit" id="login-submit" class="btn-login"><span id="login-submit-label">Entrar</span><span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></button>
     </form>
-  </div>
+    <p id="login-status" class="login-status" role="status" aria-live="polite"></p>
+  </main>
+  <script>
+    const form = document.getElementById('login-form');
+    const username = document.getElementById('id_username');
+    const password = document.getElementById('id_password');
+    const toggle = document.getElementById('password-toggle');
+    const submit = document.getElementById('login-submit');
+    const errors = document.getElementById('login-errors');
+    const fields = [[username, 'username-error', 'Escribe tu usuario.'], [password, 'password-error', 'Escribe tu contraseña.']];
+    form.noValidate = true;
+    toggle.hidden = false;
+    toggle.addEventListener('click', () => {
+      const visible = password.type === 'password';
+      password.type = visible ? 'text' : 'password';
+      toggle.setAttribute('aria-pressed', String(visible));
+      toggle.title = visible ? 'Ocultar contraseña' : 'Mostrar contraseña';
+      toggle.setAttribute('aria-label', toggle.title);
+      toggle.firstElementChild.textContent = visible ? 'visibility_off' : 'visibility';
+    });
+    for (const [field, errorId] of fields) {
+      field.addEventListener('input', () => {
+        field.removeAttribute('aria-invalid');
+        document.getElementById(errorId).hidden = true;
+      });
+    }
+    form.addEventListener('submit', event => {
+      let firstInvalid = null;
+      for (const [field, errorId, message] of fields) {
+        if (!field.checkValidity()) {
+          field.setAttribute('aria-invalid', 'true');
+          const error = document.getElementById(errorId);
+          error.textContent = field.validity.valueMissing ? message : field.validationMessage;
+          error.hidden = false;
+          firstInvalid ||= field;
+        }
+      }
+      if (firstInvalid) {
+        event.preventDefault();
+        document.getElementById('login-error-message').textContent = 'Revisa los campos marcados para continuar.';
+        errors.hidden = false;
+        firstInvalid.focus();
+        return;
+      }
+      errors.hidden = true;
+      submit.disabled = true;
+      form.setAttribute('aria-busy', 'true');
+      document.getElementById('login-submit-label').textContent = 'Entrando…';
+      document.getElementById('login-status').textContent = 'Validando acceso…';
+    });
+    window.addEventListener('pageshow', () => {
+      submit.disabled = false;
+      form.removeAttribute('aria-busy');
+      document.getElementById('login-submit-label').textContent = 'Entrar';
+      document.getElementById('login-status').textContent = '';
+      password.type = 'password';
+      toggle.setAttribute('aria-pressed', 'false');
+      toggle.title = 'Mostrar contraseña';
+      toggle.setAttribute('aria-label', toggle.title);
+      toggle.firstElementChild.textContent = 'visibility';
+    });
+    if (!errors.hidden) (form.querySelector('[aria-invalid="true"]') || errors).focus();
+  </script>
 </body>
 </html>
