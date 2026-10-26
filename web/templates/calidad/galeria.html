@@ -507,17 +507,60 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  max-width: 92vw;
+  width: 88vw;
+  max-width: min(1200px, calc(100vw - 128px));
   max-height: 90vh;
 }
 
+.modal-zoom-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.modal-zoom-tools button {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  background: #1e293b;
+  color: #fff;
+  border: 1px solid #64748b;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.modal-zoom-tools button:disabled { opacity: .4; cursor: default; }
+.modal-zoom-tools output { width: 5ch; text-align: center; color: #fff; }
+.modal-image-viewport {
+  width: 100%;
+  height: 66vh;
+  max-height: calc(100dvh - 240px);
+  flex-shrink: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.modal-image-canvas {
+  min-width: 100%;
+  min-height: 100%;
+  width: max-content;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 #modal-img {
-  max-width: 88vw;
-  max-height: 72vh;
+  display: block;
+  max-width: none;
+  max-height: none;
+  flex-shrink: 0;
   border-radius: 8px;
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
   object-fit: contain;
-  transition: transform 0.2s ease;
+  cursor: zoom-in;
+}
+.modal-image-viewport.is-zoomed { cursor: grab; }
+.modal-image-viewport.is-zoomed #modal-img { cursor: inherit; }
+.modal-image-viewport.is-dragging, .modal-image-viewport.is-dragging #modal-img {
+  cursor: grabbing;
 }
 
 .modal-nav-btn {
@@ -548,11 +591,15 @@
 .modal-nav-next { right: -56px; }
 
 @media (max-width: 768px) {
+  .modal-content-wrap { max-width: 92vw; }
   .modal-nav-prev { left: 10px; }
   .modal-nav-next { right: 10px; }
 }
 
 .modal-footer {
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
   margin-top: 14px;
   background: rgba(15, 23, 42, 0.9);
   border: 1px solid var(--border);
@@ -675,6 +722,18 @@
   </button>
 
   <div class="modal-content-wrap">
+    <div class="modal-zoom-tools" role="group" aria-label="Zoom de la evidencia">
+      <button type="button" id="modal-zoom-out" onclick="cambiarZoomModal(modalZoom - .5)" aria-label="Reducir" title="Reducir">
+        <span class="material-symbols-outlined">zoom_out</span>
+      </button>
+      <output id="modal-zoom-level" aria-live="polite" aria-label="Nivel de zoom">100%</output>
+      <button type="button" id="modal-zoom-in" onclick="cambiarZoomModal(modalZoom + .5)" aria-label="Ampliar" title="Ampliar">
+        <span class="material-symbols-outlined">zoom_in</span>
+      </button>
+      <button type="button" onclick="cambiarZoomModal(1)" aria-label="Ajustar imagen" title="Ajustar imagen">
+        <span class="material-symbols-outlined">fit_screen</span>
+      </button>
+    </div>
     <button class="modal-nav-btn modal-nav-prev" id="modal-btn-prev" onclick="cambiarFotoModal(-1)" aria-label="Foto anterior">
       <span class="material-symbols-outlined">chevron_left</span>
     </button>
@@ -682,7 +741,11 @@
       <span class="material-symbols-outlined">chevron_right</span>
     </button>
 
-    <img id="modal-img" src="" alt="Foto ampliada">
+    <div class="modal-image-viewport" id="modal-image-viewport" tabindex="0" aria-label="Evidencia ampliada">
+      <div class="modal-image-canvas">
+        <img id="modal-img" src="" alt="Foto ampliada" draggable="false">
+      </div>
+    </div>
 
     <div class="modal-footer" id="modal-footer-info">
       <div><strong id="modal-modelo"></strong> <span id="modal-foto-num" style="color:#94a3b8; font-size:0.80rem;"></span></div>
@@ -798,6 +861,56 @@ initInfiniteScrollObserver();
 let currentModalPhotos = [];
 let currentModalIndex = 0;
 let currentModalMeta = {};
+let modalZoom = 1;
+let modalDrag = null;
+const modalViewport = document.getElementById('modal-image-viewport');
+const modalImage = document.getElementById('modal-img');
+
+function cambiarZoomModal(value) {
+  modalZoom = Math.max(1, Math.min(4, value));
+  document.getElementById('modal-zoom-level').textContent = `${Math.round(modalZoom * 100)}%`;
+  document.getElementById('modal-zoom-out').disabled = modalZoom === 1;
+  document.getElementById('modal-zoom-in').disabled = modalZoom === 4;
+  modalViewport.classList.toggle('is-zoomed', modalZoom > 1);
+  if (!modalImage.naturalWidth) return;
+  const bounds = modalViewport.getBoundingClientRect();
+  if (!bounds.width || !bounds.height) return;
+  const centerX = (modalViewport.scrollLeft + modalViewport.clientWidth / 2) / modalViewport.scrollWidth;
+  const centerY = (modalViewport.scrollTop + modalViewport.clientHeight / 2) / modalViewport.scrollHeight;
+  const fit = Math.min(bounds.width / modalImage.naturalWidth, bounds.height / modalImage.naturalHeight, 1);
+  modalImage.style.width = `${modalImage.naturalWidth * fit * modalZoom}px`;
+  modalImage.style.height = `${modalImage.naturalHeight * fit * modalZoom}px`;
+  modalViewport.scrollLeft = centerX * modalViewport.scrollWidth - modalViewport.clientWidth / 2;
+  modalViewport.scrollTop = centerY * modalViewport.scrollHeight - modalViewport.clientHeight / 2;
+}
+
+modalImage.addEventListener('load', () => cambiarZoomModal(1));
+modalImage.addEventListener('dblclick', () => cambiarZoomModal(modalZoom > 1 ? 1 : 2));
+modalViewport.addEventListener('wheel', (event) => {
+  if (!event.deltaY || event.ctrlKey) return;
+  event.preventDefault();
+  cambiarZoomModal(modalZoom + (event.deltaY < 0 ? .25 : -.25));
+}, { passive: false });
+modalViewport.addEventListener('pointerdown', (event) => {
+  if (modalZoom === 1 || event.pointerType !== 'mouse' || event.button !== 0) return;
+  event.preventDefault();
+  modalDrag = { x: event.clientX, y: event.clientY, left: modalViewport.scrollLeft, top: modalViewport.scrollTop };
+  modalViewport.setPointerCapture(event.pointerId);
+  modalViewport.classList.add('is-dragging');
+});
+modalViewport.addEventListener('pointermove', (event) => {
+  if (!modalDrag) return;
+  modalViewport.scrollLeft = modalDrag.left + modalDrag.x - event.clientX;
+  modalViewport.scrollTop = modalDrag.top + modalDrag.y - event.clientY;
+});
+function terminarArrastreModal() {
+  modalDrag = null;
+  modalViewport.classList.remove('is-dragging');
+}
+modalViewport.addEventListener('lostpointercapture', terminarArrastreModal);
+modalViewport.addEventListener('pointerup', terminarArrastreModal);
+modalViewport.addEventListener('pointercancel', terminarArrastreModal);
+window.addEventListener('resize', () => cambiarZoomModal(modalZoom));
 
 function abrirModalDesdeThumb(el) {
   const container = el.closest('.rc-thumbs');
@@ -820,6 +933,7 @@ function abrirModalDesdeThumb(el) {
 
   renderModalState();
   document.getElementById('foto-modal').classList.add('open');
+  cambiarZoomModal(1);
   document.body.style.overflow = 'hidden';
 }
 
@@ -829,6 +943,7 @@ function renderModalState() {
   if (!currentPhoto) return;
 
   document.getElementById('modal-img').src = currentPhoto.orig_url;
+  cambiarZoomModal(1);
   document.getElementById('modal-modelo').textContent = currentModalMeta.modelo || '';
   document.getElementById('modal-foto-num').textContent = `· Foto #${String(currentPhoto.num).padStart(3, '0')} (${currentModalIndex + 1} de ${currentModalPhotos.length})`;
   document.getElementById('modal-defecto').textContent = currentModalMeta.descripcion ? `Defecto: ${currentModalMeta.descripcion}` : '';
@@ -853,6 +968,8 @@ function cambiarFotoModal(delta) {
 }
 
 function cerrarModal() {
+  terminarArrastreModal();
+  cambiarZoomModal(1);
   document.getElementById('foto-modal').classList.remove('open');
   document.getElementById('modal-img').src = '';
   document.body.style.overflow = '';

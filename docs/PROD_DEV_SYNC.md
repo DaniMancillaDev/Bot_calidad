@@ -108,6 +108,48 @@ Hasta resolverlo, PROD queda respaldado y DEV mantiene su comportamiento.
 Esto es el reporte general; la agrupacion multilinea Box Condition ya existente
 se conserva y se comprueba con T01/T03 y cantidad 25.
 
+## Correccion del visor de galeria: 2026-10-26
+
+El reporte de falta de zoom en `/fotos/` se confirmo contra las plantillas
+reales DEV y PROD: SHA256 previo identico
+`07f906f0df846f2a5854151af2d28ab74947e3dfe6806864d55a30040b660ba7`.
+El visor solo ajustaba la imagen a la ventana; no tenia controles de zoom.
+
+Cambio exclusivo DEV en `web/templates/calidad/galeria.html`: controles con
+iconos existentes, zoom relativo al ajuste entre 100 y 400%, rueda y doble clic,
+area desplazable y arrastre por raton. Restablece ajuste al cambiar foto o
+reabrir. Conserva URL original, proporciones, orden, navegacion y Escape; no
+escribe medios ni modifica permisos, modelos, importaciones o reportes.
+
+Recuperacion previa: rama `backup/before-gallery-zoom-20261026-3aa8cdb`, bundle
+externo anterior verificado y snapshots DEV/PROD con procedencia/hashes en
+`/mnt/Orto/iqa_gallery_zoom_backup_20261026`. No reemplazar PROD por DEV.
+El commit se identifica con `git log -- web/templates/calidad/galeria.html`.
+El nuevo HEAD debe incorporarse al inventario de la migracion: `3aa8cdb` pasa
+a ser la referencia ANTERIOR, no se debe restaurar encima del nuevo trabajo.
+
+Prueba reproducible sin Django, BD ni servicios productivos:
+
+```sh
+python -m unittest scripts.tests.test_gallery_zoom -v
+```
+
+Utiliza Chromium instalado (o CHROME_BIN) y Node con WebSocket integrado;
+no instala dependencias. Prueba el JS/HTML/CSS real extraido de la plantilla
+con una imagen PNG sintetica, en 1440x1000, 900x650 y 390x844. Comprueba botones,
+rueda, doble clic, limites, desplazamiento, arrastre real por CDP, navegacion,
+URL/proporcion, cierre y reapertura. Los tres tamanos pasan con el parche y
+fallan con el snapshot anterior. Capturas scratch en
+`/dev/shm/iqa-gallery-zoom-results`; iconos usan fallback tipografico de fixture,
+no se valida el CDN de fuentes. No equivale a probar un telefono fisico o pinch.
+
+No se desplego, reinicio ni modifico PROD. La ruta publica exige login;
+no se eludieron permisos ni se crearon sesiones productivas para probarla.
+No se ejecutaron la suite completa ni un nuevo preflight de despliegue por
+este parche visual. Los controles de conservacion/almacenamiento y la revision
+del nuevo diff siguen siendo obligatorios antes de aplicar nada a PROD;
+no se actualizaron hashes de politica para aprobar automaticamente el cambio.
+
 ## Commits de esta integracion
 
 | Commit | Capacidad |
