@@ -1,0 +1,73 @@
+<style>
+  #app-dialog {
+    box-sizing: border-box;
+    width: min(440px, calc(100vw - 32px));
+    max-height: calc(100dvh - 32px);
+    margin: auto;
+    padding: 24px;
+    overflow: auto;
+    color: var(--text, #e2e8f0);
+    background: var(--surface, #1a1d2e);
+    border: 1px solid var(--border, #2e3250);
+    border-radius: 8px;
+    box-shadow: 0 24px 48px rgba(0, 0, 0, .4);
+    font: 14px Inter, system-ui, sans-serif;
+  }
+  #app-dialog::backdrop { background: rgba(0, 0, 0, .7); backdrop-filter: blur(4px); }
+  #app-dialog h2 { margin: 0 0 12px; font-size: 18px; font-weight: 600; }
+  #app-dialog p { margin: 0 0 24px; color: var(--text-muted, #94a3b8); line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+  #app-dialog input { box-sizing: border-box; width: 100%; margin-bottom: 24px; padding: 10px 12px; color: inherit; background: var(--bg, #0f1117); border: 1px solid var(--border, #2e3250); border-radius: 4px; font: inherit; }
+  #app-dialog .app-dialog-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+  #app-dialog button { min-height: 44px; padding: 8px 16px; border: 1px solid var(--border, #2e3250); border-radius: 6px; background: transparent; color: inherit; cursor: pointer; font: inherit; }
+  #app-dialog #app-dialog-accept { background: var(--accent, #6366f1); border-color: transparent; color: #fff; }
+  #app-dialog :focus-visible { outline: 2px solid #93c5fd; outline-offset: 3px; }
+</style>
+<dialog id="app-dialog" aria-labelledby="app-dialog-title" aria-describedby="app-dialog-text">
+  <form method="dialog">
+    <h2 id="app-dialog-title"></h2>
+    <p id="app-dialog-text"></p>
+    <input id="app-dialog-input" aria-labelledby="app-dialog-title" hidden>
+    <div class="app-dialog-actions">
+      <button type="button" id="app-dialog-cancel">Cancelar</button>
+      <button type="submit" value="accept" id="app-dialog-accept">Continuar</button>
+    </div>
+  </form>
+</dialog>
+<script>
+(() => {
+  const dialog = document.getElementById('app-dialog');
+  const input = document.getElementById('app-dialog-input');
+  const cancel = document.getElementById('app-dialog-cancel');
+  const accept = document.getElementById('app-dialog-accept');
+  cancel.addEventListener('click', () => dialog.close('cancel'));
+  let queue = Promise.resolve();
+  function openDialog(title, text, btnText, btnColor, showCancel, inputValue = null) {
+    const result = queue.then(() => new Promise(resolve => {
+      document.getElementById('app-dialog-title').textContent = title;
+      document.getElementById('app-dialog-text').textContent = text;
+      input.hidden = inputValue === null;
+      input.value = inputValue ?? '';
+      cancel.hidden = !showCancel;
+      accept.textContent = btnText;
+      accept.style.background = btnColor;
+      dialog.returnValue = '';
+      dialog.addEventListener('close', () => {
+        resolve(dialog.returnValue === 'accept' ? (inputValue === null ? true : input.value) : null);
+      }, { once: true });
+      dialog.showModal();
+      if (!input.hidden) { input.focus(); input.select(); }
+      else (showCancel ? cancel : accept).focus();
+    }));
+    queue = result.then(() => {}, () => {});
+    return result;
+  }
+  window.showConfirmModal = async function(title, text, btnText, btnColor, callback, showCancel = true) {
+    const accepted = await openDialog(title, text, btnText, btnColor, showCancel);
+    if (accepted && callback) callback();
+    return Boolean(accepted);
+  };
+  window.iqaConfirm = text => showConfirmModal('Confirmar acción', text, 'Continuar', 'var(--accent, #6366f1)');
+  window.iqaAlert = text => showConfirmModal('Aviso', text, 'Entendido', 'var(--accent, #6366f1)', null, false);
+  window.iqaPrompt = (text, value = '') => openDialog('Editar', text, 'Guardar', 'var(--accent, #6366f1)', true, value ?? '');
+})();
+</script>

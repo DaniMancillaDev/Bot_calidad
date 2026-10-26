@@ -260,10 +260,10 @@
                                 assigned_photos: this.activeDraft.assigned_photos
                             })
                         });
-                        alert('Guardado correctamente');
+                        await iqaAlert('Guardado correctamente');
                         this.loadDrafts(this.currentPage); // Refrescar lista para ver validación
                     } catch (e) {
-                        alert('Error guardando');
+                        await iqaAlert('Error guardando');
                     }
                 },
                 
@@ -284,31 +284,32 @@
                         if (this.activeDraft) this.selectDraft(this.activeDraft.id);
                     } catch (e) {
                         console.error(e);
-                        alert('Error validando');
+                        await iqaAlert('Error validando');
                     }
                 },
 
                 async confirmImport() {
-                    if (!confirm("¿Seguro que deseas insertar estos registros en la base de datos de producción?")) return;
+                    if (!await iqaConfirm("¿Seguro que deseas insertar estos registros en la base de datos de producción?")) return;
                     
                     try {
                         this.sessionStatus = 'Insertando...';
                         const res = await fetch(`/workspace/api/confirm/${this.uuid}/`, {method: 'POST'});
                         const data = await res.json();
                         if (data.status === 'ok') {
-                            alert(`¡Éxito! Se crearon ${data.creados} registros.`);
+                            await iqaAlert(`¡Éxito! Se crearon ${data.creados} registros.`);
                             this.sessionStatus = 'CONFIRMED';
                             window.location.href = '/admin/calidad/registrodefecto/';
                         } else {
-                            alert("Error: " + data.error);
+                            await iqaAlert("Error: " + data.error);
                             this.sessionStatus = 'FAILED';
                         }
                     } catch (e) {
-                        alert("Error confirmando.");
+                        await iqaAlert("Error confirmando.");
                     }
                 }
             }));
         });
     </script>
+{% include 'calidad/partials/app_dialog.html' %}
 </body>
 </html>

@@ -694,46 +694,6 @@
     }
   </script>
 
-  <!-- GLOBAL CONFIRM MODAL -->
-  <div class="modal-overlay" id="global-confirm-modal" style="z-index: 9999;">
-    <div class="modal-content">
-      <h3 id="global-confirm-title" style="margin-top: 0; color: var(--text); font-size: 1.2rem; font-weight: 600; margin-bottom: 15px;"></h3>
-      <p id="global-confirm-text" style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 25px; line-height: 1.5;"></p>
-      <div style="display: flex; justify-content: flex-end; gap: 12px;">
-        <button id="btn-global-confirm-cancel" class="btn btn-ghost" style="padding: 8px 18px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer;">Cancelar</button>
-        <button id="btn-global-confirm-ok" class="btn btn-primary" style="padding: 8px 18px; border-radius: 6px; cursor: pointer; border: none; color: white;"></button>
-      </div>
-    </div>
-  </div>
-  <script>
-    let globalConfirmAction = null;
-    window.showConfirmModal = function(title, text, btnText, btnColor, callback, showCancel=true) {
-        document.getElementById('global-confirm-title').textContent = title;
-        document.getElementById('global-confirm-text').textContent = text;
-        const btnOk = document.getElementById('btn-global-confirm-ok');
-        btnOk.textContent = btnText;
-        btnOk.style.background = btnColor;
-        btnOk.style.borderColor = btnColor;
-        
-        const btnCancel = document.getElementById('btn-global-confirm-cancel');
-        btnCancel.style.display = showCancel ? 'inline-block' : 'none';
-
-        globalConfirmAction = callback;
-        document.getElementById('global-confirm-modal').style.display = 'flex';
-    };
-    document.addEventListener('DOMContentLoaded', () => {
-        document.getElementById('btn-global-confirm-cancel').addEventListener('click', () => {
-            document.getElementById('global-confirm-modal').style.display = 'none';
-            globalConfirmAction = null;
-        });
-        document.getElementById('btn-global-confirm-ok').addEventListener('click', () => {
-            document.getElementById('global-confirm-modal').style.display = 'none';
-            if (globalConfirmAction) {
-                globalConfirmAction();
-                globalConfirmAction = null;
-            }
-        });
-    });
-  </script>
+  {% include 'calidad/partials/app_dialog.html' %}
 </body>
 </html>

@@ -1141,11 +1141,11 @@
         renderNavigator(searchInput.value);
 
       } else {
-        showConfirmModal('Error', 'Error al modificar el estado de la foto: ' + data.message, 'Entendido', 'var(--danger)', () => {}, false).replace('})', '}, false');
+        showConfirmModal('Error', 'Error al modificar el estado de la foto: ' + data.message, 'Entendido', 'var(--danger)', () => {}, false);
       }
     } catch (e) {
       console.error('Error:', e);
-      showConfirmModal('Error', 'Error de red al intentar modificar el estado de la foto.', 'Entendido', 'var(--danger)', () => {}, false).replace('})', '}, false');
+      showConfirmModal('Error', 'Error de red al intentar modificar el estado de la foto.', 'Entendido', 'var(--danger)', () => {}, false);
     }
   }
 
@@ -1221,7 +1221,7 @@
   // ponytail: FASE 2.1 - Excluir registro completo
   async function eliminarRegistro() {
     if (!activeRecord) return;
-    if (!confirm('¿Estás seguro de excluir este registro completo? Ya no aparecerá en el Excel.')) return;
+    if (!await iqaConfirm('¿Estás seguro de excluir este registro completo? Ya no aparecerá en el Excel.')) return;
     
     saveInd.textContent = 'Eliminando...';
     saveInd.className = 'save-indicator';
@@ -1241,12 +1241,12 @@
         }
       } else {
         const errorData = await res.json();
-        alert('Error al eliminar: ' + (errorData.message || 'Desconocido'));
+        await iqaAlert('Error al eliminar: ' + (errorData.message || 'Desconocido'));
         saveInd.textContent = '';
       }
     } catch (e) {
       console.error(e);
-      alert('Error de red al intentar eliminar.');
+      await iqaAlert('Error de red al intentar eliminar.');
       saveInd.textContent = '';
     }
   }

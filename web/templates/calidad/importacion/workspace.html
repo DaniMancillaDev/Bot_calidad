@@ -566,11 +566,11 @@
         );
     }
 
-    function editarCampo(recordId, field) {
+    async function editarCampo(recordId, field) {
         const row = state.registros.find(r => r.id === recordId);
         if (!row) return;
         
-        const newVal = prompt(`Editar ${field.toUpperCase()}:`, row[field]);
+        const newVal = await iqaPrompt(`Editar ${field.toUpperCase()}:`, row[field]);
         if (newVal !== null && newVal !== row[field]) {
             // Optimistic UI update
             row[field] = newVal;
@@ -623,21 +623,21 @@
             if (data.error) {
                 showConfirmModal('Error al guardar', "Error al guardar: " + data.error + ". Recargando página...", 'Entendido', 'var(--danger)', () => {
                     window.location.reload();
-                }, false).replace('})', '}, false');
+                }, false);
             }
         })
         .catch(error => {
             console.error("Error AJAX:", error);
             showConfirmModal('Error de conexión', 'Error de conexión al guardar los cambios. Recargando para mantener sincronización...', 'Entendido', 'var(--danger)', () => {
                 window.location.reload();
-            }, false).replace('})', '}, false');
+            }, false);
         });
     }
     
     function confirmarImportacion() {
         const tieneErrores = state.registros.some(r => r.error_inconsistencia);
         if (tieneErrores) {
-            alert('No puedes confirmar la importación porque hay filas con errores de inconsistencia (rangos vs cantidades). Por favor, corrígelos o elimina las filas problemáticas antes de continuar.');
+            iqaAlert('No puedes confirmar la importación porque hay filas con errores de inconsistencia (rangos vs cantidades). Por favor, corrígelos o elimina las filas problemáticas antes de continuar.');
             return;
         }
 
@@ -668,13 +668,13 @@
             if (data.redirect) {
                 window.location.href = data.redirect;
             } else if (data.error) {
-                showConfirmModal('Error', "Error: " + data.error, 'Entendido', 'var(--danger)', () => {}, false).replace('})', '}, false');
+                showConfirmModal('Error', "Error: " + data.error, 'Entendido', 'var(--danger)', () => {}, false);
                 btn.disabled = false;
                 btn.innerHTML = '<span class="material-symbols-outlined icon" style="vertical-align: middle;">check_circle</span> Confirmar Importación';
             }
         })
         .catch(error => {
-            showConfirmModal('Error', 'Ocurrió un error al confirmar. Inténtalo de nuevo.', 'Entendido', 'var(--danger)', () => {}, false).replace('})', '}, false');
+            showConfirmModal('Error', 'Ocurrió un error al confirmar. Inténtalo de nuevo.', 'Entendido', 'var(--danger)', () => {}, false);
             console.error(error);
             btn.disabled = false;
             btn.innerHTML = '<span class="material-symbols-outlined icon" style="vertical-align: middle;">check_circle</span> Confirmar Importación';

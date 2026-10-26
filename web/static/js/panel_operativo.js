@@ -637,7 +637,7 @@ class PanelOperativo {
     }
 
     async eliminarRegistro(id) {
-        if (!confirm("¿Seguro que deseas eliminar este registro permanentemente?")) return;
+        if (!await showConfirmModal('Eliminar registro', '¿Seguro que deseas eliminar este registro permanentemente?', 'Eliminar', 'var(--danger)')) return;
         try {
             const res = await fetch(`/api/registro/${id}/delete/`, {
                 method: 'POST',
@@ -711,14 +711,14 @@ class PanelOperativo {
         }
     }
 
-    enviarExcel() {
+    async enviarExcel() {
         const seleccionados = this.registros.filter(r => r._selected && !r._hidden);
         if (seleccionados.length === 0) {
             this.mostrarToast("Selecciona al menos 1 registro para enviar.");
             return;
         }
 
-        if (!confirm(`¿Estás seguro de procesar ${seleccionados.length} registros a Excel?`)) return;
+        if (!await iqaConfirm(`¿Estás seguro de procesar ${seleccionados.length} registros a Excel?`)) return;
 
         const btnExcel = document.getElementById('btn-excel');
         const textOriginal = btnExcel.innerHTML;

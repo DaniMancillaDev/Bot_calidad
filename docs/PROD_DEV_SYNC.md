@@ -350,3 +350,49 @@ crear un registro para comprobarlo manualmente. Se aplico el cambio de una linea
 en PROD y se creo el registro 808 PRUEBA-BORRADO sin fotos. No se borro ningun
 registro productivo. Ver `docs/deployments/20261026-operation-delete-hotfix.md`
 para alcance, validacion, efectos del registro sintetico y limites de reversion.
+
+## 2026-10-26: avisos integrados en el tema (solo DEV y demo)
+
+Solicitud del usuario: sustituir los cuadros del navegador ("esta pagina dice")
+por avisos acordes al resto de paginas. Se conserva la API existente
+`showConfirmModal` y sus callbacks, usando un parcial compartido con `<dialog>`
+estilizado. No se sobrescriben `window.alert`, `confirm` ni `prompt`.
+
+El parcial `calidad/partials/app_dialog.html` se incluye desde base.html y desde
+el workspace independiente. Incorpora confirmacion, aviso y captura de texto;
+las llamadas que antes bloqueaban el hilo esperan ahora la respuesta mediante
+await. Las cancelaciones no ejecutan callbacks ni peticiones. Escape cancela;
+el foco inicial va a Cancelar (o al campo en ediciones) y el navegador mantiene
+el foco dentro del dialogo modal. Los mensajes se insertan como texto, nunca HTML.
+Las aperturas simultaneas se encolan para no sobrescribir una confirmacion.
+
+Actualizados los llamadores de Operacion, diccionario, borradores de WhatsApp,
+importaciones y revisiones de orientacion/Box Condition. Se quitaron las llamadas
+`.replace` erroneas sobre el resultado de showConfirmModal en avisos existentes.
+No se cambian endpoints, permisos, reglas de borrado, archivos ni base de datos.
+
+Recuperacion previa: rama `backup/before-themed-dialogs-20261026T192202Z` y
+`/mnt/Orto/iqa_dialogs_backup_20261026T192202Z/before.tar.gz`, SHA256
+`88977f630b6f00b09af3950763a073bb9c31f50927a5913e718dfb487be6f999`.
+El tar fue listado sin errores; no sustituir archivos completos sobre cambios
+posteriores al revertir. Base Git anterior: `cb5308e`.
+
+Pruebas: Chromium real 1440x1000 y 390x844 para confirmar/cancelar, foco,
+Escape, Enter, texto vacio, texto no interpretado como HTML, callback unico,
+cola de avisos y flujo real del metodo eliminarRegistro con fetch simulado.
+Se verifico que cancelar no cambia filas ni envia solicitudes. Capturas
+`/dev/shm/iqa-app-dialog-1440.png` y `iqa-app-dialog-390.png`.
+Cinco pruebas de scripts correctas al incluir navegacion y zoom existentes.
+Las ocho plantillas afectadas compilan con Django; node --check y diff --check
+correctos. El buscador de regresion ya no encuentra alert/confirm/prompt nativos
+en las plantillas propias ni en web/static/js. La demo aislada de Operacion
+tambien abre el dialogo nuevo y conserva su fila al cancelar.
+Regresion adicional: 36 pruebas Django correctas (`tests_operation_delete`,
+`tests_v2`, `tests_pending_evidence`) contra PostgreSQL nuevo en RAM; incluye
+confirmacion concurrente, permisos, borradores, orden, exclusion y recuperacion.
+Solo se aplicaron migraciones al PostgreSQL temporal y se detuvo al finalizar.
+Log persistente junto al respaldo externo: `django-regression.log`.
+
+No se publico este cambio en PROD. Las excepciones previas no lo incluyen.
+No se probaron Safari/Firefox ni mensajeria real; no se ocultaron avisos propios
+de seguridad del navegador ni se modifico el administrador de Django/terceros.

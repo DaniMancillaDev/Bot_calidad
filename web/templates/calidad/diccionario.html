@@ -729,9 +729,9 @@
     showToast(isUpdate ? `Regla actualizada: "${key}" → "${val}"` : `Regla añadida: "${key}" → "${val}"`, 'success');
   }
 
-  function deleteEntry(key) {
+  async function deleteEntry(key) {
     if (!isSuperuser) return;
-    if (confirm(`¿Eliminar la regla "${key}"?`)) {
+    if (await iqaConfirm(`¿Eliminar la regla "${key}"?`)) {
       if (editingKey === key) cancelEdit();
       delete catalog[activeTab][key];
       markUnsaved(true);
