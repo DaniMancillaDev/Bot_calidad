@@ -582,6 +582,13 @@ def _build_galeria_queryset(request):
         'fecha_hasta': request.GET.get('fecha_hasta', '')
     }
 
+    registro_id = request.GET.get('registro')
+    if registro_id is not None:
+        if registro_id.isascii() and registro_id.isdigit() and 0 < len(registro_id) <= 18:
+            registros_qs = registros_qs.filter(pk=int(registro_id))
+        else:
+            registros_qs = registros_qs.none()
+
     if filtros['estado']:
         registros_qs = registros_qs.filter(estado_revision=filtros['estado'])
     if filtros['turno']:

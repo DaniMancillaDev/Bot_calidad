@@ -258,3 +258,33 @@ bundle externo. No aplicar reset --hard ni clean sobre DEV.
 Para deshacer integraciones, revisar y revertir commits propios uno por uno,
 preservando cambios posteriores. Los snapshots de PROD permanecen independientes.
 No restaurar datos de negocio como parte de una reversion de codigo.
+
+## 2026-10-26: miniaturas de Operacion hacia el visor (solo DEV)
+
+Origen: defecto confirmado en el JavaScript servido por PROD y en DEV: las
+miniaturas enlazaban al original protegido, evitando la galeria y su zoom.
+Ahora cada miniatura enlaza a `/fotos/?registro=ID&foto=URL_CODIFICADA` usando
+el registro de la propia evidencia, incluso en filas agrupadas del panel.
+El filtro se aplica sobre `get_registros_permitidos`, nunca sobre todos los
+registros. Un identificador invalido devuelve un conjunto vacio. El visor
+solo abre una URL que ya figure entre las miniaturas autorizadas renderizadas;
+no carga URLs arbitrarias recibidas en la consulta. No se modifican fotos,
+asociaciones, colas ni las acciones existentes de mas fotos/badge.
+
+Base: `1bfa6b5f4acec407f8618e5027b1385cc72030eb`.
+Respaldo externo: `/mnt/Orto/iqa_operation_link_backup_20261026T164644Z/before.tar.gz`,
+SHA256 `f81b708947bc52979be2e66cea87886b969f0cc666de59284ef9a9db2b428942`.
+El archivo tar fue listado correctamente; la referencia Git de recuperacion
+es la rama `backup/before-operation-gallery-link-20261026T164644Z`.
+La reversion debe limitarse a este cambio revisado, sin sustituir archivos
+completos ni descartar avances posteriores.
+
+Validacion: `python -B -m unittest scripts.tests.test_operation_gallery_link
+scripts.tests.test_gallery_zoom -v`: 3 pruebas correctas, incluyendo Chromium
+en 1440x1000, 900x650 y 390x844. Se verifica destino/codificacion del enlace,
+seleccion exacta, rechazo de URL desconocida y regresion de zoom/navegacion.
+La prueba del filtro usa un queryset simulado: no sustituye una prueba Django
+con PostgreSQL ni una comprobacion autenticada de permisos extremo a extremo.
+`node --check web/static/js/panel_operativo.js` y `git diff --check` correctos.
+PROD no modificado; no desplegado. El preflight y cualquier autorizacion de
+despliegue siguen siendo necesarios; la excepcion previa era solo del visor.

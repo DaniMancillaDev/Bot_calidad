@@ -31,6 +31,16 @@ async function checkZoom() {
   function assert(value, name) { if (!value) throw new Error(name); }
   const settle = () => new Promise(resolve => setTimeout(resolve, 80));
   const first = document.querySelector('.thumb-wrap');
+  const second = document.querySelectorAll('.thumb-wrap')[1];
+  history.replaceState(null, '', '?registro=17&foto=' + encodeURIComponent(second.dataset.orig));
+  abrirEvidenciaEnlazada();
+  await modalImage.decode(); await settle();
+  assert(currentModalIndex === 1 && modalImage.src === second.dataset.orig, 'Deep link selects exact photo');
+  cerrarModal();
+  history.replaceState(null, '', '?foto=' + encodeURIComponent('https://example.invalid/not-allowed.jpg'));
+  abrirEvidenciaEnlazada();
+  assert(!document.getElementById('foto-modal').classList.contains('open'), 'Unknown URL does not open or load');
+  history.replaceState(null, '', location.pathname);
   abrirModalDesdeThumb(first);
   await modalImage.decode(); await settle();
   const original = modalImage.src;
@@ -88,7 +98,7 @@ class GalleryZoomBrowserTests(unittest.TestCase):
         javascript = 'let currentModalPhotos = [];' + template.split('let currentModalPhotos = [];', 1)[1].split('</script>', 1)[0]
         image = fixture_image()
         thumbs = '<div class="rc-thumbs">' + ''.join(
-            f'<div class="thumb-wrap" data-orig="{image}" data-num="{i}" data-modelo="MODELO-PRUEBA-123" '
+            f'<div class="thumb-wrap" data-orig="{image}#{i}" data-num="{i}" data-modelo="MODELO-PRUEBA-123" '
             'data-linea="T01/T03" data-descripcion="Caja danada durante manejo" data-responsable="TSCEM"></div>'
             for i in (1, 2)) + '</div>'
         html = ('<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">'

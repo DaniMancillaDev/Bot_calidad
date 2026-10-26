@@ -1007,6 +1007,14 @@ document.addEventListener('keydown', (e) => {
 document.getElementById('foto-modal').addEventListener('click', function(e) {
   if (e.target === this) cerrarModal();
 });
+
+function abrirEvidenciaEnlazada() {
+  const original = new URLSearchParams(window.location.search).get('foto');
+  if (!original) return;
+  const thumb = Array.from(document.querySelectorAll('.thumb-wrap')).find(el => el.dataset.orig === original);
+  if (thumb) abrirModalDesdeThumb(thumb);
+}
+abrirEvidenciaEnlazada();
 </script>
 
 {% endblock %}

@@ -291,7 +291,8 @@ class PanelOperativo {
             if (r.fotos_preview && r.fotos_preview.length > 0) {
                 fotosBadge = `<div class="evidence-cell"><div class="evidence-thumbs">`;
                 r.fotos_preview.slice(0, 3).forEach(f => {
-                    fotosBadge += `<a href="${f.url}" target="_blank" onclick="event.stopPropagation();" title="Ver foto">
+                    const galleryUrl = `/fotos/?registro=${encodeURIComponent(f.registro_id)}&foto=${encodeURIComponent(f.url)}`;
+                    fotosBadge += `<a href="${galleryUrl}" target="_blank" onclick="event.stopPropagation();" title="Ver foto">
                                      <img src="${f.thumb_url}" class="evidence-thumb" alt="Evidencia fotográfica">
                                    </a>`;
                 });
