@@ -342,3 +342,11 @@ Logs previos y posteriores conservados junto al respaldo externo. Preflight
 general BLOCKED; no se desplego este cambio, no se reinicio PROD ni se tocaron
 sus registros, fotos, sesiones o colas. La autorizacion anterior era unicamente
 para navegacion y barras del visor; no cubre el borrado administrativo.
+
+### Autorizacion posterior: borrado y registro de prueba
+
+El usuario autorizo despues expresamente aplicar solo el arreglo de borrado y
+crear un registro para comprobarlo manualmente. Se aplico el cambio de una linea
+en PROD y se creo el registro 808 PRUEBA-BORRADO sin fotos. No se borro ningun
+registro productivo. Ver `docs/deployments/20261026-operation-delete-hotfix.md`
+para alcance, validacion, efectos del registro sintetico y limites de reversion.
