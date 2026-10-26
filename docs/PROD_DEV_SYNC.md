@@ -150,6 +150,12 @@ este parche visual. Los controles de conservacion/almacenamiento y la revision
 del nuevo diff siguen siendo obligatorios antes de aplicar nada a PROD;
 no se actualizaron hashes de politica para aprobar automaticamente el cambio.
 
+Refinamiento visual posterior: barra unica con borde tenue, iconos de 19px,
+botones sin marcos individuales, hover discreto, foco de teclado visible y
+objetivos tactiles de 44px. Solo CSS del visor; no cambia el zoom ni los datos.
+La prueba Chromium incluye emulacion de puntero tactil para verificar esos 44px.
+El tunel de muestra se actualiza por separado, no constituye despliegue PROD.
+
 ## Commits de esta integracion
 
 | Commit | Capacidad |

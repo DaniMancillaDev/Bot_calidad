@@ -515,22 +515,42 @@
 .modal-zoom-tools {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 10px;
+  gap: 0;
+  padding: 3px;
+  margin-bottom: 14px;
+  background: rgba(17, 24, 39, .7);
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 8px;
 }
 .modal-zoom-tools button {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   display: grid;
   place-items: center;
-  background: #1e293b;
-  color: #fff;
-  border: 1px solid #64748b;
-  border-radius: 6px;
+  background: transparent;
+  color: #cbd5e1;
+  border: 0;
+  border-radius: 4px;
   cursor: pointer;
+  transition: background .15s, color .15s;
 }
-.modal-zoom-tools button:disabled { opacity: .4; cursor: default; }
-.modal-zoom-tools output { width: 5ch; text-align: center; color: #fff; }
+.modal-zoom-tools .material-symbols-outlined { font-size: 19px; }
+.modal-zoom-tools button:hover:not(:disabled) { background: rgba(255, 255, 255, .08); color: #fff; }
+.modal-zoom-tools button:disabled { opacity: .3; cursor: default; }
+.modal-zoom-tools output {
+  width: 44px;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.modal-zoom-tools button:focus-visible, .modal-nav-btn:focus-visible, .modal-close-btn:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 3px;
+}
+@media (pointer: coarse) {
+  .modal-zoom-tools button { width: 44px; height: 44px; }
+}
 .modal-image-viewport {
   width: 100%;
   height: 66vh;
@@ -567,11 +587,11 @@
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  background: rgba(15, 23, 42, 0.85);
-  border: 1px solid var(--border);
-  color: #ffffff;
-  width: 46px;
-  height: 46px;
+  background: rgba(10, 15, 25, .45);
+  border: 1px solid rgba(255, 255, 255, .1);
+  color: #cbd5e1;
+  width: 42px;
+  height: 42px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -582,10 +602,11 @@
 }
 
 .modal-nav-btn:hover {
-  background: var(--accent);
-  border-color: var(--accent);
-  transform: translateY(-50%) scale(1.1);
+  background: rgba(255, 255, 255, .12);
+  border-color: rgba(255, 255, 255, .2);
+  color: #fff;
 }
+.modal-nav-btn .material-symbols-outlined { font-size: 20px; }
 
 .modal-nav-prev { left: -56px; }
 .modal-nav-next { right: -56px; }
@@ -617,9 +638,9 @@
   position: absolute;
   top: 24px;
   right: 28px;
-  background: rgba(15, 23, 42, 0.85);
-  border: 1px solid var(--border);
-  color: #f8fafc;
+  background: transparent;
+  border: 0;
+  color: #cbd5e1;
   width: 40px;
   height: 40px;
   border-radius: 8px;
@@ -632,9 +653,8 @@
 }
 
 .modal-close-btn:hover {
-  background: var(--danger);
+  background: rgba(255, 255, 255, .08);
   color: #fff;
-  border-color: var(--danger);
 }
 
 @keyframes spin {

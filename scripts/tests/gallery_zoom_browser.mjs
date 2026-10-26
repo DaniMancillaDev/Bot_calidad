@@ -58,6 +58,11 @@ try {
   assert.ok(after.left < before.left && after.top < before.top, 'Real mouse drag pans both axes');
   assert.equal(after.dragging, false, 'Pointer release clears drag');
   await evaluate('cambiarZoomModal(1)');
+  if (Number(width) < 769) {
+    await send('Emulation.setTouchEmulationEnabled', { enabled: true });
+    const target = await evaluate('document.getElementById("modal-zoom-in").getBoundingClientRect().width');
+    assert.ok(target >= 44, 'Touch controls keep a comfortable hit area');
+  }
   const image = await send('Page.captureScreenshot', { format: 'png' });
   await writeFile(screenshot, Buffer.from(image.data, 'base64'));
   console.log(`PASS ${width}x${height}: zoom, limits, wheel, navigation, original, pan, close/reopen`);
