@@ -288,3 +288,16 @@ con PostgreSQL ni una comprobacion autenticada de permisos extremo a extremo.
 `node --check web/static/js/panel_operativo.js` y `git diff --check` correctos.
 PROD no modificado; no desplegado. El preflight y cualquier autorizacion de
 despliegue siguen siendo necesarios; la excepcion previa era solo del visor.
+
+### Ajuste visual posterior: barras del visor
+
+Se ocultan exclusivamente las barras de desplazamiento del visor mediante
+`scrollbar-width: none` y el pseudoelemento WebKit; se conserva `overflow: auto`
+para no perder el arrastre, el desplazamiento tactil ni el acceso a los bordes.
+No se cambia la tira de miniaturas. Respaldo externo previo:
+`/mnt/Orto/iqa_gallery_scrollbars_backup_20261026T185724Z/before.tar.gz`,
+SHA256 `3af38369049c8adc0ca20da512f8d35b7abc47ca7ad72ed7ffd6161637789156`.
+Las mismas 3 pruebas pasan, incluyendo ausencia de barras por estilo calculado
+y arrastre real en Chromium para los tres tamanos. No probado en dispositivos
+fisicos ni otros motores. Se refresco solo el servidor de demo aislado del
+tunel existente; PROD permanece intacto.

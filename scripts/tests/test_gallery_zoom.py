@@ -46,6 +46,7 @@ async function checkZoom() {
   const original = modalImage.src;
   const fitWidth = modalImage.getBoundingClientRect().width;
   assert(fitWidth > 0, 'Nonblank image');
+  assert(getComputedStyle(modalViewport).scrollbarWidth === 'none', 'Image scrollbars hidden');
   assert(document.getElementById('modal-zoom-out').disabled, 'Minimum disabled');
   document.getElementById('modal-zoom-in').click();
   assert(modalZoom === 1.5 && modalImage.width > fitWidth, 'Button enlarges actual pixels');
