@@ -396,3 +396,12 @@ Log persistente junto al respaldo externo: `django-regression.log`.
 No se publico este cambio en PROD. Las excepciones previas no lo incluyen.
 No se probaron Safari/Firefox ni mensajeria real; no se ocultaron avisos propios
 de seguridad del navegador ni se modifico el administrador de Django/terceros.
+
+### Publicacion autorizada de los dialogos
+
+El usuario autorizo posteriormente la excepcion acotada para PROD. Se aplicaron
+solo los cambios compatibles sobre sus fuentes originales; no se publico la
+pagina WhatsApp exclusiva de DEV. Ver
+`docs/deployments/20261026-themed-dialogs-hotfix.md` para respaldo, hashes,
+pruebas, primera reversion real, resultado final y limites de persistencia.
+El control general permanece BLOCKED; esta autorizacion no cubre otros cambios.
