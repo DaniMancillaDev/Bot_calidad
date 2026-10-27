@@ -1,188 +1,100 @@
 {% extends "calidad/base.html" %}
 
 {% block title %}Dashboard — Panel de Calidad{% endblock %}
-{% block page_title %}Dashboard{% endblock %}
+{% block page_title %}Centro de control{% endblock %}
+
+{% block extra_head %}
+<style>
+  .dashboard-page { --dashboard-accent:#818cf8; --dashboard-accent-soft:transparent; --dashboard-rule:rgba(255,255,255,.08); }
+  .dashboard-page .card { box-shadow:none; }
+  .dashboard-page .card:hover { transform:none; box-shadow:none; }
+  .dashboard-page .dashboard-header { display:flex; align-items:flex-end; justify-content:space-between; gap:24px; margin-bottom:24px; }
+  .dashboard-page .eyebrow { color:var(--dashboard-accent); font-size:.72rem; font-weight:700; letter-spacing:.12em; text-transform:uppercase; margin-bottom:8px; }
+  .dashboard-page h2 { color:var(--text); font-size:clamp(1.55rem,2vw,2rem); line-height:1.15; margin:0 0 6px; }
+  .dashboard-page .dashboard-subtitle { color:var(--text-muted); font-size:.92rem; line-height:1.5; margin:0; }
+  .dashboard-page .dashboard-context { display:flex; align-items:center; gap:8px; color:var(--text-muted); font-size:.82rem; white-space:nowrap; }
+  .dashboard-page .dashboard-context .material-symbols-outlined { color:var(--dashboard-accent); font-size:18px; }
+  .dashboard-page .dashboard-toolbar { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; background:transparent; border-bottom:1px solid var(--dashboard-rule); border-radius:0; padding:0 0 14px; margin-bottom:24px; }
+  .dashboard-page .period-control { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .dashboard-page .period-label { color:var(--text-muted); font-size:.8rem; font-weight:600; }
+  .dashboard-page .period-options { display:flex; gap:6px; flex-wrap:wrap; }
+  .dashboard-page .profile-context { display:inline-flex; align-items:center; gap:6px; color:var(--text-muted); font-size:.8rem; }
+  .dashboard-page .profile-context strong { color:var(--text); }
+  .dashboard-page .metric-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; margin-bottom:24px; }
+  .dashboard-page .metric-card { position:relative; min-height:126px; overflow:hidden; border:1px solid var(--border); border-radius:10px; background:var(--surface); box-shadow:none; padding:18px; }
+  .dashboard-page .metric-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+  .dashboard-page .metric-label { color:var(--text-muted); font-size:.78rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
+  .dashboard-page .metric-icon { color:var(--dashboard-accent); font-size:22px; }
+  .dashboard-page .metric-value { color:var(--text); font-size:2rem; font-weight:700; line-height:1; margin-top:16px; font-variant-numeric:tabular-nums; }
+  .dashboard-page .metric-value.accent { color:var(--dashboard-accent); }
+  .dashboard-page .metric-note { color:var(--text-muted); font-size:.78rem; line-height:1.4; margin-top:10px; }
+  .dashboard-page .metric-link { color:var(--dashboard-accent); font-size:.82rem; font-weight:600; text-decoration:none; }
+  .dashboard-page .metric-link:hover { text-decoration:underline; }
+  .dashboard-page .section-grid { display:grid; grid-template-columns:minmax(0,1.15fr) minmax(300px,.85fr); gap:16px; margin-bottom:24px; }
+  .dashboard-page .module { min-width:0; }
+  .dashboard-page .section-grid .module { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:18px; }
+  .dashboard-page .module-header { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:18px; }
+  .dashboard-page .module-title { color:var(--text); font-size:1rem; font-weight:700; margin:0 0 4px; }
+  .dashboard-page .module-note { color:var(--text-muted); font-size:.78rem; margin:0; }
+  .dashboard-page .module-icon { color:var(--text-muted); font-size:20px; }
+  .dashboard-page .line-list { display:grid; gap:13px; }
+  .dashboard-page .line-row { display:grid; grid-template-columns:72px minmax(0,1fr) 38px; align-items:center; gap:10px; }
+  .dashboard-page .line-name { color:var(--text); font-size:.82rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .dashboard-page .line-track { height:6px; overflow:hidden; background:rgba(255,255,255,.08); border-radius:99px; }
+  .dashboard-page .line-fill { height:100%; min-width:4px; background:var(--dashboard-accent); border-radius:inherit; }
+  .dashboard-page .line-total { color:var(--text); font-size:.82rem; font-weight:700; text-align:right; }
+  .dashboard-page .defect-list { display:grid; gap:8px; }
+  .dashboard-page .defect-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid var(--dashboard-rule); }
+  .dashboard-page .defect-row:last-child { border-bottom:0; }
+  .dashboard-page .defect-name { min-width:0; color:var(--text); font-size:.84rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .dashboard-page .defect-rank { color:var(--text-muted); font-size:.72rem; font-weight:700; margin-right:8px; }
+  .dashboard-page .defect-total { color:var(--dashboard-accent); font-size:.8rem; font-weight:700; }
+  .dashboard-page .quick-actions { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; }
+  .dashboard-page .quick-action { display:flex; align-items:center; gap:8px; min-width:0; padding:10px 0; color:var(--text); background:transparent; border:0; border-top:1px solid var(--dashboard-rule); border-radius:0; font-size:.82rem; font-weight:600; text-decoration:none; }
+  .dashboard-page .quick-action:hover { color:var(--dashboard-accent); }
+  .dashboard-page .quick-action .material-symbols-outlined { color:var(--dashboard-accent); font-size:19px; }
+  .dashboard-page .quick-actions-section { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:18px; margin-bottom:24px !important; }
+  .dashboard-page .quick-actions-section .module-header { margin-bottom:14px; }
+  .dashboard-page .recent-module { padding:0; overflow:hidden; border-color:var(--dashboard-rule); }
+  .dashboard-page .recent-module .module-header { padding:20px 20px 0; }
+  .dashboard-page .recent-table-wrap { overflow-x:auto; }
+  .dashboard-page .recent-table { min-width:760px; }
+  .dashboard-page .recent-table th,.dashboard-page .recent-table td { padding:10px 12px; }
+  .dashboard-page .recent-table th { font-size:.7rem; }
+  .dashboard-page .recent-table td { font-size:.82rem; }
+  .dashboard-page .recent-table .muted { color:var(--text-muted); white-space:nowrap; }
+  .dashboard-page .empty-state { padding:28px 20px; color:var(--text-muted); text-align:center; }
+  .dashboard-page .empty-state .material-symbols-outlined { display:block; font-size:28px; opacity:.5; margin-bottom:8px; }
+  @media (max-width:1024px) { .dashboard-page .section-grid { grid-template-columns:1fr; gap:30px; } }
+  @media (max-width:760px) { .dashboard-page .dashboard-header { align-items:flex-start; flex-direction:column; gap:10px; } .dashboard-page .dashboard-context { white-space:normal; } .dashboard-page .metric-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .dashboard-page .metric-card:nth-child(3) { grid-column:1 / -1; } .dashboard-page .quick-actions { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  @media (max-width:480px) { .dashboard-page .metric-grid,.dashboard-page .quick-actions { grid-template-columns:1fr; } .dashboard-page .dashboard-toolbar { align-items:flex-start; flex-direction:column; } .dashboard-page .line-row { grid-template-columns:58px minmax(0,1fr) 32px; } }
+  @media (prefers-reduced-motion:reduce) { .dashboard-page * { scroll-behavior:auto !important; transition-duration:.01ms !important; } }
+</style>
+{% endblock %}
 
 {% block topbar_actions %}
-<a href="{% url 'reportes' %}" class="btn btn-ghost">
-  <span class="material-symbols-outlined" style="font-size:1.1rem;">analytics</span> Ver todos los reportes
-</a>
+<a href="{% url 'reportes' %}" class="btn btn-primary"><span class="material-symbols-outlined" aria-hidden="true">analytics</span> Ver reportes</a>
 {% endblock %}
 
 {% block content %}
+<div class="dashboard-page">
+  <header class="dashboard-header"><div><p class="eyebrow">Operación IQA</p><h2>Centro de control</h2><p class="dashboard-subtitle">Lectura rápida de registros, defectos y actividad reciente.</p></div><div class="dashboard-context"><span class="material-symbols-outlined" aria-hidden="true">verified</span><span>Datos filtrados por tu acceso</span></div></header>
 
-<!-- FILTRO DE PERÍODO E INFORMACIÓN DE TURNO -->
-<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:20px;">
-  <div style="display:flex; gap:8px; align-items:center;">
-    <span style="color:var(--text-muted); font-size:.85rem; display:inline-flex; align-items:center; gap:4px;">
-      <span class="material-symbols-outlined" style="font-size:1rem;">calendar_month</span> Período:
-    </span>
-    <div style="display:flex; gap:6px;">
-      <a href="?dias=7" class="time-pill {% if dias == 7 %}active{% endif %}">7 días</a>
-      <a href="?dias=14" class="time-pill {% if dias == 14 %}active{% endif %}">14 días</a>
-      <a href="?dias=30" class="time-pill {% if dias == 30 %}active{% endif %}">30 días</a>
-    </div>
-  </div>
+  <section class="dashboard-toolbar" aria-label="Controles del dashboard"><div class="period-control"><span class="period-label">Periodo</span><nav class="period-options" aria-label="Seleccionar periodo"><a href="?dias=7" class="time-pill {% if dias == 7 %}active{% endif %}"{% if dias == 7 %} aria-current="page"{% endif %}>7 días</a><a href="?dias=14" class="time-pill {% if dias == 14 %}active{% endif %}"{% if dias == 14 %} aria-current="page"{% endif %}>14 días</a><a href="?dias=30" class="time-pill {% if dias == 30 %}active{% endif %}"{% if dias == 30 %} aria-current="page"{% endif %}>30 días</a></nav></div>{% if perfil %}<div class="profile-context"><span class="material-symbols-outlined" aria-hidden="true">badge</span><span><strong>Turno {{ perfil.turno }}</strong> · {{ perfil.departamento }}</span>{% if request.user.is_superuser %}<span class="badge badge-purple">Admin</span>{% endif %}</div>{% endif %}</section>
 
-  {% if perfil %}
-  <div style="font-size:.85rem; color:var(--text-muted); display:inline-flex; align-items:center; gap:6px; background:var(--surface); border:1px solid var(--border); padding:5px 12px; border-radius:99px;">
-    <span class="material-symbols-outlined" style="font-size:1rem; color:var(--accent);">badge</span>
-    <span><strong>Turno {{ perfil.turno }}</strong> &bull; {{ perfil.departamento }}</span>
-    {% if request.user.is_superuser %}
-    <span class="badge badge-purple" style="font-size:0.7rem; padding:1px 6px;">Admin</span>
-    {% endif %}
-  </div>
-  {% endif %}
+  <section class="metric-grid" aria-label="Indicadores principales">
+    <article class="card metric-card"><div class="metric-head"><span class="metric-label">Registros totales</span><span class="material-symbols-outlined metric-icon" aria-hidden="true">inventory_2</span></div><div class="metric-value">{{ total_registros }}</div><p class="metric-note">Histórico disponible para tu turno o departamento.</p></article>
+    <article class="card metric-card"><div class="metric-head"><span class="metric-label">Actividad reciente</span><span class="material-symbols-outlined metric-icon" aria-hidden="true">schedule</span></div><div class="metric-value accent">{{ registros_recientes }}</div><p class="metric-note">Registros creados en los últimos {{ dias }} días.</p></article>
+    <article class="card metric-card"><div class="metric-head"><span class="metric-label">Evidencias visuales</span><span class="material-symbols-outlined metric-icon" aria-hidden="true">photo_library</span></div><div class="metric-value" style="font-size:1.25rem;margin-top:22px;"><a class="metric-link" href="{% url 'galeria_fotos' %}">Abrir galería <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;">arrow_forward</span></a></div><p class="metric-note">Consulta y navega las fotografías asociadas.</p></article>
+  </section>
+
+  <section class="section-grid" aria-label="Distribución de la operación">
+    <article class="card module"><div class="module-header"><div><h3 class="module-title">Registros por línea</h3><p class="module-note">Volumen relativo dentro de las líneas con datos.</p></div><span class="material-symbols-outlined module-icon" aria-hidden="true">bar_chart</span></div>{% if por_linea %}<div class="line-list">{% for item in por_linea %}<div class="line-row"><span class="line-name" title="{{ item.linea }}">{{ item.linea }}</span><div class="line-track" role="img" aria-label="{{ item.linea }}: {{ item.total }} registros"><div class="line-fill" style="width:{{ item.porcentaje }}%"></div></div><span class="line-total">{{ item.total }}</span></div>{% endfor %}</div>{% else %}<p class="empty-state">No hay registros para mostrar en este periodo.</p>{% endif %}</article>
+    <article class="card module"><div class="module-header"><div><h3 class="module-title">Tipos de defecto</h3><p class="module-note">Los cinco más frecuentes del histórico visible.</p></div><span class="material-symbols-outlined module-icon" aria-hidden="true">format_list_numbered</span></div>{% if top_defectos %}<div class="defect-list">{% for item in top_defectos %}<div class="defect-row"><span class="defect-name" title="{{ item.descripcion }}"><span class="defect-rank">#{{ forloop.counter }}</span>{{ item.descripcion|truncatechars:45 }}</span><span class="defect-total">{{ item.total }}</span></div>{% endfor %}</div>{% else %}<p class="empty-state">No hay defectos registrados todavía.</p>{% endif %}</article>
+  </section>
+
+  <section class="card module quick-actions-section" aria-labelledby="quick-actions-title"><div class="module-header"><div><h3 id="quick-actions-title" class="module-title">Acciones rápidas</h3><p class="module-note">Accede directamente a las tareas principales.</p></div><span class="material-symbols-outlined module-icon" aria-hidden="true">bolt</span></div><nav class="quick-actions" aria-label="Acciones rápidas"><a class="quick-action" href="{% url 'panel_operativo' %}"><span class="material-symbols-outlined" aria-hidden="true">table_rows</span>Panel operativo</a><a class="quick-action" href="{% url 'reportes' %}"><span class="material-symbols-outlined" aria-hidden="true">description</span>Reportes</a><a class="quick-action" href="{% url 'galeria_fotos' %}"><span class="material-symbols-outlined" aria-hidden="true">photo_library</span>Galería</a></nav></section>
+
+  <section class="card recent-module" aria-labelledby="recent-title"><div class="module-header"><div><h3 id="recent-title" class="module-title">Registros recientes</h3><p class="module-note">Últimos 10 registros visibles para tu cuenta.</p></div><a href="{% url 'reportes' %}" class="btn btn-ghost">Ver todos <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></a></div><div class="recent-table-wrap"><table class="recent-table"><thead><tr><th>Fotos</th><th>Modelo</th><th>Línea</th><th>Descripción</th><th>Responsable</th><th>Cant.</th><th>Turno</th><th>Fecha</th></tr></thead><tbody>{% for r in ultimos_registros %}<tr><td><a href="{% url 'galeria_fotos' %}?q={{ r.fotos_rango|urlencode }}" class="metric-link" title="Ver fotos asociadas">{{ r.fotos_rango|default:"—" }}</a></td><td>{{ r.modelo|truncatechars:25 }}</td><td><span class="badge badge-purple">{{ r.linea }}</span></td><td title="{{ r.descripcion }}">{{ r.descripcion|truncatechars:35 }}</td><td>{{ r.responsable }}</td><td><strong>{{ r.cantidad|default:1 }}</strong></td><td><span class="badge badge-green">{{ r.turno|default:"—" }}/{{ r.departamento|default:"—" }}</span></td><td class="muted">{{ r.fecha_registro|date:"d/m H:i"|default:"—" }}</td></tr>{% empty %}<tr><td colspan="8" class="empty-state"><span class="material-symbols-outlined" aria-hidden="true">inbox</span>No hay registros todavía.</td></tr>{% endfor %}</tbody></table></div></section>
 </div>
-
-<!-- TARJETAS DE ESTADÍSTICAS -->
-<div class="grid grid-3" style="margin-bottom:24px;">
-  <div class="card">
-    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-      <div>
-        <div class="card-title">Total Registros</div>
-        <div class="card-value">{{ total_registros }}</div>
-      </div>
-      <span class="material-symbols-outlined" style="font-size:1.8rem; color:var(--text-muted); opacity:0.5;">inventory_2</span>
-    </div>
-    <div style="color:var(--text-muted); font-size:.8rem; margin-top:6px;">Histórico asignado a tu turno/depto</div>
-  </div>
-
-  <div class="card">
-    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-      <div>
-        <div class="card-title">Últimos {{ dias }} días</div>
-        <div class="card-value" style="color:var(--accent);">{{ registros_recientes }}</div>
-      </div>
-      <span class="material-symbols-outlined" style="font-size:1.8rem; color:var(--accent); opacity:0.6;">history</span>
-    </div>
-    <div style="color:var(--text-muted); font-size:.8rem; margin-top:6px;">Actividad en el período seleccionado</div>
-  </div>
-
-  <div class="card" style="display:flex; flex-direction:column; justify-content:space-between;">
-    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-      <div>
-        <div class="card-title">Evidencias Visuales</div>
-        <div class="card-value" style="font-size:1.35rem; color:var(--success); margin-top:2px;">
-          <a href="{% url 'galeria_fotos' %}" style="color:inherit; text-decoration:none; display:inline-flex; align-items:center; gap:4px;">
-            Galería <span class="material-symbols-outlined" style="font-size:1.2rem;">arrow_forward</span>
-          </a>
-        </div>
-      </div>
-      <span class="material-symbols-outlined" style="font-size:1.8rem; color:var(--success); opacity:0.6;">photo_library</span>
-    </div>
-    <div style="color:var(--text-muted); font-size:.8rem; margin-top:6px;">Búsqueda y navegación de fotos</div>
-  </div>
-</div>
-
-<!-- DEFECTOS POR LÍNEA Y TOP DEFECTOS -->
-<div class="grid grid-2" style="margin-bottom:24px;">
-
-  <!-- Por línea -->
-  <div class="card">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-      <div class="card-title" style="margin:0;">Defectos por Línea</div>
-      <span class="material-symbols-outlined" style="font-size:1.2rem; color:var(--text-muted);">bar_chart</span>
-    </div>
-    {% if por_linea %}
-    <div style="display:flex; flex-direction:column; gap:12px;">
-      {% for item in por_linea %}
-      <div style="display:flex; align-items:center; gap:12px;">
-        <span class="badge badge-purple" style="min-width:60px; text-align:center;">{{ item.linea }}</span>
-        <div style="flex:1; background:var(--surface2); border-radius:99px; height:10px; overflow:hidden;">
-          <div style="height:100%; background:linear-gradient(90deg, var(--accent), #818cf8); border-radius:99px; width:{{ item.porcentaje }}%; min-width:4px; transition:width 0.3s ease;"></div>
-        </div>
-        <span style="color:var(--text); font-weight:600; font-size:.85rem; min-width:32px; text-align:right;">{{ item.total }}</span>
-      </div>
-      {% endfor %}
-    </div>
-    {% else %}
-    <p style="color:var(--text-muted); font-size:.88rem; margin:12px 0;">Sin datos registrados aún.</p>
-    {% endif %}
-  </div>
-
-  <!-- Top defectos -->
-  <div class="card">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-      <div class="card-title" style="margin:0;">Top Tipos de Defecto</div>
-      <span class="material-symbols-outlined" style="font-size:1.2rem; color:var(--text-muted);">format_list_numbered</span>
-    </div>
-    {% if top_defectos %}
-    <div style="display:flex; flex-direction:column; gap:8px;">
-      {% for item in top_defectos %}
-      <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 10px; border-radius:8px; background:var(--surface2);">
-        <div style="display:flex; align-items:center; gap:8px; overflow:hidden;">
-          <span style="font-size:0.75rem; font-weight:700; color:var(--text-muted); width:18px;">#{{ forloop.counter }}</span>
-          <span style="font-size:.88rem; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="{{ item.descripcion }}">{{ item.descripcion|truncatechars:45 }}</span>
-        </div>
-        <span class="badge badge-purple" style="font-size:0.8rem; margin-left:8px;">{{ item.total }}</span>
-      </div>
-      {% endfor %}
-    </div>
-    {% else %}
-    <p style="color:var(--text-muted); font-size:.88rem; margin:12px 0;">Sin datos registrados aún.</p>
-    {% endif %}
-  </div>
-</div>
-
-<!-- ÚLTIMOS REGISTROS -->
-<div class="card">
-  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-    <div style="display:flex; align-items:center; gap:8px;">
-      <span class="material-symbols-outlined" style="font-size:1.2rem; color:var(--accent);">table_rows</span>
-      <div class="card-title" style="margin:0;">Últimos Registros</div>
-    </div>
-    <a href="{% url 'reportes' %}" class="btn btn-ghost" style="font-size:.8rem; padding:5px 12px;">
-      Ver todos los registros <span class="material-symbols-outlined" style="font-size:.9rem;">arrow_forward</span>
-    </a>
-  </div>
-  <div class="table-wrapper">
-    <table>
-      <thead>
-        <tr>
-          <th>Fotos</th>
-          <th>Modelo</th>
-          <th>Línea</th>
-          <th>Descripción</th>
-          <th>Responsable</th>
-          <th>Cant.</th>
-          <th>Turno/Depto</th>
-          <th>Fecha</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for r in ultimos_registros %}
-        <tr>
-          <td>
-            <a href="{% url 'galeria_fotos' %}?q={{ r.fotos_rango|urlencode }}" style="text-decoration:none;" title="Ver fotos asociadas">
-              <span style="display:inline-block; padding:2px 8px; border-radius:6px; font-size:0.8rem; font-weight:600; background:rgba(99,102,241,0.08); color:var(--accent);">
-                {{ r.fotos_rango|default:"—" }}
-              </span>
-            </a>
-          </td>
-          <td style="font-weight:500;">{{ r.modelo|truncatechars:25 }}</td>
-          <td><span class="badge badge-purple">{{ r.linea }}</span></td>
-          <td style="font-size:0.88rem; color:var(--text);" title="{{ r.descripcion }}">{{ r.descripcion|truncatechars:35 }}</td>
-          <td>{{ r.responsable }}</td>
-          <td style="font-weight:700;">{{ r.cantidad|default:1 }}</td>
-          <td>
-            <span class="badge badge-green">{{ r.turno|default:"—" }}/{{ r.departamento|default:"—" }}</span>
-          </td>
-          <td style="color:var(--text-muted); font-size:.82rem; white-space:nowrap;">
-            {{ r.fecha_registro|date:"d/m H:i"|default:"—" }}
-          </td>
-        </tr>
-        {% empty %}
-        <tr>
-          <td colspan="8" style="text-align:center; color:var(--text-muted); padding:32px;">
-            <span class="material-symbols-outlined" style="font-size:2rem; display:block; margin-bottom:8px; opacity:0.4;">inbox</span>
-            No hay registros todavía.
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
-
 {% endblock %}

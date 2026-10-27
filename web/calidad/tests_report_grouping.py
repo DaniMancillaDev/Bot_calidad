@@ -12,6 +12,17 @@ from calidad.tasks import _consolidar_registros
 
 
 class GroupingComparisonTests(SimpleTestCase):
+    def test_consolidated_group_keeps_distinct_invoices(self):
+        rows = [
+            {'id': 1, 'numero_parte': 'PN', 'descripcion': 'DENT', 'invoice': 'INV-1'},
+            {'id': 2, 'numero_parte': 'PN', 'descripcion': 'DENT', 'invoice': 'INV-2'},
+            {'id': 3, 'numero_parte': 'PN', 'descripcion': 'DENT', 'invoice': 'INV-1'},
+        ]
+
+        groups = _consolidar_registros(rows)
+
+        self.assertEqual(groups[0]['invoice'], 'INV-1\nINV-2')
+
     def test_both_rules_keep_quantities_record_ids_and_photos(self):
         base = {'id': 1, 'numero_parte': 'PN', 'modelo': 'MODEL-A', 'responsable': 'WH',
                 'descripcion': 'DENT', 'cantidad': 2, 'evidencias': ['photo-a']}

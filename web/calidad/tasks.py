@@ -208,6 +208,13 @@ def _consolidar_registros(regs, translator=None, *, grouping_rule='dev_descripti
         grupo['cantidad'] += (reg.get('cantidad') or 1)
         grupo['evidencias'].extend(reg.get('evidencias', []))
 
+        invoice = (reg.get('invoice') or '').strip()
+        if invoice:
+            invoices = [value.strip() for value in str(grupo.get('invoice') or '').split('\n') if value.strip()]
+            if invoice not in invoices:
+                invoices.append(invoice)
+                grupo['invoice'] = '\n'.join(invoices)
+
         id_reg = reg.get('id')
         desc_reg = (reg.get('descripcion') or '').strip()
         linea_reg = (reg.get('linea') or '').strip()

@@ -3,6 +3,8 @@ Configuración de Django - Panel de Calidad
 """
 import os
 from pathlib import Path
+from urllib.parse import urlparse
+from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -80,13 +82,18 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 
 # ====================================
-# BASE DE DATOS: PostgreSQL (producción) / SQLite (fallback local)
+# BASE DE DATOS: PostgreSQL obligatorio
 # ====================================
+_database_url = os.getenv('DATABASE_URL', '')
+if not _database_url:
+    raise ImproperlyConfigured('DATABASE_URL es obligatorio; este proyecto usa PostgreSQL.')
+if urlparse(_database_url).scheme not in ('postgres', 'postgresql'):
+    raise ImproperlyConfigured('DATABASE_URL debe apuntar a PostgreSQL; SQLite no esta soportado.')
+
 import dj_database_url
 
 _default_db = dj_database_url.config(
     env='DATABASE_URL',
-    default=f'sqlite:///{BOT_DIR / "bot_calidad.db"}',
     # ASGI creates request-scoped threads; persistent connections exhaust PostgreSQL.
     conn_max_age=0,
 )

@@ -747,10 +747,10 @@
 
 <script>
   // ── 1. DATA HYDRATION ────────────────────────────────────────────────────
-  const registrosRaw = JSON.parse(document.getElementById('registros-data').textContent);
+  let registrosRaw = JSON.parse(document.getElementById('registros-data').textContent);
   const fotosPreviewData = JSON.parse(document.getElementById('fotos-preview-data').textContent);
 
-  const appData = registrosRaw.map(reg => {
+  let appData = registrosRaw.map(reg => {
     // ponytail: Agrupar por registro_id real, evitamos colisiones entre lotes
     // si reutilizan los mismos números de fotos
     const fotosAsociadas = fotosPreviewData.filter(f => f.registro_id === reg.id);

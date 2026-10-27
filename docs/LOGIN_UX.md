@@ -1,5 +1,8 @@
 # Login IQA: criterios y comprobaciones
 
+Actualizacion 2026-10-27 UTC: [auditoria ampliada](LOGIN_AUDIT_20261027.md),
+implementacion y limites reales. Solo DEV, sin commit ni despliegue.
+
 ## Objetivo
 
 Corregir la dificultad reportada para distinguir Usuario y Contrasena sin
